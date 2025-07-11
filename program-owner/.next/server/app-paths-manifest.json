@@ -1,0 +1,7 @@
+{
+  "/pm/programs/page": "app/pm/programs/page.js",
+  "/pm/trainees/page": "app/pm/trainees/page.js",
+  "/pm/facilitator/page": "app/pm/facilitator/page.js",
+  "/pm/page": "app/pm/page.js",
+  "/pm/performance/page": "app/pm/performance/page.js"
+}

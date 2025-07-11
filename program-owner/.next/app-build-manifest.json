@@ -1,0 +1,99 @@
+{
+  "pages": {
+    "/layout": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/layout.css",
+      "static/chunks/app/layout.js"
+    ],
+    "/pm/layout": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/pm/layout.css",
+      "static/chunks/app/pm/layout.js"
+    ],
+    "/pm/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/pm/page.css",
+      "static/chunks/app/pm/page.js"
+    ],
+    "/pm/facilitator/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/pm/facilitator/page.css",
+      "static/chunks/app/pm/facilitator/page.js"
+    ],
+    "/pm/facilitator/loading": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/pm/facilitator/loading.js"
+    ],
+    "/pm/attendance/loading": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/pm/attendance/loading.js"
+    ],
+    "/pm/attendance/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/pm/attendance/page.css",
+      "static/chunks/app/pm/attendance/page.js"
+    ],
+    "/pm/programs/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/pm/programs/page.css",
+      "static/chunks/app/pm/programs/page.js"
+    ],
+    "/pm/programs/loading": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/pm/programs/loading.js"
+    ],
+    "/pm/performance/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/pm/performance/page.css",
+      "static/chunks/app/pm/performance/page.js"
+    ],
+    "/pm/performance/loading": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/pm/performance/loading.js"
+    ],
+    "/pm/certificates/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/pm/certificates/page.css",
+      "static/chunks/app/pm/certificates/page.js"
+    ],
+    "/pm/certificates/loading": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/pm/certificates/loading.js"
+    ],
+    "/pm/archieves/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/pm/archieves/page.css",
+      "static/chunks/app/pm/archieves/page.js"
+    ],
+    "/pm/archieves/loading": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/pm/archieves/loading.js"
+    ],
+    "/pm/trainees/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/pm/trainees/page.css",
+      "static/chunks/app/pm/trainees/page.js"
+    ],
+    "/pm/trainees/loading": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/pm/trainees/loading.js"
+    ]
+  }
+}
