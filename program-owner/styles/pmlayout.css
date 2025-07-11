@@ -1,0 +1,31 @@
+.pm-layout {
+  display: flex;
+  min-height: 100vh;
+  background-color: #f9fafb;
+}
+
+.pm-main-content {
+  flex: 1;
+  margin-left: 280px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pm-dashboard-content {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #f9fafb;
+}
+
+.pm-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+@media (max-width: 768px) {
+  .pm-main-content {
+    margin-left: 0;
+  }
+}
