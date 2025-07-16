@@ -57,7 +57,7 @@ export default function LoginPage() {
       </div>
 
       {/* Right Panel (The Form with the Angled Shape) */}
-      <div className="w-[55%] text-white flex items-center justify-center p-8 pl-[15%] box-border relative -ml-[5%] z-20 bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 bg-[length:400%_400%] animate-gradientAnimation clip-path-polygon">
+      <div className="w-[55%] text-white flex items-center justify-center p-8 pl-[15%] box-border relative -ml-[5%] z-20 bg-gradient-to-br bg-[#1f497d] bg-[length:400%_400%] animate-gradientAnimation clip-path-polygon">
         <form onSubmit={handleSubmit} className="w-full max-w-md flex flex-col gap-6 relative z-20 opacity-0 animate-fadeInDelayed">
           <div className="text-center mb-4">
             <div className="flex justify-center mb-4">
@@ -115,13 +115,14 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <button 
+         <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full bg-white text-blue-700 py-4 font-semibold text-base border-none rounded-lg cursor-pointer transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:bg-white/50 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none"
-          >
-            {isLoading ? 'ACCESSING...' : 'ACCESS DASHBOARD'}
-          </button>
+            className="w-full bg-white text-gray-600 py-4 font-semibold text-base border-none rounded-lg cursor-pointer transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 hover:bg-gray-300 hover:text-white hover:font-bold disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none"
+>
+           {isLoading ? 'ACCESSING...' : 'ACCESS DASHBOARD'}
+           </button>
+
 
           {/* Demo Credentials */}
           <div className="mt-6 p-4 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
