@@ -1,4 +1,4 @@
-export type UserRole = 'SuperAdmin' | 'program_manager' | 'facilitator' | 'trainee' | 'it_support'
+export type UserRole = 'super_admin' | 'program_manager' | 'facilitator' | 'trainee' | 'it_support'
 
 export type Permission = 
   | 'manage_users'
