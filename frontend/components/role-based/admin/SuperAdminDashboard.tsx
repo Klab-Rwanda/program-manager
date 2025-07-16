@@ -1,33 +1,28 @@
 "use client"
-
-import { useState, useEffect, useCallback } from 'react'
-import { 
-  BookOpen, 
-  Users, 
-  UserCheck, 
-  Clock, 
+import { useState, useEffect, useCallback } from "react"
+import {
+  BookOpen,
+  Users,
+  UserCheck,
+  Clock,
   Loader2,
   Eye,
-  Edit,
-  Trash2,
   Plus,
   Mail,
   Briefcase,
   Calendar,
   Activity,
   FileText,
-  User,
-  X
+  X,
 } from "lucide-react"
-
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
 
 // Types based on the original JavaScript structure
 interface DashboardStats {
@@ -73,7 +68,7 @@ export function SuperAdminDashboard() {
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
-  const [selectedManagerId, setSelectedManagerId] = useState('')
+  const [selectedManagerId, setSelectedManagerId] = useState("")
   const [isAssigning, setIsAssigning] = useState(false)
 
   // Mock data based on the original structure
@@ -81,7 +76,7 @@ export function SuperAdminDashboard() {
     totalPrograms: 24,
     activeTrainees: 248,
     totalUsers: 1247,
-    pendingApprovals: 8
+    pendingApprovals: 8,
   }
 
   const mockRecentUsers: User[] = [
@@ -97,8 +92,8 @@ export function SuperAdminDashboard() {
       createdAt: "2024-01-15T10:00:00Z",
       activityFeed: [
         { id: "1", type: "Attendance", text: "Marked attendance for React session", timestamp: "2024-01-20T14:30:00Z" },
-        { id: "2", type: "Submission", text: "Submitted course materials", timestamp: "2024-01-19T16:00:00Z" }
-      ]
+        { id: "2", type: "Submission", text: "Submitted course materials", timestamp: "2024-01-19T16:00:00Z" },
+      ],
     },
     {
       id: "2",
@@ -110,8 +105,8 @@ export function SuperAdminDashboard() {
       programs: [{ name: "Data Science" }],
       createdAt: "2024-01-14T09:00:00Z",
       activityFeed: [
-        { id: "3", type: "Attendance", text: "Attended Python workshop", timestamp: "2024-01-20T10:00:00Z" }
-      ]
+        { id: "3", type: "Attendance", text: "Attended Python workshop", timestamp: "2024-01-20T10:00:00Z" },
+      ],
     },
     {
       id: "3",
@@ -120,7 +115,7 @@ export function SuperAdminDashboard() {
       dateAdded: "2024-01-13",
       email: "bob@klab.rw",
       status: "Inactive",
-      createdAt: "2024-01-13T11:00:00Z"
+      createdAt: "2024-01-13T11:00:00Z",
     },
     {
       id: "4",
@@ -133,8 +128,8 @@ export function SuperAdminDashboard() {
       programs: [{ name: "UI/UX Design" }],
       createdAt: "2024-01-12T13:00:00Z",
       activityFeed: [
-        { id: "4", type: "Submission", text: "Updated design portfolio", timestamp: "2024-01-20T15:00:00Z" }
-      ]
+        { id: "4", type: "Submission", text: "Updated design portfolio", timestamp: "2024-01-20T15:00:00Z" },
+      ],
     },
     {
       id: "5",
@@ -144,22 +139,22 @@ export function SuperAdminDashboard() {
       email: "mike@klab.rw",
       status: "Active",
       programs: [{ name: "Mobile Development" }],
-      createdAt: "2024-01-11T08:00:00Z"
-    }
+      createdAt: "2024-01-11T08:00:00Z",
+    },
   ]
 
   const mockManagers: ProgramManager[] = [
     { id: "1", name: "Manager One", email: "manager1@klab.rw" },
     { id: "2", name: "Manager Two", email: "manager2@klab.rw" },
-    { id: "3", name: "Manager Three", email: "manager3@klab.rw" }
+    { id: "3", name: "Manager Three", email: "manager3@klab.rw" },
   ]
 
   // Simulate the original fetchDashboardData function
   const fetchDashboardData = useCallback(async () => {
     try {
       // Simulate API calls
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
       setStats(mockStats)
       setRecentUsers(mockRecentUsers)
       setAvailableManagers(mockManagers)
@@ -180,9 +175,9 @@ export function SuperAdminDashboard() {
     setIsDetailLoading(true)
     try {
       // Simulate API call to get detailed user data
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await new Promise((resolve) => setTimeout(resolve, 500))
       setSelectedUser(user)
-      setSelectedManagerId(user.assignedManager?._id || '')
+      setSelectedManagerId(user.assignedManager?._id || "none")
     } catch (err) {
       alert("Could not load user details.")
       setIsDetailOpen(false)
@@ -195,17 +190,17 @@ export function SuperAdminDashboard() {
     setIsDetailOpen(false)
     setTimeout(() => {
       setSelectedUser(null)
-      setSelectedManagerId('')
+      setSelectedManagerId("")
     }, 300)
   }
 
   const handleAssignManager = async () => {
     if (!selectedUser) return
-    
+
     setIsAssigning(true)
     try {
       // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await new Promise((resolve) => setTimeout(resolve, 1000))
       alert("Manager assignment updated successfully!")
       fetchDashboardData() // Refresh data
     } catch (err) {
@@ -216,10 +211,9 @@ export function SuperAdminDashboard() {
   }
 
   const timeAgo = (dateString: string) => {
-    if (!dateString) return ''
+    if (!dateString) return ""
     const date = new Date(dateString)
     const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000)
-
     let interval = seconds / 31536000
     if (interval > 1) return Math.floor(interval) + " years ago"
     interval = seconds / 2592000
@@ -235,9 +229,12 @@ export function SuperAdminDashboard() {
 
   const getActivityIcon = (type: string) => {
     switch (type) {
-      case 'Attendance': return Calendar
-      case 'Submission': return FileText
-      default: return Activity
+      case "Attendance":
+        return Calendar
+      case "Submission":
+        return FileText
+      default:
+        return Activity
     }
   }
 
@@ -250,11 +247,7 @@ export function SuperAdminDashboard() {
   }
 
   if (error) {
-    return (
-      <div className="p-8 text-red-600 bg-red-50 rounded-lg">
-        {error}
-      </div>
-    )
+    return <div className="p-8 text-destructive bg-destructive/10 rounded-lg">{error}</div>
   }
 
   const systemStats = [
@@ -263,33 +256,33 @@ export function SuperAdminDashboard() {
       value: stats?.totalPrograms.toString() || "0",
       change: "+3 this month",
       icon: BookOpen,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100 dark:bg-blue-900/20"
+      color: "text-custom-blue",
+      bgColor: "bg-muted/30", // Changed to grey background
     },
     {
       title: "Active Trainees",
       value: stats?.activeTrainees.toString() || "0",
       change: "+18 from last month",
       icon: Users,
-      color: "text-green-600",
-      bgColor: "bg-green-100 dark:bg-green-900/20"
+      color: "text-custom-blue", // Changed to custom-blue
+      bgColor: "bg-muted/30", // Changed to grey background
     },
     {
       title: "Total Users",
       value: stats?.totalUsers.toString() || "0",
       change: "+12 this month",
       icon: UserCheck,
-      color: "text-purple-600",
-      bgColor: "bg-purple-100 dark:bg-purple-900/20"
+      color: "text-custom-blue", // Changed to custom-blue
+      bgColor: "bg-muted/30", // Changed to grey background
     },
     {
       title: "Pending Approvals",
       value: stats?.pendingApprovals.toString() || "0",
       change: "Require attention",
       icon: Clock,
-      color: "text-orange-600",
-      bgColor: "bg-orange-100 dark:bg-orange-900/20"
-    }
+      color: "text-custom-blue", // Changed to custom-blue
+      bgColor: "bg-muted/30", // Changed to grey background
+    },
   ]
 
   return (
@@ -298,14 +291,18 @@ export function SuperAdminDashboard() {
       <div className="rounded-lg bg-gradient-to-r from-gray-900 to-gray-800 p-6 text-white">
         <h2 className="text-2xl font-bold mb-2">Welcome back, Super Admin!</h2>
         <p className="text-gray-300 mb-4">
-          System overview and management dashboard. Monitor all activities across kLab.
+          Comprehensive system overview and management dashboard. Monitor all activities across kLab.
         </p>
         <div className="flex gap-3">
           <Button size="lg" className="bg-white text-black hover:bg-gray-100">
             <Plus className="mr-2 h-4 w-4" />
             Add New User
           </Button>
-          <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-black">
+          <Button
+            size="lg"
+            variant="outline"
+            className="border-white text-white hover:bg-white hover:text-black bg-transparent"
+          >
             <Users className="mr-2 h-4 w-4" />
             Manage Users
           </Button>
@@ -324,7 +321,11 @@ export function SuperAdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-foreground">{stat.value}</div>
-              <p className="text-xs text-green-400 mt-1">{stat.change}</p>
+              <p
+                className={`text-xs mt-1 ${stat.title === "Pending Approvals" ? "text-muted-foreground" : stat.change.startsWith("+") ? "text-custom-blue" : "text-muted-foreground"}`}
+              >
+                {stat.change}
+              </p>
             </CardContent>
           </Card>
         ))}
@@ -356,9 +357,12 @@ export function SuperAdminDashboard() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={user.avatar} alt={user.name} />
+                          <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
                           <AvatarFallback className="text-xs">
-                            {user.name.split(' ').map(n => n[0]).join('')}
+                            {user.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")}
                           </AvatarFallback>
                         </Avatar>
                         <div>
@@ -373,25 +377,23 @@ export function SuperAdminDashboard() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {user.programs?.map(p => p.name).join(', ') || 'None'}
+                      {user.programs?.map((p) => p.name).join(", ") || "None"}
                     </TableCell>
                     <TableCell>
-                      <Badge 
-                        variant={user.status === "Active" ? "default" : "secondary"}
-                        className="text-xs"
+                      <Badge
+                        className={cn(
+                          "text-xs",
+                          user.status === "Active"
+                            ? "bg-custom-blue text-white"
+                            : "bg-secondary text-secondary-foreground",
+                        )}
                       >
                         {user.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {user.dateAdded}
-                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{user.dateAdded}</TableCell>
                     <TableCell>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleUserClick(user)}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => handleUserClick(user)}>
                         <Eye className="h-3 w-3" />
                       </Button>
                     </TableCell>
@@ -411,7 +413,10 @@ export function SuperAdminDashboard() {
           <CardContent>
             <div className="space-y-4">
               {availableManagers.map((manager) => (
-                <div key={manager.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+                <div
+                  key={manager.id}
+                  className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30"
+                >
                   <div className="space-y-1">
                     <p className="font-medium text-sm text-foreground">{manager.name}</p>
                     <p className="text-xs text-muted-foreground">{manager.email}</p>
@@ -465,7 +470,7 @@ export function SuperAdminDashboard() {
               </Button>
             </DialogTitle>
           </DialogHeader>
-          
+
           {isDetailLoading ? (
             <div className="flex justify-center items-center p-8">
               <Loader2 size={32} className="animate-spin" />
@@ -477,7 +482,10 @@ export function SuperAdminDashboard() {
                 <Avatar className="h-16 w-16">
                   <AvatarImage src={`https://i.pravatar.cc/80?u=${selectedUser.email}`} alt={selectedUser.name} />
                   <AvatarFallback className="text-lg">
-                    {selectedUser.name.split(' ').map(n => n[0]).join('')}
+                    {selectedUser.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
                   </AvatarFallback>
                 </Avatar>
                 <div>
@@ -497,21 +505,20 @@ export function SuperAdminDashboard() {
                 {selectedUser.programs && selectedUser.programs.length > 0 && (
                   <div className="flex items-center gap-2">
                     <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">
-                      Enrolled in: {selectedUser.programs.map(p => p.name).join(', ')}
-                    </span>
+                    <span className="text-sm">Enrolled in: {selectedUser.programs.map((p) => p.name).join(", ")}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">
-                    Member since: {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'N/A'}
+                    Member since:{" "}
+                    {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : "N/A"}
                   </span>
                 </div>
               </div>
 
               {/* Manager Assignment */}
-              {(selectedUser.role === 'Trainee' || selectedUser.role === 'Facilitator') && (
+              {(selectedUser.role === "Trainee" || selectedUser.role === "Facilitator") && (
                 <div className="space-y-3 p-4 rounded-lg border border-border">
                   <h4 className="font-medium text-foreground">Assigned Program Manager</h4>
                   <div className="flex gap-2">
@@ -520,19 +527,19 @@ export function SuperAdminDashboard() {
                         <SelectValue placeholder="Select a manager" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">No Manager Assigned</SelectItem>
-                        {availableManagers.map(manager => (
+                        <SelectItem value="none">No Manager Assigned</SelectItem>
+                        {availableManagers.map((manager) => (
                           <SelectItem key={manager.id} value={manager.id}>
                             {manager.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button 
+                    <Button
                       onClick={handleAssignManager}
-                      disabled={isAssigning || selectedManagerId === (selectedUser.assignedManager?._id || '')}
+                      disabled={isAssigning || selectedManagerId === (selectedUser.assignedManager?._id || "none")}
                     >
-                      {isAssigning ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                      {isAssigning ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
                     </Button>
                   </div>
                 </div>
@@ -543,12 +550,15 @@ export function SuperAdminDashboard() {
                 <h4 className="font-medium text-foreground">Recent Activity</h4>
                 <div className="space-y-2">
                   {selectedUser.activityFeed && selectedUser.activityFeed.length > 0 ? (
-                    selectedUser.activityFeed.map(activity => {
+                    selectedUser.activityFeed.map((activity) => {
                       const IconComponent = getActivityIcon(activity.type)
                       return (
-                        <div key={activity.id} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30">
-                          <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
-                            <IconComponent className="h-4 w-4 text-blue-600" />
+                        <div
+                          key={activity.id}
+                          className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30"
+                        >
+                          <div className="p-2 rounded-lg bg-custom-blue/10">
+                            <IconComponent className="h-4 w-4 text-custom-blue" />
                           </div>
                           <div className="flex-1">
                             <p className="text-sm text-foreground">{activity.text}</p>
@@ -572,4 +582,4 @@ export function SuperAdminDashboard() {
       </Dialog>
     </div>
   )
-} 
+}

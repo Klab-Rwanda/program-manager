@@ -1,17 +1,5 @@
 "use client"
-
-import { useState } from "react"
-import { 
-  BookOpen, 
-  Camera, 
-  Clock, 
-  Users, 
-  FileCheck, 
-  TrendingUp, 
-  Calendar, 
-  Upload 
-} from "lucide-react"
-
+import { BookOpen, Camera, Clock, Users, FileCheck, TrendingUp, Calendar, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -47,7 +35,6 @@ export function FacilitatorDashboard() {
       trend: "+5% from last week",
     },
   ]
-
   const recentActivities = [
     {
       title: "Software Engineering Bootcamp",
@@ -68,7 +55,6 @@ export function FacilitatorDashboard() {
       status: "info",
     },
   ]
-
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
@@ -80,24 +66,31 @@ export function FacilitatorDashboard() {
           Start Class & Mark Attendance
         </Button>
       </div>
-
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat, index) => (
           <Card key={index} className="bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
+              <div className="p-2 rounded-lg bg-muted/30">
+                {" "}
+                {/* Changed to bg-muted/30 */}
+                <stat.icon className="h-4 w-4 text-custom-blue" /> {/* Changed all icons to text-custom-blue */}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-foreground">{stat.value}</div>
               <p className="text-xs text-muted-foreground mt-1">{stat.description}</p>
-              <p className="text-xs text-green-400 mt-1">{stat.trend}</p>
+              <p
+                className={`text-xs mt-1 ${stat.trend.startsWith("+") ? "text-custom-blue" : "text-muted-foreground"}`}
+              >
+                {stat.trend}
+              </p>{" "}
+              {/* Adjusted trend colors */}
             </CardContent>
           </Card>
         ))}
       </div>
-
       {/* Main Content Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         {/* Today's Schedule */}
@@ -109,7 +102,7 @@ export function FacilitatorDashboard() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-4 rounded-lg bg-muted">
               <div className="flex items-center gap-3">
-                <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                <div className="h-2 w-2 rounded-full bg-website-primary"></div> {/* Changed to bg-website-primary */}
                 <div>
                   <p className="font-medium text-foreground">Software Engineering Bootcamp</p>
                   <p className="text-sm text-muted-foreground">Room A1 • 20 students</p>
@@ -120,10 +113,9 @@ export function FacilitatorDashboard() {
                 <Badge variant="outline">In Progress</Badge>
               </div>
             </div>
-
             <div className="flex items-center justify-between p-4 rounded-lg bg-muted">
               <div className="flex items-center gap-3">
-                <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                <div className="h-2 w-2 rounded-full bg-website-primary"></div> {/* Changed to bg-website-primary */}
                 <div>
                   <p className="font-medium text-foreground">Tech for Kids</p>
                   <p className="text-sm text-muted-foreground">Room B2 • 15 students</p>
@@ -136,7 +128,6 @@ export function FacilitatorDashboard() {
             </div>
           </CardContent>
         </Card>
-
         {/* Recent Activity */}
         <Card className="col-span-3 bg-card border-border">
           <CardHeader>
@@ -149,10 +140,10 @@ export function FacilitatorDashboard() {
                 <div
                   className={`h-2 w-2 rounded-full mt-2 ${
                     activity.status === "completed"
-                      ? "bg-green-500"
+                      ? "bg-website-primary" // Changed to bg-website-primary
                       : activity.status === "pending"
-                        ? "bg-yellow-500"
-                        : "bg-blue-500"
+                        ? "bg-website-secondary" // Changed to bg-website-secondary
+                        : "bg-website-primary" // Changed to bg-website-primary
                   }`}
                 ></div>
                 <div className="flex-1 space-y-1">
@@ -165,7 +156,6 @@ export function FacilitatorDashboard() {
           </CardContent>
         </Card>
       </div>
-
       {/* Quick Actions */}
       <Card className="bg-card border-border">
         <CardHeader>
@@ -195,4 +185,4 @@ export function FacilitatorDashboard() {
       </Card>
     </div>
   )
-} 
+}
