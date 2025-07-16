@@ -117,32 +117,32 @@ export function TraineeDashboard() {
       value: myPrograms.length.toString(),
       change: "Active courses",
       icon: BookOpen,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100 dark:bg-blue-900/20",
+      color: "text-custom-blue",
+      bgColor: "bg-custom-blue/10",
     },
     {
       title: "Overall Progress",
       value: `${Math.round(myPrograms.reduce((sum, p) => sum + (p.progress || 0), 0) / myPrograms.length)}%`,
       change: "+12% this week",
       icon: TrendingUp,
-      color: "text-green-600",
-      bgColor: "bg-green-100 dark:bg-green-900/20",
+      color: "text-custom-blue",
+      bgColor: "bg-custom-blue/10",
     },
     {
       title: "Next Session",
       value: "Today",
       change: "2:00 PM - React Basics",
       icon: Calendar,
-      color: "text-orange-600",
-      bgColor: "bg-orange-100 dark:bg-orange-900/20",
+      color: "text-custom-blue",
+      bgColor: "bg-custom-blue/10",
     },
     {
       title: "Pending Tasks",
       value: "5",
       change: "Due this week",
       icon: FileText,
-      color: "text-purple-600",
-      bgColor: "bg-purple-100 dark:bg-purple-900/20",
+      color: "text-custom-blue",
+      bgColor: "bg-custom-blue/10",
     },
   ]
 
@@ -173,15 +173,15 @@ export function TraineeDashboard() {
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="rounded-lg bg-gradient-to-r from-blue-900 to-blue-800 p-6 text-white">
+      <div className="rounded-lg bg-gradient-to-r from-gray-900 to-gray-800 p-6 text-white">
         <h2 className="text-2xl font-bold mb-2">Welcome back, Alice!</h2>
-        <p className="text-blue-200 mb-4">Continue your learning journey. You have {myPrograms.length} active programs.</p>
+        <p className="text-gray-300 mb-4">Continue your learning journey. You have {myPrograms.length} active programs.</p>
         <div className="flex gap-3">
-          <Button size="lg" className="bg-white text-blue-900 hover:bg-blue-50">
+          <Button size="lg" className="bg-white text-black hover:bg-gray-100">
             <BookOpen className="mr-2 h-4 w-4" />
             Continue Learning
           </Button>
-          <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-blue-900">
+          <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-black bg-transparent">
             <FileText className="mr-2 h-4 w-4" />
             Submit Assignment
           </Button>
@@ -193,14 +193,13 @@ export function TraineeDashboard() {
         {stats.map((stat, index) => (
           <Card key={index} className="bg-card border-border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
               <div className={`p-2 rounded-lg ${stat.bgColor}`}>
                 <stat.icon className={`h-4 w-4 ${stat.color}`} />
               </div>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-foreground">{stat.value}</div>
-              <p className="text-xs text-muted-foreground mt-1">{stat.change}</p>
+              <p className="text-xs text-muted-foreground mt-1">{stat.title}</p>
             </CardContent>
           </Card>
         ))}
@@ -222,14 +221,14 @@ export function TraineeDashboard() {
                     <div className="flex items-center justify-between">
                       <Link 
                         href={`/program-management/${program._id}`} 
-                        className="font-medium text-foreground hover:text-blue-600 transition-colors flex items-center gap-2"
+                        className="font-medium text-foreground hover:text-custom-blue transition-colors flex items-center gap-2"
                       >
                         {program.name}
                         <ExternalLink className="h-3 w-3" />
                       </Link>
                       <Badge 
                         variant={program.status === "Active" ? "default" : "secondary"}
-                        className={program.status === "Active" ? "bg-blue-600" : ""}
+                        className={program.status === "Active" ? "bg-custom-blue text-white" : ""}
                       >
                         {program.status}
                       </Badge>
@@ -241,7 +240,7 @@ export function TraineeDashboard() {
                     </div>
                     {program.progress && (
                       <div className="flex items-center space-x-2">
-                        <Progress value={program.progress} className="w-32" />
+                        <Progress value={program.progress} className="w-32 [&>*]:bg-custom-blue dark:[&>*]:bg-custom-blue" />
                         <span className="text-sm text-muted-foreground">{program.progress}%</span>
                       </div>
                     )}
@@ -288,12 +287,15 @@ export function TraineeDashboard() {
                       task.status === "Completed" ? "default" : 
                       task.status === "In Progress" ? "secondary" : "outline"
                     }
-                    className="text-xs"
+                    className={
+                      task.status === "Completed" ? "bg-custom-blue text-white" : 
+                      task.status === "In Progress" ? "bg-muted/30 text-muted-foreground" : "text-xs"
+                    }
                   >
                     {task.status}
                   </Badge>
                 </div>
-                <p className="text-sm text-blue-600 font-medium">{task.program}</p>
+                <p className="text-sm text-custom-blue font-medium">{task.program}</p>
                 <div className="flex items-center text-xs text-muted-foreground">
                   <Clock className="mr-1 h-3 w-3" />
                   Due: {task.dueDate}
@@ -333,4 +335,4 @@ export function TraineeDashboard() {
       </Card>
     </div>
   )
-} 
+}
