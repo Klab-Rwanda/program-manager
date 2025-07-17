@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Plus,
   Search,
@@ -16,25 +16,45 @@ import {
   Clock,
   Users,
   BookOpen,
-  Send,
-  UserPlus,
   Award,
-  TrendingUp,
+  Star,
   Calendar,
   FileText,
-  Star,
   Download,
-  ExternalLink,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface Facilitator {
   id: number
@@ -72,6 +92,15 @@ interface ContentSubmission {
 }
 
 export default function FacilitatorsPage() {
+  const API_BASE_URL = "http://localhost:8000/api/v1/programs"
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+
+
+  // State
+  const [programs, setPrograms] = useState<{ _id: string; name: string }[]>([])
+  const [selectedProgramId, setSelectedProgramId] = useState<string>("")
+  const [facilitators, setFacilitators] = useState<Facilitator[]>([])
+  const [contentSubmissions, setContentSubmissions] = useState<ContentSubmission[]>([]) // keep mock or fetch later if available
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [activeTab, setActiveTab] = useState("facilitators")
@@ -81,337 +110,133 @@ export default function FacilitatorsPage() {
   const [showContentPreview, setShowContentPreview] = useState(false)
   const [selectedFacilitator, setSelectedFacilitator] = useState<Facilitator | null>(null)
   const [selectedContent, setSelectedContent] = useState<ContentSubmission | null>(null)
-  const [showPromoteModal, setShowPromoteModal] = useState(false)
-  const [contentDuration, setContentDuration] = useState("weekly")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const [facilitators, setFacilitators] = useState<Facilitator[]>([
-    {
-      id: 1,
-      name: "Alice Uwimana",
-      email: "alice.uwimana@klab.rw",
-      phone: "+250 788 123 456",
-      specialization: "Full Stack Development",
-      experience: "5 years",
-      status: "active",
-      programs: ["Tekeher Experts", "Web Development Basics"],
-      rating: 4.8,
-      github: "alice-uwimana",
-      joinDate: "2023-01-15",
-      studentsCount: 45,
-      contentSubmissions: 12,
-      approvedContent: 10,
-      type: "hired",
-    },
-    {
-      id: 2,
-      name: "Bob Nkurunziza",
-      email: "bob.nkurunziza@klab.rw",
-      phone: "+250 788 234 567",
-      specialization: "Data Science",
-      experience: "7 years",
-      status: "active",
-      programs: ["Data Analytics Bootcamp"],
-      rating: 4.9,
-      github: "bob-data",
-      joinDate: "2022-08-20",
-      studentsCount: 32,
-      contentSubmissions: 8,
-      approvedContent: 8,
-      type: "hired",
-    },
-    {
-      id: 3,
-      name: "Carol Mukamana",
-      email: "carol.mukamana@klab.rw",
-      phone: "+250 788 345 678",
-      specialization: "UI/UX Design",
-      experience: "4 years",
-      status: "inactive",
-      programs: ["UI/UX Design Mastery"],
-      rating: 4.7,
-      github: "carol-design",
-      joinDate: "2023-03-10",
-      studentsCount: 28,
-      contentSubmissions: 5,
-      approvedContent: 4,
-      type: "hired",
-    },
-    {
-      id: 4,
-      name: "David Mugisha",
-      email: "david.mugisha@student.klab.rw",
-      phone: "+250 788 456 789",
-      specialization: "Mobile Development",
-      experience: "2 years",
-      status: "active",
-      programs: ["Mobile App Development"],
-      rating: 4.5,
-      github: "david-mobile",
-      joinDate: "2024-01-10",
-      studentsCount: 15,
-      contentSubmissions: 3,
-      approvedContent: 3,
-      type: "promoted",
-      previousProgram: "Tekeher Experts",
-      promotionDate: "2024-01-10",
-    },
-  ])
+  // For hiring facilitator (enter facilitator user id)
+  const [hireFacilitatorId, setHireFacilitatorId] = useState("")
 
-  const [contentSubmissions, setContentSubmissions] = useState<ContentSubmission[]>([
-    {
-      id: 1,
-      facilitatorId: 1,
-      facilitatorName: "Alice Uwimana",
-      title: "Advanced React Hooks",
-      description: "Comprehensive guide to useEffect, useContext, and custom hooks",
-      program: "Tekeher Experts",
-      submissionDate: "2024-01-20",
-      status: "pending",
-      type: "lesson",
-      duration: "weekly",
-      content: `
-# Advanced React Hooks
+  // Fetch programs from backend
+  async function fetchPrograms() {
+    const res = await fetch(API_BASE_URL, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error("Failed to load programs")
+    const data = await res.json()
+    return data.data // assuming backend sends { data: [...] }
+  }
 
-## Introduction
-React Hooks revolutionized how we write React components by allowing us to use state and other React features in functional components.
+  // Fetch facilitators for selected program
+  async function fetchFacilitators(programId: string) {
+    const res = await fetch(`${API_BASE_URL}/${programId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error("Failed to load facilitators")
+    const data = await res.json()
+    return data.data.facilitators || []
+  }
 
-## useEffect Hook
-The useEffect hook lets you perform side effects in functional components:
+  // Enroll facilitator to program by userId
+  async function enrollFacilitator(programId: string, facilitatorId: string) {
+    const res = await fetch(`${API_BASE_URL}/${programId}/enroll-facilitator`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ facilitatorId }),
+    })
+    if (!res.ok) {
+      const errorData = await res.json()
+      throw new Error(errorData.message || "Failed to enroll facilitator")
+    }
+    return await res.json()
+  }
 
-\`\`\`javascript
-import React, { useState, useEffect } from 'react';
-
-function Example() {
-  const [count, setCount] = useState(0);
-
+  // Load programs on mount
   useEffect(() => {
-    document.title = \`You clicked \${count} times\`;
-  });
+    async function loadPrograms() {
+      setLoading(true)
+      try {
+        const progs = await fetchPrograms()
+        setPrograms(progs)
+        if (progs.length > 0) setSelectedProgramId(progs[0]._id)
+        setError(null)
+      } catch (err: any) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadPrograms()
+  }, [])
 
-  return (
-    <div>
-      <p>You clicked {count} times</p>
-      <button onClick={() => setCount(count + 1)}>
-        Click me
-      </button>
-    </div>
-  );
-}
-\`\`\`
+  // Load facilitators when selectedProgramId changes
+  useEffect(() => {
+    if (!selectedProgramId) return
+    async function loadFacilitators() {
+      setLoading(true)
+      try {
+        const facs = await fetchFacilitators(selectedProgramId)
+        setFacilitators(facs)
+        setError(null)
+      } catch (err: any) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadFacilitators()
+  }, [selectedProgramId])
 
-## useContext Hook
-The useContext hook allows you to consume context values:
-
-\`\`\`javascript
-const ThemeContext = React.createContext();
-
-function App() {
-  return (
-    <ThemeContext.Provider value="dark">
-      <Toolbar />
-    </ThemeContext.Provider>
-  );
-}
-
-function Toolbar() {
-  const theme = useContext(ThemeContext);
-  return <div>Current theme: {theme}</div>;
-}
-\`\`\`
-
-## Custom Hooks
-Custom hooks let you extract component logic into reusable functions:
-
-\`\`\`javascript
-function useCounter(initialValue = 0) {
-  const [count, setCount] = useState(initialValue);
-  
-  const increment = () => setCount(count + 1);
-  const decrement = () => setCount(count - 1);
-  const reset = () => setCount(initialValue);
-  
-  return { count, increment, decrement, reset };
-}
-\`\`\`
-
-## Assignment
-Create a custom hook that manages form state and validation.
-      `,
-      fileUrl: "#",
-    },
-    {
-      id: 2,
-      facilitatorId: 2,
-      facilitatorName: "Bob Nkurunziza",
-      title: "Data Visualization with Python",
-      description: "Creating interactive charts using matplotlib and seaborn",
-      program: "Data Analytics Bootcamp",
-      submissionDate: "2024-01-18",
-      status: "approved",
-      type: "assignment",
-      duration: "program",
-      content: `
-# Data Visualization with Python
-
-## Overview
-Data visualization is crucial for understanding patterns and insights in data. Python offers powerful libraries for creating compelling visualizations.
-
-## Matplotlib Basics
-Matplotlib is the foundation of plotting in Python:
-
-\`\`\`python
-import matplotlib.pyplot as plt
-import numpy as np
-
-# Basic line plot
-x = np.linspace(0, 10, 100)
-y = np.sin(x)
-
-plt.figure(figsize=(10, 6))
-plt.plot(x, y, label='sin(x)')
-plt.xlabel('X values')
-plt.ylabel('Y values')
-plt.title('Sine Wave')
-plt.legend()
-plt.grid(True)
-plt.show()
-\`\`\`
-
-## Seaborn for Statistical Plots
-Seaborn provides high-level statistical visualization:
-
-\`\`\`python
-import seaborn as sns
-import pandas as pd
-
-# Load sample dataset
-tips = sns.load_dataset('tips')
-
-# Create a scatter plot
-plt.figure(figsize=(10, 6))
-sns.scatterplot(data=tips, x='total_bill', y='tip', hue='day')
-plt.title('Tips vs Total Bill by Day')
-plt.show()
-\`\`\`
-
-## Interactive Visualizations
-For interactive plots, we can use libraries like Plotly:
-
-\`\`\`python
-import plotly.express as px
-import plotly.graph_objects as go
-
-# Create an interactive scatter plot
-fig = px.scatter(tips, x='total_bill', y='tip', 
-                 color='day', size='size',
-                 title='Interactive Tips Visualization')
-fig.show()
-\`\`\`
-
-## Assignment
-Create a comprehensive dashboard using multiple visualization types to analyze a dataset of your choice.
-      `,
-      fileUrl: "#",
-    },
-    {
-      id: 3,
-      facilitatorId: 3,
-      facilitatorName: "Carol Mukamana",
-      title: "UI/UX Design Principles",
-      description: "Fundamental principles of user interface and experience design",
-      program: "UI/UX Design Mastery",
-      submissionDate: "2024-01-15",
-      status: "rejected",
-      type: "lesson",
-      duration: "weekly",
-      content: `
-# UI/UX Design Principles
-
-## Introduction
-Good design is not just about aesthetics; it's about creating experiences that are intuitive, efficient, and enjoyable for users.
-
-## Key Principles
-
-### 1. User-Centered Design
-Always design with the user in mind. Understand their needs, goals, and pain points.
-
-### 2. Consistency
-Maintain consistency in design elements, interactions, and terminology throughout the application.
-
-### 3. Accessibility
-Design for users with different abilities and needs. Consider color contrast, screen readers, and keyboard navigation.
-
-### 4. Feedback
-Provide clear feedback for user actions. Users should always know what's happening.
-
-### 5. Simplicity
-Keep interfaces simple and focused. Remove unnecessary elements that don't serve a purpose.
-
-## Design Process
-
-1. **Research**: Understand your users and their needs
-2. **Ideate**: Generate multiple design solutions
-3. **Prototype**: Create interactive prototypes
-4. **Test**: Validate designs with real users
-5. **Iterate**: Refine based on feedback
-
-## Tools and Resources
-- Figma for design and prototyping
-- Adobe XD for advanced prototyping
-- Sketch for macOS users
-- InVision for collaboration
-- UserTesting for user research
-
-## Assignment
-Design a mobile app interface for a task management application, focusing on the core principles discussed.
-      `,
-      fileUrl: "#",
-    },
-  ])
-
+  // Filter helpers
   const filteredFacilitators = facilitators.filter((facilitator) => {
     const matchesSearch = facilitator.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = filterStatus === "all" || facilitator.status === filterStatus
     return matchesSearch && matchesStatus
   })
 
+  // Mock filter contentSubmissions as before or replace with backend fetch later
   const filteredContent = contentSubmissions.filter((content) => {
-    const matchesSearch = content.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         content.facilitatorName.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesSearch =
+      content.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      content.facilitatorName.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = filterStatus === "all" || content.status === filterStatus
     return matchesSearch && matchesStatus
   })
 
-  const handlePreviewContent = (content: ContentSubmission) => {
-    setSelectedContent(content)
-    setShowContentPreview(true)
-  }
-
-  const handleHireFacilitator = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // Implementation for hiring facilitator
-    setShowHireModal(false)
-  }
-
-  const handlePromoteStudent = (student: any) => {
-    setSelectedFacilitator(student)
-    setShowPromoteModal(true)
-  }
-
-  const handleDeleteFacilitator = (id: number) => {
-    setFacilitators(facilitators.filter(f => f.id !== id))
-  }
-
-  const handleApproveContent = (contentId: number) => {
-    setContentSubmissions(contentSubmissions.map(content => 
-      content.id === contentId ? { ...content, status: "approved" } : content
-    ))
-  }
-
-  const handleRejectContent = (contentId: number) => {
-    setContentSubmissions(contentSubmissions.map(content => 
-      content.id === contentId ? { ...content, status: "rejected" } : content
-    ))
+  // UI helpers
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "active":
+        return (
+          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+            Active
+          </Badge>
+        )
+      case "inactive":
+        return (
+          <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Inactive</Badge>
+        )
+      case "pending":
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+            Pending
+          </Badge>
+        )
+      case "approved":
+        return (
+          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+            Approved
+          </Badge>
+        )
+      case "rejected":
+        return (
+          <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Rejected</Badge>
+        )
+      default:
+        return <Badge variant="secondary">{status}</Badge>
+    }
   }
 
   const getStatusIcon = (status: string) => {
@@ -427,21 +252,55 @@ Design a mobile app interface for a task management application, focusing on the
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "active":
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Active</Badge>
-      case "inactive":
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Inactive</Badge>
-      case "pending":
-        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Pending</Badge>
-      case "approved":
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Approved</Badge>
-      case "rejected":
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Rejected</Badge>
-      default:
-        return <Badge variant="secondary">{status}</Badge>
+  // Handlers
+  const handleHireFacilitator = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedProgramId) {
+      alert("Please select a program first")
+      return
     }
+    if (!hireFacilitatorId.trim()) {
+      alert("Please enter facilitator user ID")
+      return
+    }
+    setLoading(true)
+    try {
+      await enrollFacilitator(selectedProgramId, hireFacilitatorId.trim())
+      const updatedFacilitators = await fetchFacilitators(selectedProgramId)
+      setFacilitators(updatedFacilitators)
+      setShowHireModal(false)
+      setHireFacilitatorId("")
+      alert("Facilitator hired successfully!")
+    } catch (err: any) {
+      alert("Error: " + err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteFacilitator = (id: number) => {
+    setFacilitators(facilitators.filter((f) => f.id !== id))
+  }
+
+  const handleApproveContent = (contentId: number) => {
+    setContentSubmissions(
+      contentSubmissions.map((content) =>
+        content.id === contentId ? { ...content, status: "approved" } : content,
+      ),
+    )
+  }
+
+  const handleRejectContent = (contentId: number) => {
+    setContentSubmissions(
+      contentSubmissions.map((content) =>
+        content.id === contentId ? { ...content, status: "rejected" } : content,
+      ),
+    )
+  }
+
+  const handlePreviewContent = (content: ContentSubmission) => {
+    setSelectedContent(content)
+    setShowContentPreview(true)
   }
 
   return (
@@ -453,16 +312,47 @@ Design a mobile app interface for a task management application, focusing on the
             Manage facilitators and review content submissions
           </p>
         </div>
-        <Button onClick={() => setShowHireModal(true)}>
+        <Button onClick={() => setShowHireModal(true)} disabled={loading}>
           <Plus className="mr-2 h-4 w-4" />
           Hire Facilitator
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      {/* Program selector */}
+      <div className="mb-4 max-w-xs">
+        <Label htmlFor="program-select">Select Program</Label>
+        <select
+          id="program-select"
+          className="border p-2 rounded w-full"
+          value={selectedProgramId}
+          onChange={(e) => setSelectedProgramId(e.target.value)}
+          disabled={loading}
+        >
+          <option value="">-- Select Program --</option>
+          {programs.map((prog) => (
+            <option key={prog._id} value={prog._id}>
+              {prog.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {error && (
+        <div className="text-red-600 font-semibold mb-2">Error: {error}</div>
+      )}
+
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="space-y-4"
+      >
         <TabsList>
-          <TabsTrigger value="facilitators">Facilitators ({facilitators.length})</TabsTrigger>
-          <TabsTrigger value="content">Content Submissions ({contentSubmissions.length})</TabsTrigger>
+          <TabsTrigger value="facilitators">
+            Facilitators ({facilitators.length})
+          </TabsTrigger>
+          <TabsTrigger value="content">
+            Content Submissions ({contentSubmissions.length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="facilitators" className="space-y-4">
@@ -511,7 +401,9 @@ Design a mobile app interface for a task management application, focusing on the
                     </div>
                     <div className="flex items-center space-x-2">
                       <Users className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{facilitator.studentsCount} students</span>
+                      <span className="text-sm">
+                        {facilitator.studentsCount} students
+                      </span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <BookOpen className="h-4 w-4 text-muted-foreground" />
@@ -536,7 +428,8 @@ Design a mobile app interface for a task management application, focusing on the
                     {facilitator.type === "promoted" && (
                       <div className="bg-blue-50 p-2 rounded-md">
                         <p className="text-xs text-blue-800">
-                          Promoted from {facilitator.previousProgram} on {facilitator.promotionDate}
+                          Promoted from {facilitator.previousProgram} on{" "}
+                          {facilitator.promotionDate}
                         </p>
                       </div>
                     )}
@@ -579,7 +472,7 @@ Design a mobile app interface for a task management application, focusing on the
         <TabsContent value="content" className="space-y-4">
           <div className="flex items-center space-x-2">
             <Input
-              placeholder="Search content..."
+              placeholder="Search content submissions..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-64"
@@ -597,122 +490,88 @@ Design a mobile app interface for a task management application, focusing on the
             </Select>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredContent.map((content) => (
-              <Card key={content.id} className="relative">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{content.title}</CardTitle>
-                    {getStatusBadge(content.status)}
-                  </div>
-                  <CardDescription>{content.facilitatorName} • {content.program}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">{content.description}</p>
-                    <div className="flex items-center space-x-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{content.type} • {content.duration}</span>
+          {filteredContent.length === 0 ? (
+            <p className="text-center text-muted-foreground">No content submissions found.</p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredContent.map((content) => (
+                <Card key={content.id} className="relative">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">{content.title}</CardTitle>
+                      {getStatusBadge(content.status)}
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">Submitted: {content.submissionDate}</span>
+                    <CardDescription>
+                      By {content.facilitatorName} | Program: {content.program}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm mb-2 line-clamp-3">{content.description}</p>
+                    <div className="flex items-center space-x-2 text-xs text-muted-foreground mb-2">
+                      <FileText className="h-4 w-4" />
+                      <span>Type: {content.type}</span>
+                      <Clock className="h-4 w-4" />
+                        <span>{content.duration}</span>                    <span>{content.duration}</span>
                     </div>
-                  </div>
-                  <div className="flex space-x-2 mt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handlePreviewContent(content)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    {content.status === "pending" && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleApproveContent(content.id)}
-                          className="text-green-600 hover:text-green-700"
-                        >
-                          <CheckCircle className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRejectContent(content.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                    <Button variant="outline" size="sm">
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    <div className="flex space-x-2 mt-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePreviewContent(content)}
+                      >
+                        <Eye className="h-4 w-4" /> Preview
+                      </Button>
+                      {content.status === "pending" && (
+                        <>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleApproveContent(content.id)}
+                          >
+                            <CheckCircle className="h-4 w-4" /> Approve
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleRejectContent(content.id)}
+                          >
+                            <XCircle className="h-4 w-4" /> Reject
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
       {/* Hire Facilitator Modal */}
       <Dialog open={showHireModal} onOpenChange={setShowHireModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Hire New Facilitator</DialogTitle>
+            <DialogTitle>Hire Facilitator</DialogTitle>
             <DialogDescription>
-              Add a new facilitator to your team. Fill in all required information.
+              Enter the user ID of the facilitator you want to hire for the selected program.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleHireFacilitator} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="name">Full Name</Label>
-                <Input id="name" required />
-              </div>
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" required />
-              </div>
-              <div>
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" required />
-              </div>
-              <div>
-                <Label htmlFor="specialization">Specialization</Label>
-                <Input id="specialization" required />
-              </div>
-              <div>
-                <Label htmlFor="experience">Experience</Label>
-                <Input id="experience" placeholder="e.g., 5 years" required />
-              </div>
-              <div>
-                <Label htmlFor="github">GitHub Username</Label>
-                <Input id="github" />
-              </div>
-            </div>
             <div>
-              <Label htmlFor="programs">Assigned Programs</Label>
-              <Select>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select programs" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tekeher">Tekeher Experts</SelectItem>
-                  <SelectItem value="web-dev">Web Development Basics</SelectItem>
-                  <SelectItem value="data-science">Data Analytics Bootcamp</SelectItem>
-                  <SelectItem value="ui-ux">UI/UX Design Mastery</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="facilitator-id">Facilitator User ID</Label>
+              <Input
+                id="facilitator-id"
+                type="text"
+                value={hireFacilitatorId}
+                onChange={(e) => setHireFacilitatorId(e.target.value)}
+                required
+              />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowHireModal(false)}>
-                Cancel
+              <Button type="submit" disabled={loading}>
+                {loading ? "Hiring..." : "Hire"}
               </Button>
-              <Button type="submit">Hire Facilitator</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -720,134 +579,109 @@ Design a mobile app interface for a task management application, focusing on the
 
       {/* View Facilitator Modal */}
       <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Facilitator Details</DialogTitle>
             <DialogDescription>
-              Detailed information about {selectedFacilitator?.name}
+              Details of {selectedFacilitator?.name}
             </DialogDescription>
           </DialogHeader>
-          {selectedFacilitator && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Name</Label>
-                  <p className="text-sm font-medium">{selectedFacilitator.name}</p>
-                </div>
-                <div>
-                  <Label>Email</Label>
-                  <p className="text-sm font-medium">{selectedFacilitator.email}</p>
-                </div>
-                <div>
-                  <Label>Phone</Label>
-                  <p className="text-sm font-medium">{selectedFacilitator.phone}</p>
-                </div>
-                <div>
-                  <Label>Specialization</Label>
-                  <p className="text-sm font-medium">{selectedFacilitator.specialization}</p>
-                </div>
-                <div>
-                  <Label>Experience</Label>
-                  <p className="text-sm font-medium">{selectedFacilitator.experience}</p>
-                </div>
-                <div>
-                  <Label>GitHub</Label>
-                  <p className="text-sm font-medium">{selectedFacilitator.github}</p>
-                </div>
-                <div>
-                  <Label>Join Date</Label>
-                  <p className="text-sm font-medium">{selectedFacilitator.joinDate}</p>
-                </div>
-                <div>
-                  <Label>Status</Label>
-                  <div className="flex items-center space-x-2">
-                    {getStatusIcon(selectedFacilitator.status)}
-                    <span className="text-sm font-medium capitalize">{selectedFacilitator.status}</span>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <Label>Assigned Programs</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {selectedFacilitator.programs.map((program, index) => (
-                    <Badge key={index} variant="secondary">{program}</Badge>
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{selectedFacilitator.studentsCount}</div>
-                  <div className="text-sm text-gray-600">Students</div>
-                </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{selectedFacilitator.contentSubmissions}</div>
-                  <div className="text-sm text-gray-600">Submissions</div>
-                </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">{selectedFacilitator.rating}</div>
-                  <div className="text-sm text-gray-600">Rating</div>
-                </div>
-              </div>
-            </div>
-          )}
+          <div className="space-y-4">
+            {selectedFacilitator ? (
+              <>
+                <p><strong>Email:</strong> {selectedFacilitator.email}</p>
+                <p><strong>Phone:</strong> {selectedFacilitator.phone}</p>
+                <p><strong>Specialization:</strong> {selectedFacilitator.specialization}</p>
+                <p><strong>Experience:</strong> {selectedFacilitator.experience}</p>
+                <p><strong>Status:</strong> {selectedFacilitator.status}</p>
+                <p><strong>Programs:</strong> {selectedFacilitator.programs.join(", ")}</p>
+                <p><strong>Students Count:</strong> {selectedFacilitator.studentsCount}</p>
+                <p><strong>Content Submissions:</strong> {selectedFacilitator.contentSubmissions}</p>
+                <p><strong>Approved Content:</strong> {selectedFacilitator.approvedContent}</p>
+                <p><strong>GitHub:</strong> {selectedFacilitator.github}</p>
+                <p><strong>Rating:</strong> {selectedFacilitator.rating}</p>
+                <p><strong>Join Date:</strong> {selectedFacilitator.joinDate}</p>
+              </>
+            ) : (
+              <p>No facilitator selected</p>
+            )}
+          </div>
           <DialogFooter>
             <Button onClick={() => setShowViewModal(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Content Preview Modal */}
-      <Dialog open={showContentPreview} onOpenChange={setShowContentPreview}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      {/* Edit Facilitator Modal */}
+      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>{selectedContent?.title}</DialogTitle>
+            <DialogTitle>Edit Facilitator</DialogTitle>
             <DialogDescription>
-              By {selectedContent?.facilitatorName} • {selectedContent?.program}
+              Edit facilitator details here.
             </DialogDescription>
           </DialogHeader>
-          {selectedContent && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <Badge variant="secondary">{selectedContent.type}</Badge>
-                  <Badge variant="secondary">{selectedContent.duration}</Badge>
-                  {getStatusBadge(selectedContent.status)}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Submitted: {selectedContent.submissionDate}
-                </div>
-              </div>
-              <div className="prose prose-sm max-w-none">
-                <pre className="whitespace-pre-wrap text-sm bg-gray-50 p-4 rounded-lg overflow-x-auto">
-                  {selectedContent.content}
-                </pre>
-              </div>
-              {selectedContent.status === "pending" && (
-                <div className="flex space-x-2">
-                  <Button
-                    onClick={() => {
-                      handleApproveContent(selectedContent.id)
-                      setShowContentPreview(false)
-                    }}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Approve
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      handleRejectContent(selectedContent.id)
-                      setShowContentPreview(false)
-                    }}
-                    variant="destructive"
-                  >
-                    <XCircle className="h-4 w-4 mr-2" />
-                    Reject
-                  </Button>
-                </div>
-              )}
-            </div>
+          {/* For demonstration, only editing specialization and experience */}
+          {selectedFacilitator ? (
+            <EditFacilitatorForm
+              facilitator={selectedFacilitator}
+              onClose={() => setShowEditModal(false)}
+              onSave={(updatedFacilitator) => {
+                setFacilitators((prev) =>
+                  prev.map((f) => (f.id === updatedFacilitator.id ? updatedFacilitator : f))
+                )
+                setShowEditModal(false)
+              }}
+            />
+          ) : (
+            <p>No facilitator selected</p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Content Preview Modal */}
+      <Dialog open={showContentPreview} onOpenChange={setShowContentPreview}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Content Preview</DialogTitle>
+            <DialogDescription>
+              Preview of content submission: {selectedContent?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedContent ? (
+              <>
+                <p><strong>Facilitator:</strong> {selectedContent.facilitatorName}</p>
+                <p><strong>Program:</strong> {selectedContent.program}</p>
+                <p><strong>Submission Date:</strong> {selectedContent.submissionDate}</p>
+                <p><strong>Description:</strong> {selectedContent.description}</p>
+                <p><strong>Type:</strong> {selectedContent.type}</p>
+                <p><strong>Duration:</strong> {selectedContent.duration}</p>
+                <div>
+                  <strong>Content File:</strong>
+                  <a
+                    href={selectedContent.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 underline"
+                  >
+                    Download / View
+                  </a>
+                </div>
+                <div className="mt-4">
+                  <iframe
+                    src={selectedContent.fileUrl}
+                    title="Content Preview"
+                    width="100%"
+                    height="400px"
+                    className="border"
+                  />
+                </div>
+              </>
+            ) : (
+              <p>No content selected</p>
+            )}
+          </div>
           <DialogFooter>
             <Button onClick={() => setShowContentPreview(false)}>Close</Button>
           </DialogFooter>
@@ -855,4 +689,52 @@ Design a mobile app interface for a task management application, focusing on the
       </Dialog>
     </div>
   )
-} 
+}
+
+// Separate component for editing facilitator details
+interface EditFacilitatorFormProps {
+  facilitator: Facilitator
+  onClose: () => void
+  onSave: (updatedFacilitator: Facilitator) => void
+}
+
+function EditFacilitatorForm({ facilitator, onClose, onSave }: EditFacilitatorFormProps) {
+  const [specialization, setSpecialization] = useState(facilitator.specialization)
+  const [experience, setExperience] = useState(facilitator.experience)
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const updatedFacilitator = { ...facilitator, specialization, experience }
+    onSave(updatedFacilitator)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="specialization">Specialization</Label>
+        <Input
+          id="specialization"
+          type="text"
+          value={specialization}
+          onChange={(e) => setSpecialization(e.target.value)}
+          required
+        />
+      </div>
+      <div>
+        <Label htmlFor="experience">Experience</Label>
+        <Input
+          id="experience"
+          type="text"
+          value={experience}
+          onChange={(e) => setExperience(e.target.value)}
+          required
+        />
+      </div>
+      <DialogFooter>
+        <Button type="submit">Save</Button>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
