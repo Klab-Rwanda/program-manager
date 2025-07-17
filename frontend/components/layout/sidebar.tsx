@@ -1,5 +1,3 @@
-// components/layout/sidebar.tsx
-
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -8,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity, Archive, Award, BarChart3, Bell, BookOpen, Calendar,
   ChevronLeft, ChevronRight, ClipboardCheck, FileText, FolderOpen,
-  GraduationCap, Home, LogOut, Menu, MessageSquare, Settings, Ticket,
+  GraduationCap, Home, LogOut, Mail, Menu, MessageSquare, Settings, Ticket,
   TrendingUp, Upload, User, UserCheck, Users, Wrench
 } from "lucide-react";
 
@@ -17,7 +15,6 @@ import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { getRoleDisplayName } from "@/lib/roles";
 
 const menuItems = [
-    // ... (Your menuItems array remains unchanged)
     { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['SuperAdmin', 'Program Manager', 'Facilitator', 'Trainee', 'IT Support'] },
     // Super Admin
     { title: "User Management", url: "/dashboard/user-management", icon: Users, roles: ['SuperAdmin'] },
@@ -63,12 +60,10 @@ export function AppSidebar() {
   const { user, role, logout } = useAuth();
   const { isCollapsed, toggleSidebar, isMobile, isMobileMenuOpen, closeMobileMenu } = useSidebar();
 
-  // State for the floating button dropdowns
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Mock notifications
   const notifications: Notification[] = [
     { id: 1, message: "New trainee application received.", time: "2 mins ago", unread: true },
     { id: 2, message: "Project submitted by John Doe.", time: "15 mins ago", unread: true },
@@ -91,7 +86,6 @@ export function AppSidebar() {
         />
       )}
 
-      {/* Main Sidebar */}
       <div
         className={`
           fixed left-0 top-0 h-screen flex flex-col z-[1000] bg-card border-r transition-all duration-300 ease-in-out
@@ -163,18 +157,9 @@ export function AppSidebar() {
             );
           })}
         </nav>
-        
-        {/* THIS IS THE SECTION THAT WAS REMOVED. WE ARE KEEPING IT GONE. */}
-        {/*
-        <div className="p-4 border-t">
-            ... user profile and logout button ...
-        </div>
-        */}
       </div>
 
-      {/* Floating Action Bubbles - RESTORED */}
       <div className="fixed bottom-8 right-8 z-[1001] flex flex-col gap-4">
-        {/* Notifications Bubble */}
         <div className="relative">
           <button 
             className="w-14 h-14 bg-[#1f497d] text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform"
@@ -189,9 +174,7 @@ export function AppSidebar() {
           </button>
           {showNotifications && (
             <div className="absolute bottom-16 right-0 w-80 bg-card border rounded-lg shadow-2xl z-20">
-              <div className="p-4 border-b">
-                <h3 className="font-semibold text-foreground">Notifications</h3>
-              </div>
+              <div className="p-4 border-b"><h3 className="font-semibold text-foreground">Notifications</h3></div>
               <div className="max-h-80 overflow-y-auto">
                 {notifications.map(n => (
                   <div key={n.id} className={`p-4 border-b ${n.unread ? 'bg-blue-50' : ''}`}>
@@ -204,7 +187,6 @@ export function AppSidebar() {
           )}
         </div>
 
-        {/* Settings Bubble */}
         <div className="relative">
           <button 
             className="w-14 h-14 bg-[#1f497d] text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform"
@@ -215,12 +197,10 @@ export function AppSidebar() {
           {showSettings && (
             <div className="absolute bottom-16 right-0 w-60 bg-card border rounded-lg shadow-2xl z-20 py-2">
               <Link href="/dashboard/settings" className="block px-4 py-2 text-sm text-foreground hover:bg-muted">Account Settings</Link>
-              <Link href="/dashboard/settings" className="block px-4 py-2 text-sm text-foreground hover:bg-muted">Appearance</Link>
             </div>
           )}
         </div>
 
-        {/* Profile/Logout Bubble */}
         <div className="relative">
           <button 
             className="w-14 h-14 bg-[#1f497d] text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform"
@@ -234,7 +214,9 @@ export function AppSidebar() {
                 <p className="text-sm font-semibold truncate">{user?.name}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
-              <Link href="/dashboard/settings" className="block px-4 py-2 text-sm text-foreground hover:bg-muted">Profile</Link>
+              <Link href="/dashboard/profile" className="block px-4 py-2 text-sm text-foreground hover:bg-muted">
+                Profile
+              </Link>
               <button onClick={logout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">
                 Logout
               </button>
