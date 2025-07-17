@@ -1,177 +1,95 @@
-"use client"
+// src/lib/contexts/RoleContext.tsx
+"use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { UserRole, Permission, User, AuthContextType } from '@/types/user'
-import { getPermissionsByRole } from '@/lib/roles'
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User } from '@/types'; // Import your new User type
+import api from '@/lib/api'; // Import the configured api client
 
-interface RoleContextType extends AuthContextType {
-  setUserRole: (role: UserRole) => void
-  setUser: (user: User | null) => void
+// Make sure your UserRole type covers all roles from the backend
+export type UserRole = 'SuperAdmin' | 'Program Manager' | 'Facilitator' | 'Trainee' | 'it_support';
+
+export interface AuthContextType {
+  user: User | null;
+  role: UserRole | null;
+  isAuthenticated: boolean;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
 }
 
-const RoleContext = createContext<RoleContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [role, setUserRole] = useState<UserRole | null>(null)
-  const [permissions, setPermissions] = useState<Permission[]>([])
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true); // Add loading state
 
-  // Update permissions when role changes
-  useEffect(() => {
-    if (role) {
-      const rolePermissions = getPermissionsByRole(role)
-      setPermissions(rolePermissions)
-    } else {
-      setPermissions([])
-    }
-  }, [role])
+  const normalizeRole = (role: string): UserRole => {
+      // Your backend has "Program Manager", but frontend might use "program_manager".
+      // This function standardizes it. Let's stick to the backend's format for now.
+      return role as UserRole;
+  };
 
-  // Check if user has specific permission
-  const hasPermission = (permission: Permission): boolean => {
-    return permissions.includes(permission)
-  }
-
-  // Check if user has specific role
-  const hasRole = (requiredRole: UserRole): boolean => {
-    return role === requiredRole
-  }
-
-  // Mock login function (replace with actual authentication)
   const login = async (email: string, password: string): Promise<void> => {
-    // Mock user data - replace with actual API call
-    const mockUsers: Record<string, { user: User; password: string }> = {
-      'admin@klab.rw': {
-        user: {
-          id: '1',
-          email: 'admin@klab.rw',
-          name: 'Super Admin',
-          role: 'super_admin',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        password: 'admin123'
-      },
-      'manager@klab.rw': {
-        user: {
-          id: '2',
-          email: 'manager@klab.rw',
-          name: 'Program Manager',
-          role: 'program_manager',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        password: 'manager123'
-      },
-      'facilitator@klab.rw': {
-        user: {
-          id: '3',
-          email: 'facilitator@klab.rw',
-          name: 'John Doe',
-          role: 'facilitator',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        password: 'facilitator123'
-      },
-      'trainee@klab.rw': {
-        user: {
-          id: '4',
-          email: 'trainee@klab.rw',
-          name: 'Alice Johnson',
-          role: 'trainee',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        password: 'trainee123'
-      },
-      'support@klab.rw': {
-        user: {
-          id: '5',
-          email: 'support@klab.rw',
-          name: 'IT Support',
-          role: 'it_support',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        password: 'support123'
-      }
-    }
-
-    const userData = mockUsers[email]
-    
-    if (userData && userData.password === password) {
-      setUser(userData.user)
-      setUserRole(userData.user.role)
-      setIsAuthenticated(true)
+    const response = await api.post('/auth/login', { email, password });
+    if (response.data && response.data.success) {
+      const { user: loggedInUser, accessToken } = response.data.data;
       
-      // Store in localStorage for persistence
-      localStorage.setItem('user', JSON.stringify(userData.user))
-      localStorage.setItem('isAuthenticated', 'true')
+      setUser(loggedInUser);
+      setIsAuthenticated(true);
+      
+      // Store token and user data
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('user', JSON.stringify(loggedInUser));
     } else {
-      throw new Error('Invalid credentials')
+      throw new Error(response.data.message || 'Login failed');
     }
-  }
+  };
 
-  // Logout function
   const logout = (): void => {
-    setUser(null)
-    setUserRole(null)
-    setPermissions([])
-    setIsAuthenticated(false)
-    
-    // Clear localStorage
-    localStorage.removeItem('user')
-    localStorage.removeItem('isAuthenticated')
-  }
+    setUser(null);
+    setIsAuthenticated(false);
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('user');
+  };
 
-  // Check for existing session on mount
   useEffect(() => {
-    const storedUser = localStorage.getItem('user')
-    const storedAuth = localStorage.getItem('isAuthenticated')
-    
-    if (storedUser && storedAuth === 'true') {
+    // This effect runs once on app load to check for an existing session
+    const token = localStorage.getItem('accessToken');
+    const storedUser = localStorage.getItem('user');
+
+    if (token && storedUser) {
       try {
-        const userData = JSON.parse(storedUser)
-        setUser(userData)
-        setUserRole(userData.role)
-        setIsAuthenticated(true)
-      } catch (error) {
-        console.error('Error parsing stored user data:', error)
-        logout()
+        setUser(JSON.parse(storedUser));
+        setIsAuthenticated(true);
+      } catch (e) {
+        console.error("Failed to parse user data from localStorage", e);
+        logout(); // Clear invalid data
       }
     }
-  }, [])
+    setLoading(false); // Finished checking auth status
+  }, []);
 
-  const value: RoleContextType = {
+  const value: AuthContextType = {
     user,
-    role,
-    permissions,
+    role: user ? normalizeRole(user.role) : null,
     isAuthenticated,
+    loading,
     login,
     logout,
-    hasPermission,
-    hasRole,
-    setUserRole,
-    setUser
-  }
+  };
 
   return (
-    <RoleContext.Provider value={value}>
-      {children}
-    </RoleContext.Provider>
-  )
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
 }
 
-export function useRole() {
-  const context = useContext(RoleContext)
+export function useAuth() {
+  const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useRole must be used within a RoleProvider')
+    throw new Error('useAuth must be used within a RoleProvider');
   }
-  return context
-} 
+  return context;
+}

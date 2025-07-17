@@ -9,11 +9,13 @@ import swaggerJsDoc from 'swagger-jsdoc';
 import swaggerOptions from './src/config/swagger.config.js';
 // Load environment variables
 dotenv.config();
+
 console.log('--- Environment Variable Check ---');
 console.log('Port:', process.env.PORT);
 console.log('Email Host:', process.env.EMAIL_HOST);
 console.log('Email User:', process.env.EMAIL_USER);
 console.log('Email Pass Loaded:', process.env.EMAIL_PASS ? 'Yes' : 'NO');
+console.log('CORS_ORIGIN used by server:', process.env.CORS_ORIGIN);
 console.log('---------------------------------');
 
 const app = express();

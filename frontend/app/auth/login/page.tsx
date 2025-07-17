@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Mail, Lock, BookOpen } from "lucide-react"
-import { useRole } from "@/lib/contexts/RoleContext"
+import { useAuth } from "@/lib/contexts/RoleContext"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   
-  const { login } = useRole()
+  const { login } = useAuth()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {

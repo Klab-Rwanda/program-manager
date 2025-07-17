@@ -1,94 +1,67 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useCallback } from "react"
-import { Download, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
-import { useRole } from "@/lib/contexts/RoleContext"
+import { useState, useEffect, useCallback } from "react";
+import { Download, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { useAuth } from "@/lib/contexts/RoleContext"; // FIX: Import the correct hook
+import api from "@/lib/api";
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+// UI Components
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-interface LogEntry {
-  id: string
-  timestamp: string
-  user: string
-  role: string
-  action: string
-  details: string
+// --- Type Definitions based on your backend Log model ---
+interface LoggedUser {
+  _id: string;
+  name: string;
+  role: string;
 }
 
+interface LogEntry {
+  _id: string;
+  createdAt: string;
+  user: LoggedUser;
+  action: string;
+  details: string;
+}
+
+interface PaginationInfo {
+  page: number;
+  totalPages: number;
+  hasPrevPage: boolean;
+  hasNextPage: boolean;
+  totalDocs: number;
+}
+
+interface LogFilters {
+  startDate: string;
+  endDate: string;
+  action: string; // 'all' will be represented by an empty string for the API
+  page: number;
+  limit: number;
+}
+
+// All possible log actions from your backend log.model.js
 const ALL_LOG_ACTIONS = [
   'USER_LOGIN', 'USER_CREATED', 'USER_UPDATED_SELF', 'USER_CHANGED_PASSWORD',
   'ADMIN_UPDATED_USER_STATUS', 'ADMIN_ASSIGNED_MANAGER_TO_USER',
   'PROGRAM_CREATED', 'PROGRAM_SUBMITTED_FOR_APPROVAL', 'PROGRAM_APPROVED',
   'PROGRAM_REJECTED', 'PROGRAM_DEACTIVATED', 'COURSE_CREATED', 'COURSE_APPROVED',
   'ATTENDANCE_MARKED', 'ATTENDANCE_EXCUSED'
-]
+];
 
-interface LogFilters {
-  startDate: string
-  endDate: string
-  action: string | "all"
-  page: number
-}
 
-// Mock data for demonstration
-const mockLogs: LogEntry[] = [
-  {
-    id: "1",
-    timestamp: "2024-01-15T10:30:00",
-    user: "John Doe",
-    role: "Super Admin",
-    action: "USER_CREATED",
-    details: "Created new user: jane@klab.rw"
-  },
-  {
-    id: "2",
-    timestamp: "2024-01-15T09:15:00",
-    user: "Jane Smith",
-    role: "Program Manager",
-    action: "PROGRAM_CREATED",
-    details: "Created program: Web Development Bootcamp"
-  },
-  {
-    id: "3",
-    timestamp: "2024-01-15T08:45:00",
-    user: "Bob Johnson",
-    role: "Facilitator",
-    action: "ATTENDANCE_MARKED",
-    details: "Marked attendance for 25 trainees"
-  },
-  {
-    id: "4",
-    timestamp: "2024-01-14T16:20:00",
-    user: "Alice Brown",
-    role: "Trainee",
-    action: "USER_LOGIN",
-    details: "User logged in successfully"
-  },
-  {
-    id: "5",
-    timestamp: "2024-01-14T14:30:00",
-    user: "Charlie Wilson",
-    role: "Super Admin",
-    action: "ADMIN_UPDATED_USER_STATUS",
-    details: "Updated user status: bob@klab.rw to Active"
-  }
-]
-
-const LogFiltersComponent = ({ onFilterChange, filters }: { onFilterChange: (filterName: string, value: string) => void, filters: LogFilters }) => {
+const LogFiltersComponent = ({ onFilterChange, filters }: { onFilterChange: (filterName: string, value: any) => void, filters: LogFilters }) => {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Filters</CardTitle>
-        <CardDescription>
-          Filter the activity log by date range and action type.
-        </CardDescription>
+        <CardDescription>Filter the activity log by date range and action type.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -117,7 +90,7 @@ const LogFiltersComponent = ({ onFilterChange, filters }: { onFilterChange: (fil
                 <SelectValue placeholder="All Actions" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Actions</SelectItem>
+                <SelectItem value="">All Actions</SelectItem>
                 {ALL_LOG_ACTIONS.map(action => (
                   <SelectItem key={action} value={action}>
                     {action.replace(/_/g, ' ')}
@@ -129,36 +102,33 @@ const LogFiltersComponent = ({ onFilterChange, filters }: { onFilterChange: (fil
         </div>
       </CardContent>
     </Card>
-  )
-}
+  );
+};
 
 const LogTable = ({ logs }: { logs: LogEntry[] }) => {
   const getActionBadge = (action: string) => {
-    const actionColors = {
+    const actionColors: { [key: string]: string } = {
       'USER_LOGIN': 'bg-blue-100 text-blue-800',
       'USER_CREATED': 'bg-green-100 text-green-800',
       'USER_UPDATED_SELF': 'bg-yellow-100 text-yellow-800',
       'PROGRAM_CREATED': 'bg-purple-100 text-purple-800',
       'ATTENDANCE_MARKED': 'bg-indigo-100 text-indigo-800',
-      'ADMIN_UPDATED_USER_STATUS': 'bg-orange-100 text-orange-800'
-    }
-    
-    const color = actionColors[action as keyof typeof actionColors] || 'bg-gray-100 text-gray-800'
-    
+      'ADMIN_UPDATED_USER_STATUS': 'bg-orange-100 text-orange-800',
+      'PROGRAM_REJECTED': 'bg-red-100 text-red-800'
+    };
+    const color = actionColors[action] || 'bg-gray-100 text-gray-800';
     return (
       <Badge className={color}>
         {action.replace(/_/g, ' ')}
       </Badge>
-    )
-  }
+    );
+  };
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Activity Log</CardTitle>
-        <CardDescription>
-          A comprehensive, filterable log of all key events across the platform.
-        </CardDescription>
+        <CardDescription>A comprehensive, filterable log of all key events across the platform.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="rounded-md border">
@@ -181,10 +151,10 @@ const LogTable = ({ logs }: { logs: LogEntry[] }) => {
                 </TableRow>
               ) : (
                 logs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell>{new Date(log.timestamp).toLocaleString()}</TableCell>
-                    <TableCell className="font-medium">{log.user}</TableCell>
-                    <TableCell>{log.role}</TableCell>
+                  <TableRow key={log._id}>
+                    <TableCell>{new Date(log.createdAt).toLocaleString()}</TableCell>
+                    <TableCell className="font-medium">{log.user?.name || 'Unknown User'}</TableCell>
+                    <TableCell>{log.user?.role || 'N/A'}</TableCell>
                     <TableCell>{getActionBadge(log.action)}</TableCell>
                     <TableCell className="max-w-md truncate">{log.details}</TableCell>
                   </TableRow>
@@ -195,107 +165,96 @@ const LogTable = ({ logs }: { logs: LogEntry[] }) => {
         </div>
       </CardContent>
     </Card>
-  )
-}
+  );
+};
 
 export default function MasterLogPage() {
-  const { user } = useRole()
-  const [logs, setLogs] = useState<LogEntry[]>([])
-  const [pagination, setPagination] = useState({
-    page: 1,
-    totalPages: 1,
-    hasPrevPage: false,
-    hasNextPage: false
-  })
-  const [loading, setLoading] = useState(true)
+  const { user } = useAuth(); // FIX: Use the correct hook
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [pagination, setPagination] = useState<PaginationInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  const today = new Date().toISOString().split('T')[0]
-  const lastMonth = new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0]
+  const today = new Date().toISOString().split('T')[0];
+  const lastMonth = new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0];
 
   const [filters, setFilters] = useState<LogFilters>({
     startDate: lastMonth,
     endDate: today,
-    action: "all",
-    page: 1
-  })
+    action: "",
+    page: 1,
+    limit: 10,
+  });
 
   const fetchLogs = useCallback(async () => {
-    setLoading(true)
+    setLoading(true);
+    setError(null);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      const params = new URLSearchParams({
+        page: filters.page.toString(),
+        limit: filters.limit.toString(),
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+      });
+      if (filters.action) {
+        params.append('action', filters.action);
+      }
       
-      // Filter mock data based on filters
-      let filteredLogs = mockLogs.filter(log => {
-        const logDate = new Date(log.timestamp).toISOString().split('T')[0]
-        const dateMatch = logDate >= filters.startDate && logDate <= filters.endDate
-        const actionMatch = filters.action === "all" || !filters.action || log.action === filters.action
-        return dateMatch && actionMatch
-      })
+      const response = await api.get(`/reports/master-log?${params.toString()}`);
+      const responseData = response.data.data;
       
-      // Simulate pagination
-      const itemsPerPage = 10
-      const startIndex = (filters.page - 1) * itemsPerPage
-      const endIndex = startIndex + itemsPerPage
-      const paginatedLogs = filteredLogs.slice(startIndex, endIndex)
-      
-      setLogs(paginatedLogs)
+      setLogs(responseData.docs);
       setPagination({
-        page: filters.page,
-        totalPages: Math.ceil(filteredLogs.length / itemsPerPage),
-        hasPrevPage: filters.page > 1,
-        hasNextPage: filters.page < Math.ceil(filteredLogs.length / itemsPerPage)
-      })
-    } catch (err) {
-      console.error("Failed to fetch master log", err)
-      alert("Could not load activity log.")
+          page: responseData.page,
+          totalPages: responseData.totalPages,
+          hasPrevPage: responseData.hasPrevPage,
+          hasNextPage: responseData.hasNextPage,
+          totalDocs: responseData.totalDocs,
+      });
+
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Could not load activity log.");
+      console.error(err);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [filters])
+  }, [filters]);
 
   useEffect(() => {
-    fetchLogs()
-  }, [fetchLogs])
+    fetchLogs();
+  }, [fetchLogs]);
 
   const handleFilterChange = (filterName: string, value: string) => {
-    setFilters(prev => ({ ...prev, [filterName]: value, page: 1 }))
-  }
+    setFilters(prev => ({ ...prev, [filterName]: value, page: 1 }));
+  };
   
   const handlePageChange = (newPage: number) => {
-    setFilters(prev => ({ ...prev, page: newPage }))
-  }
+    setFilters(prev => ({ ...prev, page: newPage }));
+  };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Master Activity Log</h1>
-          <p className="text-muted-foreground">
-            A comprehensive, filterable log of all key events across the platform.
-          </p>
+          <p className="text-muted-foreground">A comprehensive log of all key system events.</p>
         </div>
-        <Button>
+        <Button disabled>
           <Download className="mr-2 h-4 w-4" />
-          Export View
+          Export View (PDF)
         </Button>
       </div>
 
-      {/* Filters */}
       <LogFiltersComponent onFilterChange={handleFilterChange} filters={filters} />
 
-      {/* Content */}
-      {loading ? (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      ) : (
+      {loading && <div className="flex items-center justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}
+      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+      
+      {!loading && !error && (
         <>
           <LogTable logs={logs} />
           
-          {/* Pagination */}
-          {pagination.totalPages > 1 && (
+          {pagination && pagination.totalPages > 1 && (
             <div className="flex items-center justify-center gap-4">
               <Button
                 variant="outline"
@@ -323,5 +282,5 @@ export default function MasterLogPage() {
         </>
       )}
     </div>
-  )
-} 
+  );
+}
