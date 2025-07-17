@@ -21,7 +21,6 @@ interface Course {
   status: 'Draft' | 'PendingApproval' | 'Approved' | 'Rejected';
   facilitator: User;
 }
-// --- THE FIX: programManager is a single User object, not an array ---
 interface ProgramDetails {
   _id: string;
   name: string;
@@ -29,7 +28,7 @@ interface ProgramDetails {
   status: string;
   trainees: User[];
   facilitators: User[];
-  programManager?: User; // CORRECTED: It's an optional single User object
+  programManager?: User;
   startDate: string;
   endDate: string;
 }
@@ -70,7 +69,6 @@ export default function ProgramDetailPage() {
         fetchData();
     }, [fetchData]);
     
-    // ... (handleApproveCourse and getStatusBadge functions remain the same)
     const handleApproveCourse = async (courseId: string) => {
         if (!window.confirm("Are you sure you want to approve this course?")) return;
         try {
@@ -91,7 +89,7 @@ export default function ProgramDetailPage() {
             default: return <Badge variant="outline">{status}</Badge>;
         }
     };
-
+    
     if (loading) {
         return <div className="flex justify-center items-center h-full p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
@@ -237,7 +235,7 @@ export default function ProgramDetailPage() {
                     programName={program.name}
                     onUserAdded={() => {
                         setIsAddUserModalOpen(false);
-                        fetchData();
+                        fetchData(); // Refresh the page data to show the new user
                     }}
                 />
             )}

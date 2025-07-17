@@ -284,6 +284,55 @@ export const getProgramStats = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, stats, "Program statistics fetched successfully."));
 });
 
+export const addUserAndEnroll = asyncHandler(async (req, res) => {
+    const { programId } = req.params;
+    const { name, email, role } = req.body;
+    const managerId = req.user._id;
+
+    // 1. Verify Manager Access to the program
+    await verifyManagerAccess(programId, managerId);
+    
+    // 2. Validate input
+    if (!name || !email || !role) {
+        throw new ApiError(400, "Name, email, and role are required.");
+    }
+    if (role !== 'Trainee' && role !== 'Facilitator') {
+        throw new ApiError(400, "Can only add Trainees or Facilitators to a program.");
+    }
+    const existedUser = await User.findOne({ email });
+    if (existedUser) {
+        throw new ApiError(409, `User with email ${email} already exists. You can enroll them from the 'Manage Users' screen.`);
+    }
+
+    // 3. Create the new user
+    const generatedPassword = Math.random().toString(36).slice(-8);
+    const newUser = await User.create({
+        name,
+        email,
+        password: generatedPassword,
+        role,
+    });
+
+    if (!newUser) {
+        throw new ApiError(500, "Something went wrong while creating the user.");
+    }
+
+    // 4. Enroll the new user into the program
+    const updateField = role === 'Trainee' ? 'trainees' : 'facilitators';
+    await Program.findByIdAndUpdate(programId, {
+        $addToSet: { [updateField]: newUser._id }
+    });
+
+    // 5. Send the registration email
+    sendRegistrationEmail(email, name, generatedPassword).catch(err => {
+        // Log the error but don't fail the request
+        console.error("Email sending failed after user creation and enrollment:", err);
+    });
+
+    const userToReturn = await User.findById(newUser._id).select("-password");
+
+    return res.status(201).json(new ApiResponse(201, { user: userToReturn }, "User created and enrolled successfully."));
+});
 
 
 export {

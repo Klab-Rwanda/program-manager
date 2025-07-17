@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Mail, Lock, BookOpen } from "lucide-react"
+import { Mail, Lock, BookOpen, Loader2 } from "lucide-react" // Added Loader2
 import { useRole } from "@/lib/contexts/RoleContext"
 
 export default function LoginPage() {
@@ -20,21 +20,28 @@ export default function LoginPage() {
     setIsLoading(true)
     
     try {
+      // The login function is from our updated RoleContext
       await login(email, password)
-      router.push("/dashboard")
-    } catch (err) {
-      setError("Invalid email or password. Please try again.")
+      router.push("/dashboard") // Redirect to the main dashboard page
+    } catch (err: any) {
+      // Provide more specific error messages from the backend
+      if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else {
+        setError("Login failed. Please check your credentials and try again.")
+      }
+      console.error(err)
     } finally {
       setIsLoading(false)
     }
   }
 
   const demoCredentials = [
-    { role: "Super Admin", email: "admin@klab.rw", password: "admin123" },
-    { role: "Program Manager", email: "manager@klab.rw", password: "manager123" },
-    { role: "Facilitator", email: "facilitator@klab.rw", password: "facilitator123" },
-    { role: "Trainee", email: "trainee@klab.rw", password: "trainee123" },
-    { role: "IT Support", email: "support@klab.rw", password: "support123" }
+    { role: "Super Admin", email: "superadmin@klab.com", password: "password123" },
+    { role: "Program Manager", email: "manager@klab.com", password: "password123" },
+    { role: "Facilitator", email: "facilitator@klab.com", password: "password123" },
+    { role: "Trainee", email: "trainee@klab.com", password: "password123" },
+    { role: "IT Support", email: "support@klab.com", password: "password123" }
   ]
 
   return (
@@ -72,7 +79,7 @@ export default function LoginPage() {
           </div>
           
           {error && (
-            <div className="bg-red-600 border border-red-400 text-white px-3 py-3 rounded-md text-center">
+            <div className="bg-red-600/80 border border-red-400 text-white px-3 py-3 rounded-md text-center text-sm">
               {error}
             </div>
           )}
@@ -118,9 +125,9 @@ export default function LoginPage() {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full bg-white text-blue-700 py-4 font-semibold text-base border-none rounded-lg cursor-pointer transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:bg-white/50 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none"
+            className="w-full bg-white text-blue-700 py-4 font-semibold text-base border-none rounded-lg cursor-pointer transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:bg-white/50 disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none flex items-center justify-center"
           >
-            {isLoading ? 'ACCESSING...' : 'ACCESS DASHBOARD'}
+            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'ACCESS DASHBOARD'}
           </button>
 
           {/* Demo Credentials */}
@@ -188,4 +195,4 @@ export default function LoginPage() {
       `}</style>
     </div>
   )
-} 
+}

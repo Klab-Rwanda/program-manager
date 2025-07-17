@@ -47,4 +47,16 @@ router.route('/trainee/:traineeId/attendance').get(reportController.getTraineeMo
  */
 router.route('/master-log').get(checkRole(['SuperAdmin']), reportController.getMasterLog);
 
+/**
+ * @openapi
+ * /reports/analytics:
+ *   get:
+ *     tags: [Reports]
+ *     summary: Get overall system analytics
+ *     security: { bearerAuth: [] }
+ *     responses:
+ *       200: { description: 'A JSON object with analytics data.' }
+ */
+router.route('/analytics').get(checkRole(['SuperAdmin']), reportController.getAnalytics);
+
 export default router;

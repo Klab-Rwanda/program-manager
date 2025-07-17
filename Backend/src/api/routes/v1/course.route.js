@@ -97,4 +97,49 @@ router.route('/:courseId/request-approval').patch(
     courseController.requestCourseApproval
 );
 
+/**
+ * @openapi
+ * /courses/{courseId}:
+ *   get:
+ *     tags: [Courses]
+ *     summary: Get details for a single course
+ *     description: Retrieves full details for one course, including the assigned facilitator and the list of trainees in the parent program.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { name: courseId, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: 'Course details fetched successfully.' }
+ *       404: { description: 'Course not found.' }
+ */
+router.route('/:courseId').get(courseController.getCourseById);
+
+/**
+ * @openapi
+ * /courses/{courseId}/assign-facilitator:
+ *   patch:
+ *     tags: [Courses]
+ *     summary: Assign a facilitator to a course
+ *     description: (Program Manager only) Assigns a specific facilitator to teach this course.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { name: courseId, in: path, required: true, schema: { type: string } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               facilitatorId: { type: string, description: "The ID of the facilitator to assign" }
+ *     responses:
+ *       200: { description: 'Facilitator assigned successfully.' }
+ *       404: { description: 'Course or Facilitator not found.' }
+ */
+router.route('/:courseId/assign-facilitator').patch(
+    checkRole(['Program Manager']),
+    courseController.assignFacilitatorToCourse
+);
+
 export default router;

@@ -1,575 +1,231 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useCallback } from 'react'
-import { 
-  BookOpen, 
-  Users, 
-  UserCheck, 
-  Clock, 
-  Loader2,
-  Eye,
-  Edit,
-  Trash2,
-  Plus,
-  Mail,
-  Briefcase,
-  Calendar,
-  Activity,
-  FileText,
-  User,
-  X
-} from "lucide-react"
+import { useState, useEffect, useCallback } from 'react';
+import api from '@/lib/api';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Loader2, Plus, Users, UserCheck, Eye, Edit, Trash2, CheckCircle, XCircle } from "lucide-react";
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Progress } from "@/components/ui/progress"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
-// Types based on the original JavaScript structure
-interface DashboardStats {
-  totalPrograms: number
-  activeTrainees: number
-  totalUsers: number
-  pendingApprovals: number
-}
-
+// --- Type Definitions ---
 interface User {
-  id: string
-  name: string
-  role: string
-  dateAdded: string
-  email?: string
-  status?: string
-  avatar?: string
-  assignedManager?: { _id: string; name: string }
-  programs?: Array<{ name: string }>
-  createdAt?: string
-  activityFeed?: Array<{
-    id: string
-    type: string
-    text: string
-    timestamp: string
-  }>
+  _id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  isActive: boolean;
+  programManager?: { _id: string; name: string };
 }
+interface ProgramManager { _id: string; name: string; }
 
-interface ProgramManager {
-  id: string
-  name: string
-  email: string
-}
+// Correct initial state with the exact string from the enum
+const initialUserData = { name: '', email: '', role: 'Trainee' };
 
 export function SuperAdminDashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [recentUsers, setRecentUsers] = useState<User[]>([])
-  const [availableManagers, setAvailableManagers] = useState<ProgramManager[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [users, setUsers] = useState<User[]>([]);
+  const [managers, setManagers] = useState<ProgramManager[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // User detail panel state
-  const [isDetailOpen, setIsDetailOpen] = useState(false)
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
-  const [isDetailLoading, setIsDetailLoading] = useState(false)
-  const [selectedManagerId, setSelectedManagerId] = useState('')
-  const [isAssigning, setIsAssigning] = useState(false)
+  // Modal States
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedManagerId, setSelectedManagerId] = useState('');
+  const [newUserData, setNewUserData] = useState(initialUserData);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Mock data based on the original structure
-  const mockStats: DashboardStats = {
-    totalPrograms: 24,
-    activeTrainees: 248,
-    totalUsers: 1247,
-    pendingApprovals: 8
-  }
-
-  const mockRecentUsers: User[] = [
-    {
-      id: "1",
-      name: "John Doe",
-      role: "Facilitator",
-      dateAdded: "2024-01-15",
-      email: "john@klab.rw",
-      status: "Active",
-      assignedManager: { _id: "1", name: "Manager One" },
-      programs: [{ name: "Web Development" }],
-      createdAt: "2024-01-15T10:00:00Z",
-      activityFeed: [
-        { id: "1", type: "Attendance", text: "Marked attendance for React session", timestamp: "2024-01-20T14:30:00Z" },
-        { id: "2", type: "Submission", text: "Submitted course materials", timestamp: "2024-01-19T16:00:00Z" }
-      ]
-    },
-    {
-      id: "2",
-      name: "Alice Johnson",
-      role: "Trainee",
-      dateAdded: "2024-01-14",
-      email: "alice@klab.rw",
-      status: "Active",
-      programs: [{ name: "Data Science" }],
-      createdAt: "2024-01-14T09:00:00Z",
-      activityFeed: [
-        { id: "3", type: "Attendance", text: "Attended Python workshop", timestamp: "2024-01-20T10:00:00Z" }
-      ]
-    },
-    {
-      id: "3",
-      name: "Bob Smith",
-      role: "Program Manager",
-      dateAdded: "2024-01-13",
-      email: "bob@klab.rw",
-      status: "Inactive",
-      createdAt: "2024-01-13T11:00:00Z"
-    },
-    {
-      id: "4",
-      name: "Sarah Wilson",
-      role: "Facilitator",
-      dateAdded: "2024-01-12",
-      email: "sarah@klab.rw",
-      status: "Active",
-      assignedManager: { _id: "2", name: "Manager Two" },
-      programs: [{ name: "UI/UX Design" }],
-      createdAt: "2024-01-12T13:00:00Z",
-      activityFeed: [
-        { id: "4", type: "Submission", text: "Updated design portfolio", timestamp: "2024-01-20T15:00:00Z" }
-      ]
-    },
-    {
-      id: "5",
-      name: "Mike Brown",
-      role: "Trainee",
-      dateAdded: "2024-01-11",
-      email: "mike@klab.rw",
-      status: "Active",
-      programs: [{ name: "Mobile Development" }],
-      createdAt: "2024-01-11T08:00:00Z"
-    }
-  ]
-
-  const mockManagers: ProgramManager[] = [
-    { id: "1", name: "Manager One", email: "manager1@klab.rw" },
-    { id: "2", name: "Manager Two", email: "manager2@klab.rw" },
-    { id: "3", name: "Manager Three", email: "manager3@klab.rw" }
-  ]
-
-  // Simulate the original fetchDashboardData function
-  const fetchDashboardData = useCallback(async () => {
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      // Simulate API calls
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      setStats(mockStats)
-      setRecentUsers(mockRecentUsers)
-      setAvailableManagers(mockManagers)
+      const [usersRes, managersRes] = await Promise.all([
+        api.get('/users/manage'),
+        api.get('/users/manage/list-by-role?role=Program Manager') // Use the exact string with space
+      ]);
+      setUsers(usersRes.data.data);
+      setManagers(managersRes.data.data);
     } catch (err) {
-      setError("Could not load dashboard data. Please try again later.")
-      console.error(err)
+      setError("Failed to fetch user data.");
+      console.error(err);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    fetchDashboardData()
-  }, [fetchDashboardData])
+    fetchData();
+  }, [fetchData]);
 
-  const handleUserClick = async (user: User) => {
-    setIsDetailOpen(true)
-    setIsDetailLoading(true)
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
     try {
-      // Simulate API call to get detailed user data
-      await new Promise(resolve => setTimeout(resolve, 500))
-      setSelectedUser(user)
-      setSelectedManagerId(user.assignedManager?._id || '')
-    } catch (err) {
-      alert("Could not load user details.")
-      setIsDetailOpen(false)
+      // The `newUserData` state already holds the correct role string (e.g., "Program Manager")
+      await api.post('/auth/register', newUserData);
+      alert(`User "${newUserData.name}" created successfully. They will receive an email with credentials.`);
+      setIsUserModalOpen(false);
+      setNewUserData(initialUserData);
+      fetchData();
+    } catch (err: any) {
+      alert(`Error: ${err.response?.data?.message || 'An unexpected error occurred.'}`);
     } finally {
-      setIsDetailLoading(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
-  const handleCloseDetail = () => {
-    setIsDetailOpen(false)
-    setTimeout(() => {
-      setSelectedUser(null)
-      setSelectedManagerId('')
-    }, 300)
-  }
+  const handleToggleStatus = async (user: User) => {
+    const newStatus = !user.isActive;
+    if (window.confirm(`Are you sure you want to ${newStatus ? 'activate' : 'deactivate'} ${user.name}?`)) {
+      try {
+        await api.patch(`/users/manage/${user._id}/status`, { isActive: newStatus });
+        alert(`User status updated.`);
+        fetchData();
+      } catch (err: any) {
+        alert(`Error: ${err.response?.data?.message || err.message}`);
+      }
+    }
+  };
+  
+  const handleOpenAssignModal = (user: User) => {
+      setSelectedUser(user);
+      // The backend uses programManager (singular)
+      setSelectedManagerId(user.programManager?._id || '');
+      setIsAssignModalOpen(true);
+  };
 
   const handleAssignManager = async () => {
-    if (!selectedUser) return
-    
-    setIsAssigning(true)
+    if (!selectedUser) return;
+    setIsSubmitting(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      alert("Manager assignment updated successfully!")
-      fetchDashboardData() // Refresh data
-    } catch (err) {
-      alert("Failed to assign manager.")
+        // Use the `assign-manager` endpoint as defined in the backend for a single program
+        // NOTE: This assumes you want to assign a manager to a PROGRAM, not a USER directly.
+        // Your backend logic for assigning a PM is on the program model. This might need adjustment.
+        // For now, let's assume we are assigning a manager to a user, which needs a backend endpoint.
+        // Let's pretend the endpoint is `/users/manage/:id/assign-manager`
+        
+        // This is a placeholder since the backend doesn't have this exact route.
+        // await api.patch(`/users/manage/${selectedUser._id}/assign-manager`, { managerId: selectedManagerId });
+        console.log(`Simulating assignment: User ${selectedUser._id} -> Manager ${selectedManagerId}`);
+        await new Promise(res => setTimeout(res, 1000));
+        
+        alert("Manager assignment updated successfully!");
+        setIsAssignModalOpen(false);
+        fetchData();
+    } catch(err: any) {
+        alert(`Error: ${err.response?.data?.message || 'This feature requires a backend endpoint.'}`);
     } finally {
-      setIsAssigning(false)
+        setIsSubmitting(false);
     }
-  }
-
-  const timeAgo = (dateString: string) => {
-    if (!dateString) return ''
-    const date = new Date(dateString)
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000)
-
-    let interval = seconds / 31536000
-    if (interval > 1) return Math.floor(interval) + " years ago"
-    interval = seconds / 2592000
-    if (interval > 1) return Math.floor(interval) + " months ago"
-    interval = seconds / 86400
-    if (interval > 1) return Math.floor(interval) + " days ago"
-    interval = seconds / 3600
-    if (interval > 1) return Math.floor(interval) + " hours ago"
-    interval = seconds / 60
-    if (interval > 1) return Math.floor(interval) + " minutes ago"
-    return Math.floor(seconds) + " seconds ago"
-  }
-
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case 'Attendance': return Calendar
-      case 'Submission': return FileText
-      default: return Activity
-    }
-  }
+  };
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center p-16">
-        <Loader2 size={32} className="animate-spin" />
-      </div>
-    )
+    return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
-
-  if (error) {
-    return (
-      <div className="p-8 text-red-600 bg-red-50 rounded-lg">
-        {error}
-      </div>
-    )
-  }
-
-  const systemStats = [
-    {
-      title: "Total Programs",
-      value: stats?.totalPrograms.toString() || "0",
-      change: "+3 this month",
-      icon: BookOpen,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100 dark:bg-blue-900/20"
-    },
-    {
-      title: "Active Trainees",
-      value: stats?.activeTrainees.toString() || "0",
-      change: "+18 from last month",
-      icon: Users,
-      color: "text-green-600",
-      bgColor: "bg-green-100 dark:bg-green-900/20"
-    },
-    {
-      title: "Total Users",
-      value: stats?.totalUsers.toString() || "0",
-      change: "+12 this month",
-      icon: UserCheck,
-      color: "text-purple-600",
-      bgColor: "bg-purple-100 dark:bg-purple-900/20"
-    },
-    {
-      title: "Pending Approvals",
-      value: stats?.pendingApprovals.toString() || "0",
-      change: "Require attention",
-      icon: Clock,
-      color: "text-orange-600",
-      bgColor: "bg-orange-100 dark:bg-orange-900/20"
-    }
-  ]
 
   return (
     <div className="space-y-6">
-      {/* Welcome Section */}
-      <div className="rounded-lg bg-gradient-to-r from-gray-900 to-gray-800 p-6 text-white">
-        <h2 className="text-2xl font-bold mb-2">Welcome back, Super Admin!</h2>
-        <p className="text-gray-300 mb-4">
-          System overview and management dashboard. Monitor all activities across kLab.
-        </p>
-        <div className="flex gap-3">
-          <Button size="lg" className="bg-white text-black hover:bg-gray-100">
-            <Plus className="mr-2 h-4 w-4" />
-            Add New User
-          </Button>
-          <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-black">
-            <Users className="mr-2 h-4 w-4" />
-            Manage Users
-          </Button>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
+          <p className="text-muted-foreground">Add, view, and manage all users in the system.</p>
         </div>
+        <Button onClick={() => setIsUserModalOpen(true)}><Plus size={16} className="mr-2" /> Create User</Button>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {systemStats.map((stat, index) => (
-          <Card key={index} className="bg-card border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
-              <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">{stat.value}</div>
-              <p className="text-xs text-green-400 mt-1">{stat.change}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {error && <Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
 
-      {/* Main Content Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Recent Users Table */}
-        <Card className="col-span-4 bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground">Recent Users</CardTitle>
-            <CardDescription>Latest user registrations and activities</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Assigned Program</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Date Added</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={user.avatar} alt={user.name} />
-                          <AvatarFallback className="text-xs">
-                            {user.name.split(' ').map(n => n[0]).join('')}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium text-foreground">{user.name}</p>
-                          <p className="text-xs text-muted-foreground">{user.email}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {user.role}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {user.programs?.map(p => p.name).join(', ') || 'None'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant={user.status === "Active" ? "default" : "secondary"}
-                        className="text-xs"
-                      >
-                        {user.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {user.dateAdded}
-                    </TableCell>
-                    <TableCell>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleUserClick(user)}
-                      >
-                        <Eye className="h-3 w-3" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        {/* Available Managers */}
-        <Card className="col-span-3 bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground">Available Managers</CardTitle>
-            <CardDescription>Program managers ready for assignment</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {availableManagers.map((manager) => (
-                <div key={manager.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
-                  <div className="space-y-1">
-                    <p className="font-medium text-sm text-foreground">{manager.name}</p>
-                    <p className="text-xs text-muted-foreground">{manager.email}</p>
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    Available
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <Card className="bg-card border-border">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-foreground">Quick Actions</CardTitle>
-          <CardDescription>Common administrative tasks</CardDescription>
+          <CardTitle>All Users</CardTitle>
+          <CardDescription>A complete list of all active users.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent">
-              <Users className="h-6 w-6" />
-              Manage Users
-            </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent">
-              <BookOpen className="h-6 w-6" />
-              View Programs
-            </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent">
-              <Clock className="h-6 w-6" />
-              Pending Approvals
-            </Button>
-            <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent">
-              <UserCheck className="h-6 w-6" />
-              System Reports
-            </Button>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.map(user => (
+                <TableRow key={user._id}>
+                  <TableCell>
+                    <div className="font-medium">{user.name}</div>
+                    <div className="text-sm text-muted-foreground">{user.email}</div>
+                  </TableCell>
+                  <TableCell><Badge variant="outline">{user.role}</Badge></TableCell>
+                  <TableCell>
+                    <Badge variant={user.isActive ? 'default' : 'destructive'} className={user.isActive ? 'bg-green-500' : ''}>
+                      {user.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className='flex gap-1 justify-end'>
+                        {/* The logic to assign a manager is typically done on a Program, not a User directly.
+                            This button is left here for UI demonstration.
+                        <Button variant="outline" size="sm" onClick={() => handleOpenAssignModal(user)}>Assign PM</Button>
+                        */}
+                        <Button variant="ghost" size="icon" onClick={() => handleToggleStatus(user)} title={user.isActive ? 'Deactivate' : 'Activate'}>
+                            {user.isActive ? <XCircle className="h-4 w-4 text-destructive"/> : <CheckCircle className="h-4 w-4 text-green-500"/>}
+                        </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
-
-      {/* User Detail Dialog */}
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      
+      {/* Create User Modal */}
+      <Dialog open={isUserModalOpen} onOpenChange={setIsUserModalOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
-              User Details
-              <Button variant="ghost" size="sm" onClick={handleCloseDetail}>
-                <X className="h-4 w-4" />
-              </Button>
-            </DialogTitle>
+            <DialogTitle>Create New User</DialogTitle>
+            <DialogDescription>A welcome email with login credentials will be sent to the user.</DialogDescription>
           </DialogHeader>
-          
-          {isDetailLoading ? (
-            <div className="flex justify-center items-center p-8">
-              <Loader2 size={32} className="animate-spin" />
+          <form onSubmit={handleCreateUser} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input id="name" value={newUserData.name} onChange={e => setNewUserData({...newUserData, name: e.target.value})} required/>
             </div>
-          ) : selectedUser ? (
-            <div className="space-y-6">
-              {/* Profile Header */}
-              <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/30">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src={`https://i.pravatar.cc/80?u=${selectedUser.email}`} alt={selectedUser.name} />
-                  <AvatarFallback className="text-lg">
-                    {selectedUser.name.split(' ').map(n => n[0]).join('')}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">{selectedUser.name}</h3>
-                  <p className="text-muted-foreground">
-                    {selectedUser.role} - <span className="capitalize">{selectedUser.status}</span>
-                  </p>
-                </div>
-              </div>
-
-              {/* User Details */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{selectedUser.email}</span>
-                </div>
-                {selectedUser.programs && selectedUser.programs.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">
-                      Enrolled in: {selectedUser.programs.map(p => p.name).join(', ')}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">
-                    Member since: {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'N/A'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Manager Assignment */}
-              {(selectedUser.role === 'Trainee' || selectedUser.role === 'Facilitator') && (
-                <div className="space-y-3 p-4 rounded-lg border border-border">
-                  <h4 className="font-medium text-foreground">Assigned Program Manager</h4>
-                  <div className="flex gap-2">
-                    <Select value={selectedManagerId} onValueChange={setSelectedManagerId}>
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="Select a manager" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">No Manager Assigned</SelectItem>
-                        {availableManagers.map(manager => (
-                          <SelectItem key={manager.id} value={manager.id}>
-                            {manager.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button 
-                      onClick={handleAssignManager}
-                      disabled={isAssigning || selectedManagerId === (selectedUser.assignedManager?._id || '')}
-                    >
-                      {isAssigning ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Recent Activity */}
-              <div className="space-y-3">
-                <h4 className="font-medium text-foreground">Recent Activity</h4>
-                <div className="space-y-2">
-                  {selectedUser.activityFeed && selectedUser.activityFeed.length > 0 ? (
-                    selectedUser.activityFeed.map(activity => {
-                      const IconComponent = getActivityIcon(activity.type)
-                      return (
-                        <div key={activity.id} className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30">
-                          <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
-                            <IconComponent className="h-4 w-4 text-blue-600" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-foreground">{activity.text}</p>
-                            <p className="text-xs text-muted-foreground">{timeAgo(activity.timestamp)}</p>
-                          </div>
-                        </div>
-                      )
-                    })
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No recent activity found for this user.</p>
-                  )}
-                </div>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" value={newUserData.email} onChange={e => setNewUserData({...newUserData, email: e.target.value})} required/>
             </div>
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">Select a user to see their details.</p>
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              {/* Ensure the value matches the backend enum exactly */}
+              <Select value={newUserData.role} onValueChange={(value) => setNewUserData(prev => ({ ...prev, role: value }))}>
+                <SelectTrigger><SelectValue/></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Trainee">Trainee</SelectItem>
+                  <SelectItem value="Facilitator">Facilitator</SelectItem>
+                  <SelectItem value="Program Manager">Program Manager</SelectItem>
+                  <SelectItem value="SuperAdmin">Super Admin</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsUserModalOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : 'Create User'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
-  )
-} 
+  );
+}

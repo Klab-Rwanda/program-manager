@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDashboardStats } from '../../controllers/dashboard.controller.js';
+import { getDashboardStats, getProgramManagerStats } from '../../controllers/dashboard.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole } from '../../middlewares/role.middleware.js';
 
@@ -30,4 +30,5 @@ router.use(verifyJWT, checkRole(['SuperAdmin', 'Program Manager']));
  */
 router.route('/stats').get(getDashboardStats);
 
+router.route('/pm/stats').get(getProgramManagerStats);
 export default router;

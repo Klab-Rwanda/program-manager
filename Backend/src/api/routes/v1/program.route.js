@@ -285,4 +285,32 @@ router.route('/:id/report/pdf').get(checkRole(['SuperAdmin', 'Program Manager'])
 router.route('/:id/stats')
     .get(checkRole(['SuperAdmin', 'Program Manager']), programController.getProgramStats);
 
+    /**
+ * @openapi
+ * /programs/{id}/add-user:
+ *   post:
+ *     tags: [Programs]
+ *     summary: Create a user and enroll them in a program
+ *     description: (Program Manager only) Creates a new user (Trainee or Facilitator) and immediately enrolls them into the specified program. Sends a registration email.
+ *     security: { bearerAuth: [] }
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string }, description: 'The ID of the program to enroll the user into.' }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               email: { type: string }
+ *               role: { type: string, enum: [Trainee, Facilitator] }
+ *     responses:
+ *       201: { description: 'User created and enrolled successfully.' }
+ */
+router.route('/:id/add-user')
+    .post(checkRole(['Program Manager', 'SuperAdmin']), programController.addUserAndEnroll);
+
+
+
 export default router;

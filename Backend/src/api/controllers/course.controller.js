@@ -77,4 +77,60 @@ export const requestCourseApproval = asyncHandler(async (req, res) => {
 });
 
 
+export const getCourseById = asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    const course = await Course.findById(courseId)
+        .populate('facilitator', 'name email')
+        .populate({
+            path: 'program',
+            select: 'name trainees',
+            populate: {
+                path: 'trainees',
+                select: 'name email'
+            }
+        });
+        
+    if (!course) throw new ApiError(404, "Course not found.");
+
+    // TODO: Add security check to ensure user is part of this program
+
+    return res.status(200).json(new ApiResponse(200, course, "Course details fetched."));
+});
+
+/**
+ * @desc    Assign a specific Facilitator to a course.
+ * @route   PATCH /api/v1/courses/{courseId}/assign-facilitator
+ * @access  Private (Program Manager)
+ */
+export const assignFacilitatorToCourse = asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    const { facilitatorId } = req.body;
+
+    // First, verify the user is a real facilitator
+    const facilitator = await User.findOne({ _id: facilitatorId, role: 'Facilitator' });
+    if (!facilitator) throw new ApiError(404, "Selected user is not a valid Facilitator.");
+
+    // TODO: Add check to ensure the requesting PM manages the program this course belongs to.
+
+    const updatedCourse = await Course.findByIdAndUpdate(
+        courseId,
+        { $set: { facilitator: facilitatorId } },
+        { new: true }
+    );
+    if (!updatedCourse) throw new ApiError(404, "Course not found.");
+    
+    // Also add this facilitator to the main program's facilitator list if they aren't there
+    await Program.findByIdAndUpdate(updatedCourse.program, { $addToSet: { facilitators: facilitatorId } });
+
+    await createLog({
+        user: req.user._id,
+        action: 'FACILITATOR_ASSIGNED_TO_COURSE',
+        details: `PM ${req.user.name} assigned facilitator ${facilitator.name} to course '${updatedCourse.title}'.`,
+        entity: { id: updatedCourse._id, model: 'Course' }
+    });
+
+    return res.status(200).json(new ApiResponse(200, updatedCourse, "Facilitator assigned successfully."));
+});
+
+
 export { createCourse, approveCourse, getCoursesForProgram };

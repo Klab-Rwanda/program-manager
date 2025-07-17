@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { UserRole, Permission, User, AuthContextType } from '@/types/user'
 import { getPermissionsByRole } from '@/lib/roles'
+import api from '@/lib/api' // Import the API client
 
 interface RoleContextType extends AuthContextType {
   setUserRole: (role: UserRole) => void
@@ -17,7 +18,6 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [permissions, setPermissions] = useState<Permission[]>([])
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  // Update permissions when role changes
   useEffect(() => {
     if (role) {
       const rolePermissions = getPermissionsByRole(role)
@@ -27,119 +27,59 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }
   }, [role])
 
-  // Check if user has specific permission
   const hasPermission = (permission: Permission): boolean => {
     return permissions.includes(permission)
   }
 
-  // Check if user has specific role
   const hasRole = (requiredRole: UserRole): boolean => {
     return role === requiredRole
   }
 
-  // Mock login function (replace with actual authentication)
+  // UPDATED LOGIN FUNCTION
   const login = async (email: string, password: string): Promise<void> => {
-    // Mock user data - replace with actual API call
-    const mockUsers: Record<string, { user: User; password: string }> = {
-      'admin@klab.rw': {
-        user: {
-          id: '1',
-          email: 'admin@klab.rw',
-          name: 'Super Admin',
-          role: 'super_admin',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        password: 'admin123'
-      },
-      'manager@klab.rw': {
-        user: {
-          id: '2',
-          email: 'manager@klab.rw',
-          name: 'Program Manager',
-          role: 'program_manager',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        password: 'manager123'
-      },
-      'facilitator@klab.rw': {
-        user: {
-          id: '3',
-          email: 'facilitator@klab.rw',
-          name: 'John Doe',
-          role: 'facilitator',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        password: 'facilitator123'
-      },
-      'trainee@klab.rw': {
-        user: {
-          id: '4',
-          email: 'trainee@klab.rw',
-          name: 'Alice Johnson',
-          role: 'trainee',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        password: 'trainee123'
-      },
-      'support@klab.rw': {
-        user: {
-          id: '5',
-          email: 'support@klab.rw',
-          name: 'IT Support',
-          role: 'it_support',
-          isActive: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        },
-        password: 'support123'
-      }
-    }
-
-    const userData = mockUsers[email]
+    const response = await api.post('/auth/login', { email, password });
     
-    if (userData && userData.password === password) {
-      setUser(userData.user)
-      setUserRole(userData.user.role)
-      setIsAuthenticated(true)
+    if (response.data && response.data.success) {
+      const { user: loggedInUser, accessToken } = response.data.data;
       
-      // Store in localStorage for persistence
-      localStorage.setItem('user', JSON.stringify(userData.user))
-      localStorage.setItem('isAuthenticated', 'true')
+      setUser(loggedInUser);
+      // Backend roles have spaces, frontend uses snake_case. Let's normalize.
+      const normalizedRole = loggedInUser.role.toLowerCase().replace(/ /g, '_') as UserRole;
+      setUserRole(normalizedRole);
+      setIsAuthenticated(true);
+      
+      localStorage.setItem('user', JSON.stringify(loggedInUser));
+      localStorage.setItem('accessToken', accessToken); // Store the token
+      localStorage.setItem('isAuthenticated', 'true');
     } else {
-      throw new Error('Invalid credentials')
+      throw new Error(response.data.message || 'Login failed');
     }
   }
 
-  // Logout function
+  // UPDATED LOGOUT FUNCTION
   const logout = (): void => {
     setUser(null)
     setUserRole(null)
     setPermissions([])
     setIsAuthenticated(false)
     
-    // Clear localStorage
     localStorage.removeItem('user')
+    localStorage.removeItem('accessToken'); // Remove the token
     localStorage.removeItem('isAuthenticated')
   }
 
-  // Check for existing session on mount
+  // UPDATED SESSION CHECK
   useEffect(() => {
     const storedUser = localStorage.getItem('user')
+    const storedToken = localStorage.getItem('accessToken')
     const storedAuth = localStorage.getItem('isAuthenticated')
     
-    if (storedUser && storedAuth === 'true') {
+    if (storedUser && storedToken && storedAuth === 'true') {
       try {
         const userData = JSON.parse(storedUser)
         setUser(userData)
-        setUserRole(userData.role)
+        const normalizedRole = userData.role.toLowerCase().replace(/ /g, '_') as UserRole;
+        setUserRole(normalizedRole)
         setIsAuthenticated(true)
       } catch (error) {
         console.error('Error parsing stored user data:', error)
@@ -174,4 +114,4 @@ export function useRole() {
     throw new Error('useRole must be used within a RoleProvider')
   }
   return context
-} 
+}

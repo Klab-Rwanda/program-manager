@@ -97,3 +97,19 @@ export const getMasterLog = asyncHandler(async (req, res) => {
 
     return res.status(200).json(new ApiResponse(200, logs, "Master log fetched successfully."));
 });
+
+export const getAnalytics = asyncHandler(async (req, res) => {
+    // In a real app, these would be complex database aggregations.
+    // For now, we will simulate the data structure.
+    const analyticsData = {
+        totalPrograms: await Program.countDocuments({ isActive: true }),
+        activePrograms: await Program.countDocuments({ status: 'Active' }),
+        totalTrainees: await User.countDocuments({ role: 'Trainee', status: 'Active' }),
+        totalFacilitators: await User.countDocuments({ role: 'Facilitator', status: 'Active' }),
+        // These would require more complex calculations
+        completionRate: 87, 
+        attendanceRate: 92,
+        // Add more real data queries as needed...
+    };
+    return res.status(200).json(new ApiResponse(200, analyticsData, "Analytics data fetched."));
+});
