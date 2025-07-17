@@ -2,10 +2,10 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useRole } from "@/lib/contexts/RoleContext"
+import { useAuth } from "@/lib/contexts/RoleContext"
 
 export default function HomePage() {
-  const { isAuthenticated } = useRole()
+  const { isAuthenticated } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
@@ -17,4 +17,4 @@ export default function HomePage() {
   }, [isAuthenticated, router])
 
   return null
-} 
+}
