@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useRole } from "@/lib/contexts/RoleContext";
+import { UserRole } from "@/lib/contexts/RoleContext";
 
 export default function FacilitatorLayout({
   children,
