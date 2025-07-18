@@ -11,21 +11,13 @@ import { Submission } from '../models/submission.model.js';
  * @access  Private (SuperAdmin)
  */
 const getAllUsers = asyncHandler(async (req, res) => {
-    // Get the role from the query parameters (e.g., /users/manage?role=ProgramManager)
     const { role } = req.query; 
-
-    // Start with a base query that all requests will have
     let query = { isActive: true };
-
-    // If a role is provided in the query, add it to our database query
     if (role) {
-       
-        const roleRegex = new RegExp(role.replace(' ', ''), 'i');
-        query.role = { $regex: roleRegex };
+        // This is more robust and handles both "Trainee" and "Facilitator" correctly.
+        query.role = role;
     }
-
     const users = await User.find(query).select('-password');
-    
     return res.status(200).json(new ApiResponse(200, users, "Users fetched successfully."));
 });
 
