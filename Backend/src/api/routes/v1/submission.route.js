@@ -87,4 +87,20 @@ router.route('/:submissionId/review').patch(
     submissionController.reviewSubmission
 );
 
+/**
+ * @openapi
+ * /submissions/my-reviews:
+ *   get:
+ *     tags: [Submissions]
+ *     summary: Get all submissions for the logged-in facilitator to review
+ *     description: (Facilitator only) Retrieves all project submissions for all courses the requesting facilitator manages.
+ *     security: { bearerAuth: [] }
+ *     responses:
+ *       200: { description: 'A list of submissions awaiting review.' }
+ */
+router.route('/my-reviews').get(
+    checkRole(['Facilitator']),
+    submissionController.getSubmissionsForFacilitator
+);
+
 export default router;

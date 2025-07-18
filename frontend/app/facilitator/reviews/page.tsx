@@ -1,536 +1,159 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Clock, CheckCircle, XCircle, MessageSquare, Download, Eye } from "lucide-react"
+import { useState, useEffect, useCallback } from "react";
+import { Clock, CheckCircle, XCircle, MessageSquare, Download, Eye, Loader2 } from "lucide-react";
+import api from "@/lib/api";
 
-import { AppSidebar } from "@/components/layout/sidebar"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+// UI Components
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
 
-export default function Reviews() {
-  const [selectedSubmission, setSelectedSubmission] = useState<any>(null)
-  const [reviewStatus, setReviewStatus] = useState("")
-  const [feedback, setFeedback] = useState("")
-  const [viewSubmissionOpen, setViewSubmissionOpen] = useState(false)
+// --- Type Definitions ---
+interface Submission {
+    _id: string;
+    trainee: { _id: string; name: string; email: string; };
+    program: { name: string; };
+    course: { title: string; };
+    fileUrl: string;
+    submittedAt: string;
+    status: 'Submitted' | 'Reviewed' | 'NeedsRevision';
+    feedback?: string;
+    grade?: string;
+}
 
-  const reviewStats = [
-    {
-      title: "Pending Reviews",
-      value: "12",
-      description: "Awaiting your review",
-      icon: Clock,
-      color: "text-yellow-500",
-    },
-    {
-      title: "Approved",
-      value: "28",
-      description: "This month",
-      icon: CheckCircle,
-      color: "text-green-500",
-    },
-    {
-      title: "Needs Revision",
-      value: "8",
-      description: "Requires changes",
-      icon: XCircle,
-      color: "text-red-500",
-    },
-  ]
+interface ReviewFormData {
+    status: 'Reviewed' | 'NeedsRevision';
+    feedback: string;
+    grade: string;
+}
 
-  const submissions = [
-    {
-      id: 1,
-      studentName: "Alice Johnson",
-      studentAvatar: "/placeholder.svg",
-      projectTitle: "E-commerce Website",
-      program: "Software Engineering Bootcamp",
-      submissionDate: "2024-01-08",
-      status: "Pending",
-      fileType: "ZIP",
-      fileSize: "15.2 MB",
-      description: "Full-stack e-commerce application with React and Node.js",
-      priority: "High",
-      projectDetails: {
-        technologies: ["React", "Node.js", "MongoDB", "Express"],
-        features: ["User Authentication", "Shopping Cart", "Payment Integration", "Admin Dashboard"],
-        githubUrl: "https://github.com/alice/ecommerce-project",
-        liveUrl: "https://alice-ecommerce.vercel.app",
-      },
-    },
-    {
-      id: 2,
-      studentName: "Bob Smith",
-      studentAvatar: "/placeholder.svg",
-      projectTitle: "Mobile Game App",
-      program: "Software Engineering Bootcamp",
-      submissionDate: "2024-01-07",
-      status: "Approved",
-      fileType: "APK",
-      fileSize: "8.7 MB",
-      description: "Simple puzzle game built with React Native",
-      priority: "Medium",
-      projectDetails: {
-        technologies: ["React Native", "Expo", "AsyncStorage"],
-        features: ["Game Logic", "Score Tracking", "Local Storage", "Sound Effects"],
-        githubUrl: "https://github.com/bob/puzzle-game",
-        liveUrl: null,
-      },
-    },
-    {
-      id: 3,
-      studentName: "Carol Davis",
-      studentAvatar: "/placeholder.svg",
-      projectTitle: "Scratch Animation",
-      program: "Tech for Kids",
-      submissionDate: "2024-01-06",
-      status: "Needs Revision",
-      fileType: "SB3",
-      fileSize: "2.1 MB",
-      description: "Interactive story with animated characters",
-      priority: "Low",
-      projectDetails: {
-        technologies: ["Scratch"],
-        features: ["Character Animation", "Interactive Story", "Sound Effects", "User Input"],
-        githubUrl: null,
-        liveUrl: "https://scratch.mit.edu/projects/carol-story",
-      },
-    },
-    {
-      id: 4,
-      studentName: "David Wilson",
-      studentAvatar: "/placeholder.svg",
-      projectTitle: "Sales Dashboard",
-      program: "Sales Training Program",
-      submissionDate: "2024-01-05",
-      status: "Pending",
-      fileType: "PDF",
-      fileSize: "5.4 MB",
-      description: "Analytics dashboard mockup with sales metrics",
-      priority: "High",
-      projectDetails: {
-        technologies: ["Figma", "Adobe XD"],
-        features: ["Sales Charts", "KPI Metrics", "Filter Options", "Export Functionality"],
-        githubUrl: null,
-        liveUrl: null,
-      },
-    },
-  ]
+export default function ReviewsPage() {
+    const [submissions, setSubmissions] = useState<Submission[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+    const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [reviewFormData, setReviewFormData] = useState<ReviewFormData>({ status: 'Reviewed', feedback: '', grade: '' });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Approved":
-        return "bg-green-500"
-      case "Needs Revision":
-        return "bg-red-500"
-      case "Pending":
-        return "bg-yellow-500"
-      default:
-        return "bg-gray-500"
-    }
-  }
+    const fetchSubmissions = useCallback(async () => {
+        setLoading(true);
+        try {
+            const response = await api.get('/submissions/my-reviews');
+            setSubmissions(response.data.data);
+        } catch (error) {
+            console.error("Failed to fetch submissions:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "High":
-        return "text-red-500"
-      case "Medium":
-        return "text-yellow-500"
-      case "Low":
-        return "text-green-500"
-      default:
-        return "text-gray-500"
-    }
-  }
+    useEffect(() => {
+        fetchSubmissions();
+    }, [fetchSubmissions]);
 
-  const handleReview = (submission: any) => {
-    setSelectedSubmission(submission)
-    setReviewStatus("")
-    setFeedback("")
-  }
+    const handleOpenReviewModal = (submission: Submission) => {
+        setSelectedSubmission(submission);
+        setReviewFormData({ status: 'Reviewed', feedback: '', grade: '' });
+        setIsReviewModalOpen(true);
+    };
 
-  const handleViewSubmission = (submission: any) => {
-    setSelectedSubmission(submission)
-    setViewSubmissionOpen(true)
-  }
+    const handleSubmitReview = async () => {
+        if (!selectedSubmission) return;
+        setIsSubmitting(true);
+        try {
+            await api.patch(`/submissions/${selectedSubmission._id}/review`, reviewFormData);
+            alert("Review submitted successfully!");
+            setIsReviewModalOpen(false);
+            fetchSubmissions(); // Refresh the list
+        } catch (err: any) {
+            alert(`Error: ${err.response?.data?.message || "Failed to submit review."}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
-  const submitReview = () => {
-    if (!reviewStatus) {
-      alert("Please select a review status")
-      return
-    }
+    const getStatusBadge = (status: string) => {
+        const statusMap: { [key: string]: string } = {
+            'Reviewed': 'bg-green-100 text-green-800',
+            'Submitted': 'bg-yellow-100 text-yellow-800',
+            'NeedsRevision': 'bg-red-100 text-red-800',
+        };
+        return <Badge className={statusMap[status]}>{status.replace('Revision', ' Revision')}</Badge>;
+    };
 
-    console.log("Review submitted:", { reviewStatus, feedback })
-    alert(`Review submitted successfully! Status: ${reviewStatus}`)
-    setSelectedSubmission(null)
-    setReviewStatus("")
-    setFeedback("")
-  }
+    const stats = {
+        pending: submissions.filter(s => s.status === 'Submitted').length,
+        approved: submissions.filter(s => s.status === 'Reviewed').length,
+        needsRevision: submissions.filter(s => s.status === 'NeedsRevision').length,
+    };
 
-  const handleExportReviews = () => {
-    const csvContent = [
-      ["Student", "Project", "Program", "Status", "Submission Date", "Priority"],
-      ...submissions.map((sub) => [
-        sub.studentName,
-        sub.projectTitle,
-        sub.program,
-        sub.status,
-        sub.submissionDate,
-        sub.priority,
-      ]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
-
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `project-reviews-${new Date().toISOString().split("T")[0]}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
-
-    alert("Reviews exported successfully!")
-  }
-
-  return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <div className="flex items-center justify-between w-full">
-            <h1 className="text-lg font-semibold">Project Reviews</h1>
-            <Button variant="outline" onClick={handleExportReviews}>
-              <Download className="mr-2 h-4 w-4" />
-              Export Reviews
-            </Button>
-          </div>
-        </header>
-
+    return (
         <div className="flex flex-1 flex-col gap-4 p-4">
-          {/* Review Stats */}
-          <div className="grid gap-4 md:grid-cols-3">
-            {reviewStats.map((stat, index) => (
-              <Card key={index} className="bg-card border-border">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">{stat.title}</CardTitle>
-                  <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                </CardHeader>
+            <h1 className="text-3xl font-bold tracking-tight">Project Reviews</h1>
+
+            <div className="grid gap-4 md:grid-cols-3">
+                <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Pending Reviews</CardTitle><Clock className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold text-yellow-600">{stats.pending}</div></CardContent></Card>
+                <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Approved</CardTitle><CheckCircle className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold text-green-600">{stats.approved}</div></CardContent></Card>
+                <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">Needs Revision</CardTitle><XCircle className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><div className="text-2xl font-bold text-red-600">{stats.needsRevision}</div></CardContent></Card>
+            </div>
+
+            <Card>
+                <CardHeader><CardTitle>Submissions Queue</CardTitle><CardDescription>Review and provide feedback on trainee projects.</CardDescription></CardHeader>
                 <CardContent>
-                  <div className={`text-2xl font-bold ${stat.color}`}>{stat.value}</div>
-                  <p className="text-xs text-muted-foreground">{stat.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Submissions Table */}
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground">Project Submissions</CardTitle>
-              <CardDescription>Review and provide feedback on trainee projects</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Project</TableHead>
-                    <TableHead>Program</TableHead>
-                    <TableHead>Submitted</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Priority</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {submissions.map((submission) => (
-                    <TableRow key={submission.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage
-                              src={submission.studentAvatar || "/placeholder.svg"}
-                              alt={submission.studentName}
-                            />
-                            <AvatarFallback>
-                              {submission.studentName
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium text-foreground">{submission.studentName}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {submission.fileType} • {submission.fileSize}
-                            </p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium text-foreground">{submission.projectTitle}</p>
-                          <p className="text-xs text-muted-foreground">{submission.description}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{submission.program}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(submission.submissionDate).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={`${getStatusColor(submission.status)} text-white border-0`}>
-                          {submission.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`text-sm font-medium ${getPriorityColor(submission.priority)}`}>
-                          {submission.priority}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => handleViewSubmission(submission)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Download className="h-4 w-4" />
-                          </Button>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" onClick={() => handleReview(submission)}>
-                                <MessageSquare className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-lg">
-                              <DialogHeader>
-                                <DialogTitle>Review Project</DialogTitle>
-                                <DialogDescription>
-                                  Provide feedback for {selectedSubmission?.studentName}'s project
-                                </DialogDescription>
-                              </DialogHeader>
-                              {selectedSubmission && (
-                                <div className="space-y-4">
-                                  <div className="p-4 bg-muted rounded-lg">
-                                    <h4 className="font-medium text-foreground">{selectedSubmission.projectTitle}</h4>
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                      {selectedSubmission.description}
-                                    </p>
-                                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                                      <span>Program: {selectedSubmission.program}</span>
-                                      <span>
-                                        File: {selectedSubmission.fileType} ({selectedSubmission.fileSize})
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    <Label htmlFor="status">Review Status</Label>
-                                    <Select value={reviewStatus} onValueChange={setReviewStatus}>
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Select review status" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="approved">Approved</SelectItem>
-                                        <SelectItem value="needs-revision">Needs Revision</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-
-                                  <div className="space-y-2">
-                                    <Label htmlFor="feedback">Feedback (Optional)</Label>
-                                    <Textarea
-                                      id="feedback"
-                                      placeholder="Provide detailed feedback for the student..."
-                                      value={feedback}
-                                      onChange={(e) => setFeedback(e.target.value)}
-                                      rows={4}
-                                    />
-                                  </div>
-
-                                  <div className="flex gap-2">
-                                    <Button onClick={submitReview} disabled={!reviewStatus} className="flex-1">
-                                      Submit Review
-                                    </Button>
-                                    <Button variant="outline" onClick={() => setSelectedSubmission(null)}>
-                                      Cancel
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* View Submission Dialog */}
-        <Dialog open={viewSubmissionOpen} onOpenChange={setViewSubmissionOpen}>
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Project Details</DialogTitle>
-              <DialogDescription>
-                Detailed view of {selectedSubmission?.studentName}'s project submission
-              </DialogDescription>
-            </DialogHeader>
-            {selectedSubmission && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="font-medium text-foreground mb-2">Project Information</h4>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Title:</span>
-                        <span className="ml-2 font-medium">{selectedSubmission.projectTitle}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Student:</span>
-                        <span className="ml-2 font-medium">{selectedSubmission.studentName}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Program:</span>
-                        <span className="ml-2 font-medium">{selectedSubmission.program}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Submitted:</span>
-                        <span className="ml-2 font-medium">
-                          {new Date(selectedSubmission.submissionDate).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-foreground mb-2">File Details</h4>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Type:</span>
-                        <span className="ml-2 font-medium">{selectedSubmission.fileType}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Size:</span>
-                        <span className="ml-2 font-medium">{selectedSubmission.fileSize}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Status:</span>
-                        <Badge className={`ml-2 ${getStatusColor(selectedSubmission.status)} text-white border-0`}>
-                          {selectedSubmission.status}
-                        </Badge>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Priority:</span>
-                        <span className={`ml-2 font-medium ${getPriorityColor(selectedSubmission.priority)}`}>
-                          {selectedSubmission.priority}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-medium text-foreground mb-2">Description</h4>
-                  <p className="text-sm text-muted-foreground">{selectedSubmission.description}</p>
-                </div>
-
-                {selectedSubmission.projectDetails && (
-                  <>
-                    <div>
-                      <h4 className="font-medium text-foreground mb-2">Technologies Used</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedSubmission.projectDetails.technologies.map((tech: string, index: number) => (
-                          <Badge key={index} variant="outline">
-                            {tech}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <h4 className="font-medium text-foreground mb-2">Features</h4>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        {selectedSubmission.projectDetails.features.map((feature: string, index: number) => (
-                          <li key={index} className="flex items-center gap-2">
-                            <CheckCircle className="h-3 w-3 text-green-500" />
-                            {feature}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {(selectedSubmission.projectDetails.githubUrl || selectedSubmission.projectDetails.liveUrl) && (
-                      <div>
-                        <h4 className="font-medium text-foreground mb-2">Links</h4>
-                        <div className="space-y-2">
-                          {selectedSubmission.projectDetails.githubUrl && (
-                            <div>
-                              <span className="text-muted-foreground text-sm">GitHub:</span>
-                              <a
-                                href={selectedSubmission.projectDetails.githubUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="ml-2 text-blue-500 hover:underline text-sm"
-                              >
-                                {selectedSubmission.projectDetails.githubUrl}
-                              </a>
-                            </div>
-                          )}
-                          {selectedSubmission.projectDetails.liveUrl && (
-                            <div>
-                              <span className="text-muted-foreground text-sm">Live Demo:</span>
-                              <a
-                                href={selectedSubmission.projectDetails.liveUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="ml-2 text-blue-500 hover:underline text-sm"
-                              >
-                                {selectedSubmission.projectDetails.liveUrl}
-                              </a>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                    {loading ? (
+                        <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                    ) : (
+                        <Table>
+                            <TableHeader><TableRow><TableHead>Student</TableHead><TableHead>Project</TableHead><TableHead>Program</TableHead><TableHead>Submitted</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                                {submissions.map((sub) => (
+                                    <TableRow key={sub._id}>
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-8 w-8"><AvatarFallback>{sub.trainee.name.split(" ").map((n) => n[0]).join("")}</AvatarFallback></Avatar>
+                                                <div><p className="font-medium">{sub.trainee.name}</p><p className="text-xs text-muted-foreground">{sub.trainee.email}</p></div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell><p className="font-medium">{sub.course.title}</p></TableCell>
+                                        <TableCell className="text-muted-foreground">{sub.program.name}</TableCell>
+                                        <TableCell className="text-muted-foreground">{new Date(sub.submittedAt).toLocaleDateString()}</TableCell>
+                                        <TableCell>{getStatusBadge(sub.status)}</TableCell>
+                                        <TableCell>
+                                            <div className="flex gap-1">
+                                                <Button asChild variant="ghost" size="sm"><a href={sub.fileUrl} target="_blank" rel="noopener noreferrer"><Download className="h-4 w-4" /></a></Button>
+                                                <Button variant="ghost" size="sm" onClick={() => handleOpenReviewModal(sub)}><MessageSquare className="h-4 w-4" /></Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     )}
-                  </>
-                )}
+                </CardContent>
+            </Card>
 
-                <div className="flex gap-2">
-                  <Button className="flex-1" onClick={() => handleReview(selectedSubmission)}>
-                    <MessageSquare className="mr-2 h-4 w-4" />
-                    Review Project
-                  </Button>
-                  <Button variant="outline" onClick={() => setViewSubmissionOpen(false)}>
-                    Close
-                  </Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-      </SidebarInset>
-    </SidebarProvider>
-  )
+            <Dialog open={isReviewModalOpen} onOpenChange={setIsReviewModalOpen}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader><DialogTitle>Review Project</DialogTitle><DialogDescription>Provide feedback for {selectedSubmission?.trainee.name}'s project: {selectedSubmission?.course.title}</DialogDescription></DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2"><Label>Review Status</Label><Select value={reviewFormData.status} onValueChange={v => setReviewFormData(f => ({ ...f, status: v as any }))}><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger><SelectContent><SelectItem value="Reviewed">Approved</SelectItem><SelectItem value="NeedsRevision">Needs Revision</SelectItem></SelectContent></Select></div>
+                        <div className="space-y-2"><Label>Grade (e.g., A+, B, 85%)</Label><Input value={reviewFormData.grade} onChange={e => setReviewFormData(f => ({ ...f, grade: e.target.value }))} placeholder="Enter a grade or score" /></div>
+                        <div className="space-y-2"><Label>Feedback</Label><Textarea placeholder="Provide detailed feedback..." value={reviewFormData.feedback} onChange={e => setReviewFormData(f => ({ ...f, feedback: e.target.value }))} rows={4} /></div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsReviewModalOpen(false)}>Cancel</Button>
+                        <Button onClick={handleSubmitReview} disabled={isSubmitting} style={{ backgroundColor: '#1f497d' }} className="hover:bg-[#1a3d6b]">{isSubmitting ? <Loader2 className="animate-spin" /> : "Submit Review"}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
 }

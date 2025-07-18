@@ -2,11 +2,9 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '@/types'; // Import your new User type
-import api from '@/lib/api'; // Import the configured api client
-
-// Make sure your UserRole type covers all roles from the backend
-export type UserRole = 'SuperAdmin' | 'Program Manager' | 'Facilitator' | 'Trainee' | 'it_support';
+import { User, UserRole } from '@/types/user';
+import api from '@/lib/api';
+import { Loader2 } from 'lucide-react'; // For a better loading experience
 
 export interface AuthContextType {
   user: User | null;
@@ -22,11 +20,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function RoleProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true); // Add loading state
+  const [loading, setLoading] = useState<boolean>(true);
 
   const normalizeRole = (role: string): UserRole => {
-      // Your backend has "Program Manager", but frontend might use "program_manager".
-      // This function standardizes it. Let's stick to the backend's format for now.
       return role as UserRole;
   };
 
@@ -38,7 +34,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       setUser(loggedInUser);
       setIsAuthenticated(true);
       
-      // Store token and user data
+      // This is safe because login() is only called from a client-side action
       localStorage.setItem('accessToken', accessToken);
       localStorage.setItem('user', JSON.stringify(loggedInUser));
     } else {
@@ -49,12 +45,17 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const logout = (): void => {
     setUser(null);
     setIsAuthenticated(false);
+    // This is safe because logout() is only called from a client-side action
     localStorage.removeItem('accessToken');
     localStorage.removeItem('user');
+    // Redirect to login page after logout to ensure clean state
+    window.location.href = '/auth/login';
   };
 
+  // THE FIX IS HERE
   useEffect(() => {
-    // This effect runs once on app load to check for an existing session
+    // This effect runs only on the client-side, after the initial server render.
+    // This is where it's safe to access browser-only APIs like localStorage.
     const token = localStorage.getItem('accessToken');
     const storedUser = localStorage.getItem('user');
 
@@ -68,7 +69,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       }
     }
     setLoading(false); // Finished checking auth status
-  }, []);
+  }, []); // Empty array ensures this runs only once on mount
 
   const value: AuthContextType = {
     user,
@@ -81,7 +82,14 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {/* Show a global loader while we check for auth status */}
+      {loading ? (
+          <div className="flex h-screen w-full items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+      ) : (
+          children
+      )}
     </AuthContext.Provider>
   );
 }

@@ -1,421 +1,193 @@
 "use client";
 
-import type React from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Upload, FileText, Download, Eye, Plus, Loader2 } from "lucide-react";
+import api from "@/lib/api";
 
-import { useState } from "react";
-import { Upload, FileText, Download, Trash2, Eye, Plus, Search } from "lucide-react";
-
-import { AppSidebar } from "@/components/layout/sidebar";
+// UI Components
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 
-export default function Curriculum() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("all");
-  const [filterProgram, setFilterProgram] = useState("all");
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [uploadData, setUploadData] = useState({
-    program: "",
-    title: "",
-    description: "",
-    type: "",
-  });
+// --- Type Definitions ---
+interface Program {
+    _id: string;
+    name: string;
+}
 
-  // Mock curriculum data
-  const [curriculumFiles, setCurriculumFiles] = useState([
-    {
-      id: 1,
-      name: "Web Development Fundamentals.pdf",
-      program: "Software Engineering Bootcamp",
-      type: "PDF",
-      size: "2.4 MB",
-      uploadDate: "2024-01-15",
-      downloads: 45,
-      status: "Active",
-    },
-    {
-      id: 2,
-      name: "JavaScript Advanced Concepts.pptx",
-      program: "Software Engineering Bootcamp",
-      type: "PowerPoint",
-      size: "5.1 MB",
-      uploadDate: "2024-01-14",
-      downloads: 32,
-      status: "Active",
-    },
-    {
-      id: 3,
-      name: "Data Analysis with Python.pdf",
-      program: "Data Science Fundamentals",
-      type: "PDF",
-      size: "3.8 MB",
-      uploadDate: "2024-01-12",
-      downloads: 28,
-      status: "Active",
-    },
-    {
-      id: 4,
-      name: "Mobile UI Design Guidelines.sketch",
-      program: "Mobile App Development",
-      type: "Sketch",
-      size: "12.3 MB",
-      uploadDate: "2024-01-10",
-      downloads: 15,
-      status: "Draft",
-    },
-  ]);
+interface Course {
+    _id: string;
+    title: string;
+    description: string;
+    program: string;
+    contentUrl: string;
+    status: 'Draft' | 'PendingApproval' | 'Approved' | 'Rejected';
+    createdAt: string;
+}
 
-  const programs = [
-    { id: "software-engineering", name: "Software Engineering Bootcamp" },
-    { id: "data-science", name: "Data Science Fundamentals" },
-    { id: "mobile-dev", name: "Mobile App Development" },
-    { id: "ui-ux", name: "UI/UX Design Workshop" },
-  ];
+const initialFormData = { programId: "", title: "", description: "" };
 
-  const filteredFiles = curriculumFiles.filter((file) => {
-    const matchesSearch =
-      file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      file.program.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === "all" || file.type.toLowerCase() === filterType.toLowerCase();
-    const matchesProgram = filterProgram === "all" || file.program === filterProgram;
-
-    return matchesSearch && matchesType && matchesProgram;
-  });
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      setSelectedFiles(Array.from(files));
-    }
-  };
-
-  const handleUploadSubmit = () => {
-    if (!uploadData.program || !uploadData.title || selectedFiles.length === 0) {
-      alert("Please fill in all required fields and select files");
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-
-          // Add new files to the list
-          const newFiles = selectedFiles.map((file, index) => ({
-            id: curriculumFiles.length + index + 1,
-            name: file.name,
-            program: programs.find((p) => p.id === uploadData.program)?.name || "",
-            type: file.type.includes("pdf")
-              ? "PDF"
-              : file.type.includes("powerpoint") || file.type.includes("presentation")
-                ? "PowerPoint"
-                : file.type.includes("word") || file.type.includes("document")
-                  ? "Word"
-                  : "Document",
-            size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-            uploadDate: new Date().toISOString().split("T")[0],
-            downloads: 0,
-            status: "Active",
-          }));
-
-          setCurriculumFiles((prev) => [...prev, ...newFiles]);
-          setUploadDialogOpen(false);
-          setSelectedFiles([]);
-          setUploadData({ program: "", title: "", description: "", type: "" });
-          alert(`Successfully uploaded ${selectedFiles.length} file(s)!`);
-
-          return 100;
+export default function CurriculumPage() {
+    const [programs, setPrograms] = useState<Program[]>([]);
+    const [courses, setCourses] = useState<Course[]>([]);
+    const [selectedProgramId, setSelectedProgramId] = useState("");
+    const [loading, setLoading] = useState({ programs: true, courses: false });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [formData, setFormData] = useState(initialFormData);
+    
+    const fetchMyPrograms = useCallback(async () => {
+        setLoading(p => ({ ...p, programs: true }));
+        try {
+            const res = await api.get('/programs');
+            const userPrograms: Program[] = res.data.data;
+            setPrograms(userPrograms);
+            if (userPrograms.length > 0 && !selectedProgramId) {
+                setSelectedProgramId(userPrograms[0]._id);
+            }
+        } catch (error) {
+            console.error("Failed to fetch programs", error);
+        } finally {
+            setLoading(p => ({ ...p, programs: false }));
         }
-        return prev + 10;
-      });
-    }, 200);
-  };
+    }, [selectedProgramId]);
 
-  const handleExportList = () => {
-    const csvContent = [
-      ["Name", "Program", "Type", "Size", "Upload Date", "Downloads", "Status"],
-      ...filteredFiles.map((file) => [
-        file.name,
-        file.program,
-        file.type,
-        file.size,
-        file.uploadDate,
-        file.downloads.toString(),
-        file.status,
-      ]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n");
+    const fetchCourses = useCallback(async () => {
+        if (!selectedProgramId) return;
+        setLoading(p => ({ ...p, courses: true }));
+        try {
+            const res = await api.get(`/courses/program/${selectedProgramId}`);
+            setCourses(res.data.data);
+        } catch (error) {
+            console.error("Failed to fetch courses", error);
+            setCourses([]);
+        } finally {
+            setLoading(p => ({ ...p, courses: false }));
+        }
+    }, [selectedProgramId]);
 
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `curriculum-files-${new Date().toISOString().split("T")[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    useEffect(() => { fetchMyPrograms(); }, [fetchMyPrograms]);
+    useEffect(() => { fetchCourses(); }, [fetchCourses]);
 
-    alert("File list exported successfully!");
-  };
+    const handleSubmitCourse = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!formData.programId || !formData.title || !selectedFile) {
+            return alert("Please select a program, provide a title, and choose a file.");
+        }
+        setIsSubmitting(true);
+        
+        const uploadFormData = new FormData();
+        uploadFormData.append('title', formData.title);
+        uploadFormData.append('description', formData.description);
+        uploadFormData.append('programId', formData.programId);
+        uploadFormData.append('courseDocument', selectedFile);
 
-  const getFileIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-      case "pdf":
-        return "📄";
-      case "powerpoint":
-      case "pptx":
-        return "📊";
-      case "word":
-      case "docx":
-        return "📝";
-      case "sketch":
-        return "🎨";
-      default:
-        return "📁";
-    }
-  };
+        try {
+            await api.post('/courses', uploadFormData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            alert('Course created successfully and is now pending approval.');
+            setUploadDialogOpen(false);
+            setFormData(initialFormData);
+            setSelectedFile(null);
+            fetchCourses();
+        } catch (err: any) {
+            alert(`Error: ${err.response?.data?.message || "Failed to create course."}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Active":
-        return "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400";
-      case "Draft":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400";
-      case "Archived":
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400";
-      default:
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400";
-    }
-  };
+    const getStatusBadge = (status: string) => {
+        const statusMap: { [key: string]: string } = {
+            'Approved': 'bg-green-100 text-green-800', 
+            'PendingApproval': 'bg-yellow-100 text-yellow-800', 
+            'Rejected': 'bg-red-100 text-red-800', 
+            'Draft': 'bg-gray-100 text-gray-800',
+        };
+        return <Badge className={statusMap[status]}>{status.replace('Approval', ' Approval')}</Badge>;
+    };
 
-  return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <h1 className="text-lg font-semibold">Curriculum Upload</h1>
-        </header>
-
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          {/* Header Section */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight">Curriculum Management</h2>
-              <p className="text-muted-foreground">Upload and manage curriculum materials for your programs</p>
-            </div>
-            <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-[#1f497d] hover:bg-[#1a3d6b]">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Upload Files
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Upload Curriculum Files</DialogTitle>
-                  <DialogDescription>
-                    Upload new curriculum materials for your programs. Supported formats: PDF, PowerPoint, Word, and more.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="program">Program</Label>
-                    <Select value={uploadData.program} onValueChange={(value) => setUploadData({ ...uploadData, program: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a program" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {programs.map((program) => (
-                          <SelectItem key={program.id} value={program.id}>
-                            {program.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Title</Label>
-                    <Input
-                      id="title"
-                      placeholder="e.g., JavaScript Fundamentals"
-                      value={uploadData.title}
-                      onChange={(e) => setUploadData({ ...uploadData, title: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      placeholder="Brief description of the curriculum material"
-                      value={uploadData.description}
-                      onChange={(e) => setUploadData({ ...uploadData, description: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="files">Files</Label>
-                    <Input
-                      id="files"
-                      type="file"
-                      multiple
-                      accept=".pdf,.pptx,.docx,.sketch,.zip"
-                      onChange={handleFileUpload}
-                    />
-                    {selectedFiles.length > 0 && (
-                      <div className="text-sm text-muted-foreground">
-                        Selected {selectedFiles.length} file(s)
-                      </div>
-                    )}
-                  </div>
-                  {isUploading && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span>Uploading...</span>
-                        <span>{uploadProgress}%</span>
-                      </div>
-                      <Progress value={uploadProgress} className="h-2" />
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1 bg-[#1f497d] hover:bg-[#1a3d6b]"
-                      onClick={handleUploadSubmit}
-                      disabled={isUploading}
-                    >
-                      {isUploading ? "Uploading..." : "Upload Files"}
-                    </Button>
-                    <Button variant="outline" onClick={() => setUploadDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                  </div>
+    return (
+        <div className="flex flex-1 flex-col gap-6 p-4">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">Curriculum Management</h1>
+                    <p className="text-muted-foreground">Upload and manage course materials for your programs.</p>
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {/* Search and Filter */}
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search files..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+                <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button style={{ backgroundColor: '#1f497d' }} className="hover:bg-[#1a3d6b]">
+                            <Plus className="mr-2 h-4 w-4" />Create Course
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader><DialogTitle>Create New Course</DialogTitle><DialogDescription>Upload a document and provide details for a new course.</DialogDescription></DialogHeader>
+                        <form onSubmit={handleSubmitCourse} className="space-y-4 py-4">
+                            <div className="space-y-2"><Label>Program *</Label><Select value={formData.programId} onValueChange={v => setFormData(f => ({ ...f, programId: v }))} required><SelectTrigger><SelectValue placeholder="Select a program" /></SelectTrigger><SelectContent>{programs.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                            <div className="space-y-2"><Label>Course Title *</Label><Input placeholder="e.g., Introduction to React" value={formData.title} onChange={e => setFormData(f => ({ ...f, title: e.target.value }))} required /></div>
+                            <div className="space-y-2"><Label>Description</Label><Textarea placeholder="Brief description of the course content..." value={formData.description} onChange={e => setFormData(f => ({ ...f, description: e.target.value }))} /></div>
+                            <div className="space-y-2"><Label>Course Document *</Label><Input type="file" onChange={e => setSelectedFile(e.target.files ? e.target.files[0] : null)} required /></div>
+                            <DialogFooter>
+                                <Button variant="outline" type="button" onClick={() => setUploadDialogOpen(false)}>Cancel</Button>
+                                <Button type="submit" disabled={isSubmitting} style={{ backgroundColor: '#1f497d' }} className="hover:bg-[#1a3d6b]">{isSubmitting ? <Loader2 className="animate-spin" /> : "Create & Submit"}</Button>
+                            </DialogFooter>
+                        </form>
+                    </DialogContent>
+                </Dialog>
             </div>
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="pdf">PDF</SelectItem>
-                <SelectItem value="powerpoint">PowerPoint</SelectItem>
-                <SelectItem value="word">Word</SelectItem>
-                <SelectItem value="sketch">Sketch</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterProgram} onValueChange={setFilterProgram}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Filter by program" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Programs</SelectItem>
-                {programs.map((program) => (
-                  <SelectItem key={program.id} value={program.name}>
-                    {program.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" onClick={handleExportList}>
-              <Download className="mr-2 h-4 w-4" />
-              Export List
-            </Button>
-          </div>
-
-          {/* Files Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredFiles.map((file) => (
-              <Card key={file.id} className="overflow-hidden">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <CardTitle className="text-lg">{file.name}</CardTitle>
-                      <CardDescription className="line-clamp-2">{file.program}</CardDescription>
+            
+            <Card>
+                <CardHeader><CardTitle>Filter Courses</CardTitle></CardHeader>
+                <CardContent>
+                    <div className="max-w-sm">
+                        <Label>Select Program to View Courses</Label>
+                        <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
+                            <SelectTrigger><SelectValue placeholder="Filter by program" /></SelectTrigger>
+                            <SelectContent>{programs.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}</SelectContent>
+                        </Select>
                     </div>
-                    <div className="text-2xl">{getFileIcon(file.type)}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={getStatusColor(file.status)}>{file.status}</Badge>
-                    <Badge variant="outline">{file.type}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Size</span>
-                      <div className="font-medium">{file.size}</div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Downloads</span>
-                      <div className="font-medium">{file.downloads}</div>
-                    </div>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Uploaded: {new Date(file.uploadDate).toLocaleDateString()}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1">
-                      <Eye className="mr-2 h-3 w-3" />
-                      Preview
-                    </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
-                      <Download className="mr-2 h-3 w-3" />
-                      Download
-                    </Button>
-                  </div>
                 </CardContent>
-              </Card>
-            ))}
-          </div>
+            </Card>
 
-          {filteredFiles.length === 0 && (
-            <div className="text-center py-8">
-              <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No curriculum files found</p>
-            </div>
-          )}
+            <Card>
+                <CardHeader>
+                    <CardTitle>My Uploaded Courses</CardTitle>
+                    <CardDescription>Courses you have created for the selected program.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {loading.courses ? (
+                        <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
+                    ) : courses.length > 0 ? (
+                        <div className="space-y-4">
+                            {courses.map((course) => (
+                                <div key={course._id} className="flex items-center justify-between p-4 rounded-lg border">
+                                    <div className="flex items-center gap-4">
+                                        <FileText className="h-6 w-6 text-[#1f497d]" />
+                                        <div>
+                                            <p className="font-medium">{course.title}</p>
+                                            <p className="text-sm text-muted-foreground">Uploaded: {new Date(course.createdAt).toLocaleDateString()}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {getStatusBadge(course.status)}
+                                        <Button asChild variant="ghost" size="sm"><a href={course.contentUrl} target="_blank" rel="noopener noreferrer"><Download className="h-4 w-4" /></a></Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-12"><p className="text-muted-foreground">No courses found for this program. Click "Create Course" to add one.</p></div>
+                    )}
+                </CardContent>
+            </Card>
         </div>
-      </SidebarInset>
-    </SidebarProvider>
-  );
+    );
 }

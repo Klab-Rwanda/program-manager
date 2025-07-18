@@ -52,4 +52,26 @@ const reviewSubmission = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, updatedSubmission, "Submission reviewed successfully."));
 });
 
+
+
+export const getSubmissionsForFacilitator = asyncHandler(async (req, res) => {
+    const facilitatorId = req.user._id;
+
+    // 1. Find all courses this facilitator is assigned to.
+    const coursesTaught = await Course.find({ facilitator: facilitatorId }).select('_id');
+    if (coursesTaught.length === 0) {
+        return res.status(200).json(new ApiResponse(200, [], "You are not assigned to any courses."));
+    }
+    const courseIds = coursesTaught.map(course => course._id);
+
+    // 2. Find all submissions for those specific courses.
+    const submissions = await Submission.find({ course: { $in: courseIds } })
+        .populate('trainee', 'name email')
+        .populate('program', 'name')
+        .populate('course', 'title')
+        .sort({ submittedAt: -1 });
+
+    return res.status(200).json(new ApiResponse(200, submissions, "Submissions for your review fetched successfully."));
+});
+
 export { createSubmission, getSubmissionsForCourse, reviewSubmission };

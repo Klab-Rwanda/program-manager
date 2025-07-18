@@ -1,75 +1,68 @@
-// app/dashboard/layout.tsx
+// File: app/dashboard/layout.tsx
 "use client";
 
-import { useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/contexts/RoleContext";
-import { SidebarProvider, useSidebar } from "@/lib/contexts/SidebarContext"; // Import the new context
-import { AppSidebar } from "@/components/layout/sidebar"; // Your sidebar component
-import { Menu } from 'lucide-react';
+import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/layout/sidebar";
 
-// A wrapper component to handle the main content's margin
-function MainContent({ children }: { children: React.ReactNode }) {
-  const { isCollapsed, isMobile } = useSidebar();
+// This is a new helper component to manage the content area
+function ContentWrapper({ children }: { children: React.ReactNode }) {
+  const { isMobile, state } = useSidebar();
+  const isCollapsed = state === 'collapsed';
+
+  // This dynamically calculates the width the sidebar is taking up
   const sidebarWidth = isCollapsed ? '80px' : '280px';
-  const marginLeft = isMobile ? '0' : sidebarWidth;
+  const marginLeft = isMobile ? '0px' : sidebarWidth;
 
   return (
     <div
-      className="flex-1 flex flex-col transition-all duration-300 ease-in-out"
-      style={{ marginLeft }}
+      className="flex-1 transition-all duration-300 ease-in-out"
+      style={{ marginLeft: marginLeft }}
     >
-      {children}
+      {/* The padding is now inside the content area */}
+      <div className="p-4 md:p-6">
+        {children}
+      </div>
     </div>
   );
 }
 
-// A wrapper for the mobile header
-function MobileHeader() {
-    const { toggleMobileMenu } = useSidebar();
-    return (
-        <header className="flex md:hidden h-16 shrink-0 items-center gap-2 border-b px-4 bg-card">
-            <button
-              className="p-2 rounded-lg text-muted-foreground hover:bg-muted"
-              onClick={toggleMobileMenu}
-            >
-              <Menu size={20} />
-            </button>
-            <h1 className="text-lg font-semibold">Dashboard</h1>
-        </header>
-    );
-}
-
-
-function DashboardContent({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { isAuthenticated, loading } = useAuth();
   const router = useRouter();
+  
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   useEffect(() => {
+    if (loading) return;
     if (!isAuthenticated) {
       router.push("/auth/login");
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, loading]);
 
-  if (!isAuthenticated) {
-    return null; // or a loading spinner
+  if (loading || !isAuthenticated) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
   return (
-    <div className="flex h-full min-h-screen bg-background">
-      <AppSidebar />
-      <MainContent>
-        <MobileHeader />
-        <main className="flex-1 p-4 md:p-6">{children}</main>
-      </MainContent>
-    </div>
-  );
-}
-
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <SidebarProvider>
-      <DashboardContent>{children}</DashboardContent>
+    <SidebarProvider open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
+      <div className="flex h-full min-h-screen">
+        <AppSidebar />
+        <ContentWrapper>
+          {children}
+        </ContentWrapper>
+      </div>
     </SidebarProvider>
   );
 }
