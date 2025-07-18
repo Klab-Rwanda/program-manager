@@ -2,6 +2,7 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { Submission } from '../models/submission.model.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
+import { Course } from '../models/course.model.js';
 
 // Trainee submits a project for a course
 const createSubmission = asyncHandler(async (req, res) => {
