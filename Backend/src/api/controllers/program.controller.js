@@ -3,13 +3,15 @@ import { ApiError } from '../../utils/ApiError.js';
 import { Program } from '../models/program.model.js';
 import { User } from '../models/user.model.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
+import { createLog } from '../../services/log.service.js';
 
 // --- HELPER FUNCTION ---
 const verifyManagerAccess = async (programId, managerId) => {
-    const program = await Program.findById(programId);
+    // Use findById with a condition to bypass the pre-find middleware for permission checks
+    const program = await Program.findById(programId).where({ isActive: { $ne: false } });
     if (!program) throw new ApiError(404, "Program not found.");
     
-    const isManager = program.programManager.some(id => id.toString() === managerId.toString());
+    const isManager = program.programManager && program.programManager.toString() === managerId.toString();
     
     if (!isManager) {
         throw new ApiError(403, "Forbidden: You are not a manager of this program.");
@@ -38,13 +40,13 @@ const createProgram = asyncHandler(async (req, res) => {
         description,
         startDate,
         endDate,
-        programManagers: managers,
+        programManager: managers.length > 0 ? managers[0] : null,
         status: programStatus,
     });
 
     // --- THIS IS THE FIX ---
     // Step 2: Fetch the newly created program again, but this time populate the manager details.
-    const populatedProgram = await Program.findById(programDoc._id).populate('programManagers', 'name email');
+    const populatedProgram = await Program.findById(programDoc._id).populate('programManager', 'name email');
     // --- END OF FIX ---
 
     const message = creator.role === 'SuperAdmin' 
@@ -149,16 +151,128 @@ const updateProgram = asyncHandler(async (req, res) => {
 
 const deleteProgram = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const program = await Program.findByIdAndUpdate(id, { isActive: false }, { new: true });
-    if (!program) throw new ApiError(404, "Program not found");
+    
+    console.log("=== DELETE PROGRAM DEBUG ===");
+    console.log("Program ID:", id);
+    console.log("User:", req.user);
+    console.log("User Role:", req.user.role);
+    console.log("User ID:", req.user._id);
+    console.log("=============================");
+    
+    try {
+        // Mark program as deleted (permanent removal)
+        const program = await Program.findByIdAndUpdate(
+            id, 
+            { isDeleted: true, isActive: false }, 
+            { new: true, runValidators: false }
+        );
+        
+        if (!program) {
+            console.log("Program not found");
+            throw new ApiError(404, "Program not found");
+        }
+        
+        console.log("Program found and deleted:", program.name);
+        
+        // Create log entry
+        await createLog({
+            user: req.user._id,
+            action: 'PROGRAM_DELETED',
+            details: `${req.user.role} ${req.user.name} permanently deleted program '${program.name}'.`,
+            entity: { id: program._id, model: 'Program' }
+        });
+        
+        console.log("Log entry created successfully");
+        return res.status(200).json(new ApiResponse(200, {}, "Program has been permanently deleted."));
+        
+    } catch (error) {
+        console.error("Error in deleteProgram:", error);
+        throw error;
+    }
+});
 
-     await createLog({
+const getArchivedPrograms = asyncHandler(async (req, res) => {
+    let query = { isArchived: true }; // Get only archived programs
+    const { role, _id } = req.user;
+    
+    // Filter by user role - Program Managers can only see their own archived programs
+    if (role === 'Program Manager') {
+        query.programManager = _id;
+    }
+    // SuperAdmin can see all archived programs
+    
+    const programs = await Program.find(query)
+        .populate('programManager', 'name email')
+        .populate('facilitators', 'name email')
+        .populate('trainees', 'name email')
+        .sort({ updatedAt: -1 }); // Most recently archived first
+    
+    return res.status(200).json(new ApiResponse(200, programs, "Archived programs fetched successfully."));
+});
+
+const archiveProgram = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    
+    // Check if user has permission to archive this program
+    if (req.user.role === 'Program Manager') {
+        await verifyManagerAccess(id, req.user._id);
+    }
+    
+    const program = await Program.findByIdAndUpdate(
+        id, 
+        { isArchived: true, isActive: false }, 
+        { new: true, runValidators: false }
+    );
+    
+    if (!program) {
+        throw new ApiError(404, "Program not found");
+    }
+    
+    // Create log entry
+    await createLog({
         user: req.user._id,
-        action: 'PROGRAM_DEACTIVATED',
-        details: `SuperAdmin ${req.user.name} deactivated program '${program.name}'.`,
+        action: 'PROGRAM_ARCHIVED',
+        details: `${req.user.role} ${req.user.name} archived program '${program.name}'.`,
         entity: { id: program._id, model: 'Program' }
     });
-    return res.status(200).json(new ApiResponse(200, {}, "Program has been deactivated."));
+    
+    return res.status(200).json(new ApiResponse(200, program, "Program has been archived."));
+});
+
+const unarchiveProgram = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    
+    // Check if user has permission to unarchive this program
+    if (req.user.role === 'Program Manager') {
+        // For unarchiving, we need to check the archived program
+        const program = await Program.findById(id).where({ isArchived: true });
+        if (!program) throw new ApiError(404, "Archived program not found.");
+        
+        const isManager = program.programManager && program.programManager.toString() === req.user._id.toString();
+        if (!isManager) {
+            throw new ApiError(403, "Forbidden: You are not a manager of this program.");
+        }
+    }
+    
+    const program = await Program.findByIdAndUpdate(
+        id, 
+        { isArchived: false, isActive: true }, 
+        { new: true, runValidators: false }
+    );
+    
+    if (!program) {
+        throw new ApiError(404, "Program not found");
+    }
+    
+    // Create log entry
+    await createLog({
+        user: req.user._id,
+        action: 'PROGRAM_UNARCHIVED',
+        details: `${req.user.role} ${req.user.name} unarchived program '${program.name}'.`,
+        entity: { id: program._id, model: 'Program' }
+    });
+    
+    return res.status(200).json(new ApiResponse(200, program, "Program has been unarchived."));
 });
 
 const updateProgramManagers = asyncHandler(async (req, res) => {
@@ -167,8 +281,15 @@ const updateProgramManagers = asyncHandler(async (req, res) => {
     if (!['add', 'remove'].includes(action)) throw new ApiError(400, "Invalid action.");
     const manager = await User.findOne({ _id: managerId, role: { $regex: /program\s*manager/i } });
     if (!manager) throw new ApiError(404, "Not a valid Program Manager.");
-    const operator = action === 'add' ? '$addToSet' : '$pull';
-    const program = await Program.findByIdAndUpdate(id, { [operator]: { programManager: managerId } }, { new: true }).populate('programManager', 'name email');
+    
+    let updateOperation;
+    if (action === 'add') {
+        updateOperation = { programManager: managerId };
+    } else {
+        updateOperation = { $unset: { programManager: "" } };
+    }
+    
+    const program = await Program.findByIdAndUpdate(id, updateOperation, { new: true }).populate('programManager', 'name email');
     if (!program) throw new ApiError(404, "Program not found.");
     const message = `Program Manager ${action === 'add' ? 'added' : 'removed'}.`;
     return res.status(200).json(new ApiResponse(200, program, message));
@@ -298,5 +419,8 @@ export {
     updateProgram,
     deleteProgram,
     updateProgramManagers,
-    generateProgramReport
+    generateProgramReport,
+    getArchivedPrograms,
+    archiveProgram,
+    unarchiveProgram
 };

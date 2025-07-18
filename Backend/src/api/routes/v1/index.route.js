@@ -10,6 +10,7 @@ import certificateRouter from './certificate.route.js';
 import programUserRouter from './programUser.route.js'; 
 import dashboardRouter from './dashboard.route.js';
 import reportRouter from './report.route.js';
+import exportRouter from './export.route.js';
 const router = Router();
 
 const defaultRoutes = [
@@ -23,7 +24,8 @@ const defaultRoutes = [
     { path: '/certificates', route: certificateRouter }, 
     { path: '/program-users', route: programUserRouter },
     { path: '/reports', route: reportRouter },
-     { path: '/dashboard', route: dashboardRouter },
+    { path: '/dashboard', route: dashboardRouter },
+    { path: '/export', route: exportRouter },
 ];
 
 defaultRoutes.forEach((route) => {

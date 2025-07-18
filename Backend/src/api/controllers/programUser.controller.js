@@ -121,7 +121,7 @@ export const getMyManagedTrainees = asyncHandler(async (req, res) => {
     const managerId = req.user._id;
 
     // 1. Find all programs managed by this PM
-    const programs = await Program.find({ programManagers: managerId }).select('_id name description');
+    const programs = await Program.find({ programManager: managerId }).select('_id name description');
     if (programs.length === 0) {
         return res.status(200).json(new ApiResponse(200, [], "No trainees found as you are not managing any programs."));
     }

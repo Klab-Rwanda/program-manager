@@ -16,16 +16,34 @@ const programSchema = new mongoose.Schema(
     },
     rejectionReason: { type: String },
     departments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Department" }],
-    isActive: { type: Boolean, default: true }, // For soft deletes
+    isActive: { type: Boolean, default: true }, // For active/inactive programs
+    isDeleted: { type: Boolean, default: false }, // For permanent deletion
+    isArchived: { type: Boolean, default: false }, // For archiving
   },
   { timestamps: true }
 );
 
-// This middleware automatically filters out "deleted" (isActive: false) programs
-// for all `find` and `findOne` queries.
+// This middleware automatically filters out deleted and archived programs
+// for all `find` and `findOne` queries, except when explicitly querying for them.
 programSchema.pre(/^find/, function (next) {
   if (this.op === "findOne" || this.op === "find") {
-    this.where({ isActive: { $ne: false } });
+    const query = this.getQuery();
+    
+    // If explicitly querying for archived programs, don't filter
+    if (query.isArchived === true) {
+      return next();
+    }
+    
+    // If explicitly querying for deleted programs, don't filter
+    if (query.isDeleted === true) {
+      return next();
+    }
+    
+    // For all other queries, filter out deleted and archived programs
+    this.where({ 
+      isDeleted: { $ne: true },
+      isArchived: { $ne: true }
+    });
   }
   next();
 });

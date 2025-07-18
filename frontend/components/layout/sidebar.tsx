@@ -12,7 +12,7 @@ import {
 
 import { useAuth } from "@/lib/contexts/RoleContext";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
-import { getRoleDisplayName } from "@/lib/roles";
+import { useCounts } from "@/lib/contexts/CountsContext";
 
 const menuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['SuperAdmin', 'Program Manager', 'Facilitator', 'Trainee', 'IT Support'] },
@@ -22,12 +22,12 @@ const menuItems = [
     { title: "Reports & Export", url: "/dashboard/reports-export", icon: BarChart3, roles: ['SuperAdmin'] },
     { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['SuperAdmin'] },
     // Program Manager
-    { title: "Programs", url: "/dashboard/programs", icon: BookOpen, roles: ['Program Manager'], count: 12 },
-    { title: "Facilitators", url: "/dashboard/facilitators", icon: UserCheck, roles: ['Program Manager'], count: 45 },
-    { title: "Trainees", url: "/dashboard/trainees", icon: Users, roles: ['Program Manager'], count: 234 },
+    { title: "Programs", url: "/dashboard/programs", icon: BookOpen, roles: ['Program Manager'], countKey: 'programs' },
+    { title: "Facilitators", url: "/dashboard/facilitators", icon: UserCheck, roles: ['Program Manager'], countKey: 'facilitators' },
+    { title: "Trainees", url: "/dashboard/trainees", icon: Users, roles: ['Program Manager'], countKey: 'trainees' },
     { title: "Attendance", url: "/dashboard/attendance", icon: Calendar, roles: ['Program Manager'] },
-    { title: "Certificates", url: "/dashboard/certificates", icon: Award, roles: ['Program Manager'], count: 89 },
-    { title: "Archive", url: "/dashboard/archive", icon: Archive, roles: ['Program Manager'] },
+    { title: "Certificates", url: "/dashboard/certificates", icon: Award, roles: ['Program Manager'], countKey: 'certificates' },
+    { title: "Archive", url: "/dashboard/archive", icon: Archive, roles: ['Program Manager'], countKey: 'archived' },
     // Facilitator
     { title: "My Programs", url: "/facilitator/programs", icon: BookOpen, roles: ['Facilitator'] },
     { title: "Attendance Tracking", url: "/facilitator/attendance", icon: Calendar, roles: ['Facilitator'] },
@@ -58,6 +58,10 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { user, role, logout } = useAuth();
   const { isCollapsed, toggleSidebar, isMobile, isMobileMenuOpen, closeMobileMenu } = useSidebar();
+  const { counts } = useCounts();
+
+  // Debug logging for counts only
+  console.log('Sidebar: Current counts:', counts);
 
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -71,7 +75,7 @@ export function AppSidebar() {
   const unreadCount = notifications.filter(n => n.unread).length;
 
   const filteredMenuItems = menuItems.filter(item =>
-    role ? item.roles.includes(role) : false
+    role ? item.roles.includes(role as any) : false
   );
 
   const sidebarWidth = isCollapsed ? '80px' : '280px';
@@ -104,7 +108,7 @@ export function AppSidebar() {
                     kLab PMS
                   </span>
                   <span className="text-xs leading-tight text-muted-foreground">
-                    {role ? getRoleDisplayName(role) : 'Guest'}
+                    {role ? role : 'Guest'}
                   </span>
                 </div>
               )}
@@ -143,11 +147,11 @@ export function AppSidebar() {
                 {!isCollapsed && (
                   <>
                     <span className="flex-1 whitespace-nowrap">{item.title}</span>
-                    {item.count && (
+                    {item.countKey && counts[item.countKey as keyof typeof counts] > 0 && (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold
                         ${isActive ? 'bg-white/20' : 'bg-muted-foreground/20'}`
                       }>
-                        {item.count}
+                        {counts[item.countKey as keyof typeof counts]}
                       </span>
                     )}
                   </>
