@@ -36,6 +36,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { getAllTrainees } from "@/lib/services/tarinee.service"
 import { getAllPrograms } from "@/lib/services/program.service"
 import { Program, Trainee } from "@/types/index"
+import {
+  createTrainee,
+  updateTrainee,
+  deleteTrainee
+} from "@/lib/services/tarinee.service";
 
 export default function TraineesPage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -52,11 +57,7 @@ export default function TraineesPage() {
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
-  const handleCreateTrainee = async () => { /*...*/ };
- const handleEditTrainee = async () => { /*...*/ };
-  const handleDeleteTrainee = async (id: string) => { /*...*/ };
-
-const [newTrainee, setNewTrainee] = useState<Trainee>({
+  const defaultTrainee: Trainee = {
   _id: "",
   name: "",
   email: "",
@@ -73,8 +74,49 @@ const [newTrainee, setNewTrainee] = useState<Trainee>({
   completedProjects: 0,
   totalProjects: 0,
   joinDate: "",
-  lastActive: "",
-});
+  lastActive: ""
+};
+
+ const handleCreateTrainee = async () => {
+  try {
+    const traineeToCreate = {
+      ...newTrainee,
+      _id: undefined,
+      createdAt: undefined,
+      updatedAt: undefined,
+    };
+    const created = await createTrainee(traineeToCreate);
+    setTrainees(prev => [...prev, created]);
+    setNewTrainee(defaultTrainee); 
+    setShowCreateModal(false);
+  } catch (err) {
+    console.error("Error creating trainee:", err);
+  }
+};
+
+
+ const handleEditTrainee = async () => {
+  try {
+    const updated = await updateTrainee(newTrainee._id, newTrainee);
+    setTrainees(prev =>
+      prev.map(t => (t._id === updated._id ? updated : t))
+    );
+    setShowEditModal(false);
+  } catch (err) {
+    console.error("Error editing trainee:", err);
+  }
+};
+
+  const handleDeleteTrainee = async (id: string) => {
+  try {
+    await deleteTrainee(id);
+    setTrainees(prev => prev.filter(t => t._id !== id));
+    setShowDeleteModal(false);
+  } catch (err) {
+    console.error("Error deleting trainee:", err);
+  }
+};
+const [newTrainee, setNewTrainee] = useState<Trainee>(defaultTrainee);
 
 useEffect(() => {
   async function loadData() {
