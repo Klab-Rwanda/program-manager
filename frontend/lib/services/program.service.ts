@@ -1,39 +1,5 @@
 import api from '../api';
-
-export interface Program {
-  _id: string;
-  name: string;
-  description: string;
-  startDate: string;
-  endDate: string;
-  status: 'Draft' | 'PendingApproval' | 'Active' | 'Completed' | 'Rejected';
-  rejectionReason?: string;
-  programManager?: {
-    _id: string;
-    name: string;
-    email: string;
-  };
-  facilitators?: Array<{
-    _id: string;
-    name: string;
-    email: string;
-  }>;
-  trainees?: Array<{
-    _id: string;
-    name: string;
-    email: string;
-  }>;
-  departments?: Array<{
-    _id: string;
-    name: string;
-  }>;
-  isActive: boolean;
-  isDeleted: boolean;
-  isArchived: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
+import { Program } from '@/types';
 export interface CreateProgramData {
   name: string;
   description: string;

@@ -11,6 +11,7 @@ import { useAuth } from "./RoleContext";
 import { getAllPrograms } from "../services/program.service";
 import { getArchivedPrograms } from "../services/archive.service";
 import { getAllFacilitators } from "@/lib/services/facilitator.service";
+import { getAllTrainees } from "@/lib/services/tarinee.service";
 
 interface CountsContextType {
   counts: {
@@ -64,19 +65,24 @@ export function CountsProvider({ children }: { children: ReactNode }) {
           "CountsContext: Facilitators fetched:",
           facilitators.length
         );
+        console.log("CountsContext: Fetching trainees...");
+        const trainees = await getAllTrainees();
+        console.log("CountsContext: Trainees fetched:", trainees.length);
+
 
         setCounts(prev => {
-          const newCounts = {
-            ...prev,
-            programs: programs.length,
-            archived: archivedPrograms.length,
-            facilitators: facilitators.length,
-            trainees: 24, // placeholder
-            certificates: 15 // placeholder
-          };
-          console.log("CountsContext: Updated counts:", newCounts);
-          return newCounts;
-        });
+  const newCounts = {
+    ...prev,
+    programs: programs.length,
+    archived: archivedPrograms.length,
+    facilitators: facilitators.length,
+    trainees: trainees.length,
+    certificates: 15 
+  };
+  console.log("CountsContext: Updated counts:", newCounts);
+  return newCounts;
+});
+
       }
     } catch (error) {
       console.error("CountsContext: Error fetching counts:", error);

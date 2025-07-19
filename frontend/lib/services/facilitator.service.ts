@@ -1,5 +1,5 @@
 import api from "../api";
-import { User } from "@/types/";
+import { User } from "@/types/index";
 
 export const getAllFacilitators = async (): Promise<User[]> => {
   const res = await api.get("/users/manage?role=Facilitator");
