@@ -45,7 +45,7 @@ const menuItems = [
     { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['it_support'] },
     { title: "Maintenance", url: "/dashboard/maintenance", icon: Wrench, roles: ['it_support'] },
     // Shared
-    
+   
 ];
 
 interface Notification {

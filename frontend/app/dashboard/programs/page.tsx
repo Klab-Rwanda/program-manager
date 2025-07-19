@@ -384,29 +384,29 @@ const ProgramsPage: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           {/* Search */}
           <div className="lg:col-span-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <input
-                type="text"
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <input
+                  type="text"
                 placeholder="Search programs by name or description..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1f497d] focus:border-transparent"
-              />
+                />
+              </div>
             </div>
-          </div>
           
           {/* Status Filter */}
           <div>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1f497d] focus:border-transparent"
-            >
-              <option value="all">All Status</option>
+              >
+                <option value="all">All Status</option>
               <option value="draft">Draft</option>
               <option value="pendingapproval">Pending Approval</option>
-              <option value="active">Active</option>
+                <option value="active">Active</option>
               <option value="completed">Completed</option>
               <option value="rejected">Rejected</option>
             </select>
@@ -422,7 +422,7 @@ const ProgramsPage: React.FC = () => {
               <option value="all">All Dates</option>
               <option value="upcoming">Upcoming</option>
               <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
+                <option value="completed">Completed</option>
               <option value="this-month">This Month</option>
             </select>
           </div>
@@ -465,7 +465,7 @@ const ProgramsPage: React.FC = () => {
             >
               <option value="asc">Ascending</option>
               <option value="desc">Descending</option>
-            </select>
+              </select>
           </div>
         </div>
               </div>
@@ -519,7 +519,7 @@ const ProgramsPage: React.FC = () => {
             )}
           </div>
         </div>
-        
+
         {/* Programs Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {sortedPrograms.map((program) => (
@@ -591,7 +591,7 @@ const ProgramsPage: React.FC = () => {
                    <span className="truncate">Submit</span>
                   </button>
                )}
-            </div>
+              </div>
             </div>
           ))}
         </div>
@@ -661,7 +661,7 @@ const ProgramsPage: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
+            </div>
           </div>
         )}
 

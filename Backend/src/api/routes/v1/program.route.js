@@ -38,7 +38,7 @@ router.use(verifyJWT);
  */
 router.route('/')
     .get(programController.getAllPrograms)
-    .post(checkRole(['Program Manager', 'SuperAdmin']), programController.createProgram);
+    .post(verifyJWT, checkRole(['Program Manager', 'SuperAdmin']), programController.createProgram);
 
 /**
  * @openapi
