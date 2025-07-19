@@ -6,13 +6,14 @@ import { usePathname } from "next/navigation";
 import {
   Activity, Archive, Award, BarChart3, Bell, BookOpen, Calendar,
   ChevronLeft, ChevronRight, ClipboardCheck, FileText, FolderOpen,
-  GraduationCap, Home, LogOut, Mail, Menu, MessageSquare, Settings, Ticket,
+  GraduationCap, Home, LogOut, Mail, Menu, MessageSquare, Moon, Settings, Sun, Ticket,
   TrendingUp, Upload, User, UserCheck, Users, Wrench
 } from "lucide-react";
 
 import { useAuth } from "@/lib/contexts/RoleContext";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useCounts } from "@/lib/contexts/CountsContext";
+import { useTheme } from "next-themes";
 
 const menuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee', 'it_support'] },
@@ -59,6 +60,7 @@ export function AppSidebar() {
   const { user, role, logout, isAuthenticated } = useAuth();
   const { isCollapsed, toggleSidebar, isMobile, isMobileMenuOpen, closeMobileMenu } = useSidebar();
   const { counts } = useCounts();
+  const { theme, setTheme } = useTheme();
 
   // Debug logging
   console.log('Sidebar: Current counts:', counts);
@@ -168,6 +170,17 @@ export function AppSidebar() {
             );
           })}
         </nav>
+
+        {/* Theme Toggle Section */}
+        <div className="p-4 border-t">
+          <button 
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium hover:bg-muted ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            {(!isCollapsed || isMobile) && <span>{theme === 'dark' ? "Light Mode" : "Dark Mode"}</span>}
+          </button>
+        </div>
       </div>
 
       <div className="fixed bottom-8 right-8 z-[1001] flex flex-col gap-4">
