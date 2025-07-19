@@ -138,7 +138,7 @@ manageRouter.route('/archived').get(checkRole(['SuperAdmin']), userController.ge
  *     responses:
  *       200: { description: 'A list of active users.' }
  */
-manageRouter.route('/').get(checkRole(['SuperAdmin']), userController.getAllUsers);
+manageRouter.route('/').get(checkRole(['SuperAdmin', 'Program Manager']), userController.getAllUsers);
 
 
 // --- GENERIC, PARAMETERIZED '/manage' ROUTES COME LAST ---

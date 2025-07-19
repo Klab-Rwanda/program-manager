@@ -55,155 +55,171 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-
-interface Facilitator {
-  id: number
-  name: string
-  email: string
-  phone: string
-  specialization: string
-  experience: string
-  status: string
-  programs: string[]
-  rating: number
-  github: string
-  joinDate: string
-  studentsCount: number
-  contentSubmissions: number
-  approvedContent: number
-  type: string
-  previousProgram?: string
-  promotionDate?: string
-}
-
-interface ContentSubmission {
-  id: number
-  facilitatorId: number
-  facilitatorName: string
-  title: string
-  description: string
-  program: string
-  submissionDate: string
-  status: string
-  type: string
-  duration: string
-  content: string
-  fileUrl: string
-}
+import { ContentSubmission } from "@/types/index"
+import {Facilitator} from "@/types/index"
 
 export default function FacilitatorsPage() {
-  const API_BASE_URL = "http://localhost:8000/api/v1/programs"
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+  const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
 
 
-  // State
-  const [programs, setPrograms] = useState<{ _id: string; name: string }[]>([])
-  const [selectedProgramId, setSelectedProgramId] = useState<string>("")
-  const [facilitators, setFacilitators] = useState<Facilitator[]>([])
-  const [contentSubmissions, setContentSubmissions] = useState<ContentSubmission[]>([]) // keep mock or fetch later if available
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all")
-  const [activeTab, setActiveTab] = useState("facilitators")
-  const [showHireModal, setShowHireModal] = useState(false)
-  const [showViewModal, setShowViewModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [showContentPreview, setShowContentPreview] = useState(false)
-  const [selectedFacilitator, setSelectedFacilitator] = useState<Facilitator | null>(null)
-  const [selectedContent, setSelectedContent] = useState<ContentSubmission | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+ const [programs, setPrograms] = useState<{ _id: string; name: string }[]>([])
+const [selectedProgramId, setSelectedProgramId] = useState<string>("")
+const [facilitators, setFacilitators] = useState<Facilitator[]>([])
+const [contentSubmissions, setContentSubmissions] = useState<ContentSubmission[]>([])
+const [searchTerm, setSearchTerm] = useState("")
+const [filterStatus, setFilterStatus] = useState("all")
+const [activeTab, setActiveTab] = useState("facilitators")
+const [showHireModal, setShowHireModal] = useState(false)
+const [showViewModal, setShowViewModal] = useState(false)
+const [showEditModal, setShowEditModal] = useState(false)
+const [showContentPreview, setShowContentPreview] = useState(false)
+const [selectedFacilitator, setSelectedFacilitator] = useState<Facilitator | null>(null)
+const [selectedContent, setSelectedContent] = useState<ContentSubmission | null>(null)
+const [loading, setLoading] = useState(false)
+const [error, setError] = useState<string | null>(null)
+const [hireFacilitatorId, setHireFacilitatorId] = useState("")
 
-  // For hiring facilitator (enter facilitator user id)
-  const [hireFacilitatorId, setHireFacilitatorId] = useState("")
+// Fetch all programs
+async function fetchPrograms() {
+  if (!token) throw new Error("Missing auth token. Please log in.");
 
-  // Fetch programs from backend
-  async function fetchPrograms() {
-    const res = await fetch(API_BASE_URL, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) throw new Error("Failed to load programs")
-    const data = await res.json()
-    return data.data // assuming backend sends { data: [...] }
+  const res = await fetch("http://localhost:8000/api/v1/programs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    console.error("Fetch error:", res.status, errorData);
+    throw new Error(errorData.message || "Failed to load programs");
   }
 
-  // Fetch facilitators for selected program
-  async function fetchFacilitators(programId: string) {
-    const res = await fetch(`${API_BASE_URL}/${programId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) throw new Error("Failed to load facilitators")
-    const data = await res.json()
-    return data.data.facilitators || []
+  const data = await res.json();
+  return data.data;
+}
+
+// Fetch all facilitators (not program-specific)
+async function fetchFacilitators() {
+  if (!token) throw new Error("Missing auth token. Please log in.");
+
+  const res = await fetch("http://localhost:8000/api/v1/users/manage?role=Facilitator", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || "Failed to load facilitators");
   }
 
-  // Enroll facilitator to program by userId
-  async function enrollFacilitator(programId: string, facilitatorId: string) {
-    const res = await fetch(`${API_BASE_URL}/${programId}/enroll-facilitator`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ facilitatorId }),
-    })
-    if (!res.ok) {
-      const errorData = await res.json()
-      throw new Error(errorData.message || "Failed to enroll facilitator")
-    }
-    return await res.json()
+  const data = await res.json();
+  return data.data;
+}
+
+// Enroll facilitator to a selected program
+async function enrollFacilitator(programId: string, facilitatorId: string) {
+  if (!token) throw new Error("Missing auth token. Please log in.");
+
+  const res = await fetch(`http://localhost:8000/api/v1/programs/${programId}/enroll-facilitator`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ facilitatorId }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    console.error("Enroll failed:", res.status, errorData);
+    throw new Error(errorData.message || "Failed to enroll facilitator");
   }
 
-  // Load programs on mount
-  useEffect(() => {
-    async function loadPrograms() {
-      setLoading(true)
-      try {
-        const progs = await fetchPrograms()
-        setPrograms(progs)
-        if (progs.length > 0) setSelectedProgramId(progs[0]._id)
-        setError(null)
-      } catch (err: any) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
+  const data = await res.json();
+  return data.data;
+}
+
+// Load programs on mount
+useEffect(() => {
+  async function loadPrograms() {
+    setLoading(true);
+    try {
+      const progs = await fetchPrograms();
+      setPrograms(progs);
+      if (progs.length > 0) {
+        setSelectedProgramId(progs[0]._id);
       }
+      setError(null);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-    loadPrograms()
-  }, [])
+  }
 
-  // Load facilitators when selectedProgramId changes
-  useEffect(() => {
-    if (!selectedProgramId) return
-    async function loadFacilitators() {
-      setLoading(true)
-      try {
-        const facs = await fetchFacilitators(selectedProgramId)
-        setFacilitators(facs)
-        setError(null)
-      } catch (err: any) {
-        setError(err.message)
-      } finally {
-        setLoading(false)
-      }
+  loadPrograms();
+}, []);
+
+// Load all facilitators once (not tied to programId)
+useEffect(() => {
+  async function loadFacilitators() {
+    setLoading(true);
+    try {
+      const facs = await fetchFacilitators();
+      setFacilitators(facs);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-    loadFacilitators()
-  }, [selectedProgramId])
+  }
 
-  // Filter helpers
-  const filteredFacilitators = facilitators.filter((facilitator) => {
-    const matchesSearch = facilitator.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = filterStatus === "all" || facilitator.status === filterStatus
-    return matchesSearch && matchesStatus
-  })
+  loadFacilitators();
+}, []);
 
-  // Mock filter contentSubmissions as before or replace with backend fetch later
-  const filteredContent = contentSubmissions.filter((content) => {
-    const matchesSearch =
-      content.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      content.facilitatorName.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = filterStatus === "all" || content.status === filterStatus
-    return matchesSearch && matchesStatus
-  })
+// Filter helpers
+const filteredFacilitators = facilitators.filter((facilitator) => {
+  const matchesSearch = facilitator.name.toLowerCase().includes(searchTerm.toLowerCase());
+  const matchesStatus = filterStatus === "all" || facilitator.status === filterStatus;
+  return matchesSearch && matchesStatus;
+});
+
+const filteredContent = contentSubmissions.filter((content) => {
+  const matchesSearch =
+    content.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    content.facilitatorName.toLowerCase().includes(searchTerm.toLowerCase());
+  const matchesStatus = filterStatus === "all" || content.status === filterStatus;
+  return matchesSearch && matchesStatus;
+});
+
+
+const handleDeleteFacilitator = (id: string) => {
+  setFacilitators((prev) => prev.filter((f) => f._id !== id))
+}
+
+const handlePreviewContent = (content: ContentSubmission) => {
+  setSelectedContent(content)
+  setShowContentPreview(true)
+}
+
+const handleApproveContent = (contentId: string) => {
+  setContentSubmissions((prev) =>
+    prev.map((content) =>
+      content._id === contentId ? { ...content, status: "Approved" } : content
+    )
+  )
+}
+
+const handleRejectContent = (contentId: string) => {
+  setContentSubmissions((prev) =>
+    prev.map((content) =>
+      content._id === contentId ? { ...content, status: "Rejected" } : content
+    )
+  )
+}
 
   // UI helpers
   const getStatusBadge = (status: string) => {
@@ -254,54 +270,34 @@ export default function FacilitatorsPage() {
 
   // Handlers
   const handleHireFacilitator = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedProgramId) {
-      alert("Please select a program first")
-      return
-    }
-    if (!hireFacilitatorId.trim()) {
-      alert("Please enter facilitator user ID")
-      return
-    }
-    setLoading(true)
-    try {
-      await enrollFacilitator(selectedProgramId, hireFacilitatorId.trim())
-      const updatedFacilitators = await fetchFacilitators(selectedProgramId)
-      setFacilitators(updatedFacilitators)
-      setShowHireModal(false)
-      setHireFacilitatorId("")
-      alert("Facilitator hired successfully!")
-    } catch (err: any) {
-      alert("Error: " + err.message)
-    } finally {
-      setLoading(false)
-    }
+  e.preventDefault();
+  if (!selectedProgramId) {
+    alert("Please select a program first");
+    return;
+  }
+  if (!hireFacilitatorId.trim()) {
+    alert("Please enter facilitator user ID");
+    return;
   }
 
-  const handleDeleteFacilitator = (id: number) => {
-    setFacilitators(facilitators.filter((f) => f.id !== id))
-  }
+  setLoading(true);
+  try {
+    await enrollFacilitator(selectedProgramId, hireFacilitatorId.trim());
 
-  const handleApproveContent = (contentId: number) => {
-    setContentSubmissions(
-      contentSubmissions.map((content) =>
-        content.id === contentId ? { ...content, status: "approved" } : content,
-      ),
-    )
-  }
+    // Fetch all facilitators again (no selectedProgramId param)
+    const updatedFacilitators = await fetchFacilitators();
+    setFacilitators(updatedFacilitators);
 
-  const handleRejectContent = (contentId: number) => {
-    setContentSubmissions(
-      contentSubmissions.map((content) =>
-        content.id === contentId ? { ...content, status: "rejected" } : content,
-      ),
-    )
+    setShowHireModal(false);
+    setHireFacilitatorId("");
+    alert("Facilitator hired successfully!");
+  } catch (err: any) {
+    alert("Error: " + err.message);
+  } finally {
+    setLoading(false);
   }
+};
 
-  const handlePreviewContent = (content: ContentSubmission) => {
-    setSelectedContent(content)
-    setShowContentPreview(true)
-  }
 
   return (
     <div className="space-y-6">
@@ -377,7 +373,7 @@ export default function FacilitatorsPage() {
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filteredFacilitators.map((facilitator) => (
-              <Card key={facilitator.id} className="relative">
+              <Card key={facilitator._id} className="relative">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg">{facilitator.name}</CardTitle>
@@ -407,7 +403,7 @@ export default function FacilitatorsPage() {
                     </div>
                     <div className="flex items-center space-x-2">
                       <BookOpen className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{facilitator.programs.join(", ")}</span>
+                      <span className="text-sm">{facilitator.programs}</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Award className="h-4 w-4 text-muted-foreground" />
@@ -458,7 +454,7 @@ export default function FacilitatorsPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDeleteFacilitator(facilitator.id)}
+                      onClick={() => handleDeleteFacilitator(facilitator._id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -495,7 +491,7 @@ export default function FacilitatorsPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredContent.map((content) => (
-                <Card key={content.id} className="relative">
+                <Card key={content._id} className="relative">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">{content.title}</CardTitle>
@@ -521,19 +517,19 @@ export default function FacilitatorsPage() {
                       >
                         <Eye className="h-4 w-4" /> Preview
                       </Button>
-                      {content.status === "pending" && (
+                      {content.status === "Pending" && (
                         <>
                           <Button
                             variant="default"
                             size="sm"
-                            onClick={() => handleApproveContent(content.id)}
+                            onClick={() => handleApproveContent(content._id)}
                           >
                             <CheckCircle className="h-4 w-4" /> Approve
                           </Button>
                           <Button
                             variant="destructive"
                             size="sm"
-                            onClick={() => handleRejectContent(content.id)}
+                            onClick={() => handleRejectContent(content._id)}
                           >
                             <XCircle className="h-4 w-4" /> Reject
                           </Button>
@@ -594,7 +590,7 @@ export default function FacilitatorsPage() {
                 <p><strong>Specialization:</strong> {selectedFacilitator.specialization}</p>
                 <p><strong>Experience:</strong> {selectedFacilitator.experience}</p>
                 <p><strong>Status:</strong> {selectedFacilitator.status}</p>
-                <p><strong>Programs:</strong> {selectedFacilitator.programs.join(", ")}</p>
+                <p><strong>Programs:</strong> {selectedFacilitator.programs}</p>
                 <p><strong>Students Count:</strong> {selectedFacilitator.studentsCount}</p>
                 <p><strong>Content Submissions:</strong> {selectedFacilitator.contentSubmissions}</p>
                 <p><strong>Approved Content:</strong> {selectedFacilitator.approvedContent}</p>
@@ -628,7 +624,7 @@ export default function FacilitatorsPage() {
               onClose={() => setShowEditModal(false)}
               onSave={(updatedFacilitator) => {
                 setFacilitators((prev) =>
-                  prev.map((f) => (f.id === updatedFacilitator.id ? updatedFacilitator : f))
+                  prev.map((f) => (f._id === updatedFacilitator._id ? updatedFacilitator : f))
                 )
                 setShowEditModal(false)
               }}

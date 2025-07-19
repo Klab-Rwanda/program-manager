@@ -31,4 +31,39 @@ export interface Program {
   updatedAt: string;
 }
 
+export interface ContentSubmission {
+  _id: string;
+  facilitatorName: string;
+  program: string;
+  title: string;
+  description: string;
+  submissionDate?: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  type: string;
+  duration: string;
+  content?: string;
+  fileUrl?: string;
+}
+
+export interface Facilitator {
+  _id: string; 
+  name: string;
+  email: string;
+  phone: string;
+  specialization: string;
+  experience: string;
+  status: 'Active' | 'Inactive' | 'Pending';
+  programs: string[]; 
+  rating: number;
+  github: string;
+  joinDate: string;
+  studentsCount: number;
+  contentSubmissions: number;
+  approvedContent: number;
+  type: string;
+  previousProgram?: string;
+  promotionDate?: string;
+}
+
+
 // Add other interfaces for Course, Attendance, etc. as you integrate them.
