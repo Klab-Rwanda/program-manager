@@ -63,11 +63,11 @@ export default function AttendancePage() {
         return <div className="text-center p-10"><p>Please log in to view this page.</p></div>;
     }
 
-    if (role === 'Program Manager' || role === 'SuperAdmin') {
+    if (role === 'program_manager' || role === 'super_admin') {
         return <ProgramManagerAttendanceView />;
     }
     
-    if (role === 'Trainee') {
+    if (role === 'trainee') {
         return <TraineeAttendanceView />;
     }
 

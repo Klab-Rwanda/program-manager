@@ -5,7 +5,7 @@ export interface User {
   _id: string;
   name: string;
   email: string;
-  role: 'Trainee' | 'Facilitator' | 'Program Manager' | 'SuperAdmin';
+  role: 'super_admin' | 'program_manager' | 'facilitator' | 'trainee' | 'it_support';
   status: 'Pending' | 'Active';
   isActive: boolean;
   firstLogin?: string;

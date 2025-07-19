@@ -5,6 +5,7 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { RoleProvider } from "@/lib/contexts/RoleContext"
 import { CountsProvider } from "@/lib/contexts/CountsContext"
+import { SidebarProvider } from "@/lib/contexts/SidebarContext"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -24,9 +25,11 @@ export default function RootLayout({
       <body className={`${inter.className} min-h-screen`}>
         <RoleProvider>
           <CountsProvider>
-            <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-              {children}
-            </ThemeProvider>
+            <SidebarProvider>
+              <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+                {children}
+              </ThemeProvider>
+            </SidebarProvider>
           </CountsProvider>
         </RoleProvider>
       </body>

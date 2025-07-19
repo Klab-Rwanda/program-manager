@@ -15,36 +15,36 @@ import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useCounts } from "@/lib/contexts/CountsContext";
 
 const menuItems = [
-    { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['SuperAdmin', 'Program Manager', 'Facilitator', 'Trainee', 'IT Support'] },
+    { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee', 'it_support'] },
     // Super Admin
-    { title: "User Management", url: "/dashboard/user-management", icon: Users, roles: ['SuperAdmin'] },
-    { title: "Master Log", url: "/dashboard/master-log", icon: Activity, roles: ['SuperAdmin'] },
-    { title: "Reports & Export", url: "/dashboard/reports-export", icon: BarChart3, roles: ['SuperAdmin'] },
-    { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['SuperAdmin'] },
+    { title: "User Management", url: "/dashboard/user-management", icon: Users, roles: ['super_admin'] },
+    { title: "Master Log", url: "/dashboard/master-log", icon: Activity, roles: ['super_admin'] },
+    { title: "Reports & Export", url: "/dashboard/reports-export", icon: BarChart3, roles: ['super_admin'] },
+    { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['super_admin'] },
     // Program Manager
-    { title: "Programs", url: "/dashboard/programs", icon: BookOpen, roles: ['Program Manager'], countKey: 'programs' },
-    { title: "Facilitators", url: "/dashboard/facilitators", icon: UserCheck, roles: ['Program Manager'], countKey: 'facilitators' },
-    { title: "Trainees", url: "/dashboard/trainees", icon: Users, roles: ['Program Manager'], countKey: 'trainees' },
-    { title: "Attendance", url: "/dashboard/attendance", icon: Calendar, roles: ['Program Manager'] },
-    { title: "Certificates", url: "/dashboard/certificates", icon: Award, roles: ['Program Manager'], countKey: 'certificates' },
-    { title: "Archive", url: "/dashboard/archive", icon: Archive, roles: ['Program Manager'], countKey: 'archived' },
+    { title: "Programs", url: "/dashboard/programs", icon: BookOpen, roles: ['program_manager'], countKey: 'programs' },
+    { title: "Facilitators", url: "/dashboard/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },
+    { title: "Trainees", url: "/dashboard/trainees", icon: Users, roles: ['program_manager'], countKey: 'trainees' },
+    { title: "Attendance", url: "/dashboard/attendance", icon: Calendar, roles: ['program_manager'] },
+    { title: "Certificates", url: "/dashboard/certificates", icon: Award, roles: ['program_manager'], countKey: 'certificates' },
+    { title: "Archive", url: "/dashboard/archive", icon: Archive, roles: ['program_manager'], countKey: 'archived' },
     // Facilitator
-    { title: "My Programs", url: "/facilitator/programs", icon: BookOpen, roles: ['Facilitator'] },
-    { title: "Attendance Tracking", url: "/facilitator/attendance", icon: Calendar, roles: ['Facilitator'] },
-    { title: "Curriculum Upload", url: "/facilitator/curriculum", icon: Upload, roles: ['Facilitator'] },
-    { title: "Project Reviews", url: "/facilitator/reviews", icon: ClipboardCheck, roles: ['Facilitator'] },
-    { title: "Weekly Roadmap", url: "/facilitator/roadmap", icon: Calendar, roles: ['Facilitator'] },
+    { title: "My Programs", url: "/facilitator/programs", icon: BookOpen, roles: ['facilitator'] },
+    { title: "Attendance Tracking", url: "/facilitator/attendance", icon: Calendar, roles: ['facilitator'] },
+    { title: "Curriculum Upload", url: "/facilitator/curriculum", icon: Upload, roles: ['facilitator'] },
+    { title: "Project Reviews", url: "/facilitator/reviews", icon: ClipboardCheck, roles: ['facilitator'] },
+    { title: "Weekly Roadmap", url: "/facilitator/roadmap", icon: Calendar, roles: ['facilitator'] },
     // Trainee
-    { title: "My Learning", url: "/dashboard/my-learning", icon: GraduationCap, roles: ['Trainee'] },
-    { title: "Submit Projects", url: "/dashboard/submit-projects", icon: FileText, roles: ['Trainee'] },
-    { title: "My Progress", url: "/dashboard/my-progress", icon: TrendingUp, roles: ['Trainee'] },
-    { title: "Learning Resources", url: "/dashboard/resources", icon: FolderOpen, roles: ['Trainee'] },
+    { title: "My Learning", url: "/dashboard/my-learning", icon: GraduationCap, roles: ['trainee'] },
+    { title: "Submit Projects", url: "/dashboard/submit-projects", icon: FileText, roles: ['trainee'] },
+    { title: "My Progress", url: "/dashboard/my-progress", icon: TrendingUp, roles: ['trainee'] },
+    { title: "Learning Resources", url: "/dashboard/resources", icon: FolderOpen, roles: ['trainee'] },
     // IT Support
-    { title: "Support Tickets", url: "/dashboard/support-tickets", icon: MessageSquare, roles: ['IT Support'] },
-    { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['IT Support'] },
-    { title: "Maintenance", url: "/dashboard/maintenance", icon: Wrench, roles: ['IT Support'] },
+    { title: "Support Tickets", url: "/dashboard/support-tickets", icon: MessageSquare, roles: ['it_support'] },
+    { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['it_support'] },
+    { title: "Maintenance", url: "/dashboard/maintenance", icon: Wrench, roles: ['it_support'] },
     // Shared
-   
+    
 ];
 
 interface Notification {
@@ -56,12 +56,15 @@ interface Notification {
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { user, role, logout } = useAuth();
+  const { user, role, logout, isAuthenticated } = useAuth();
   const { isCollapsed, toggleSidebar, isMobile, isMobileMenuOpen, closeMobileMenu } = useSidebar();
   const { counts } = useCounts();
 
-  // Debug logging for counts only
+  // Debug logging
   console.log('Sidebar: Current counts:', counts);
+  console.log('Sidebar: User:', user);
+  console.log('Sidebar: Role:', role);
+  console.log('Sidebar: IsAuthenticated:', isAuthenticated);
 
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -75,10 +78,15 @@ export function AppSidebar() {
   const unreadCount = notifications.filter(n => n.unread).length;
 
   const filteredMenuItems = menuItems.filter(item =>
-    role ? item.roles.includes(role as any) : false
+    role ? item.roles.includes(role) : false
   );
 
   const sidebarWidth = isCollapsed ? '80px' : '280px';
+
+  // Don't render sidebar if not authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <>

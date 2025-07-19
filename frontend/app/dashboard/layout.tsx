@@ -4,7 +4,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/contexts/RoleContext";
-import { SidebarProvider, useSidebar } from "@/lib/contexts/SidebarContext"; // Import the new context
+import { useSidebar } from "@/lib/contexts/SidebarContext"; // Import the new context
 import { AppSidebar } from "@/components/layout/sidebar"; // Your sidebar component
 import { Menu } from 'lucide-react';
 
@@ -67,9 +67,5 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <SidebarProvider>
-      <DashboardContent>{children}</DashboardContent>
-    </SidebarProvider>
-  );
+  return <DashboardContent>{children}</DashboardContent>;
 }
