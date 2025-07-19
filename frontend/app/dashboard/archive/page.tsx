@@ -294,66 +294,66 @@ export default function ArchivePage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredArchive.map((item) => (
-            <Card key={item.id} className="relative">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    {getTypeIcon(item.type)}
-                    {getTypeBadge(item.type)}
-                  </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {filteredArchive.map((item) => (
+          <Card key={item.id} className="relative">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  {getTypeIcon(item.type)}
+                  {getTypeBadge(item.type)}
                 </div>
-                <CardTitle className="text-lg">{item.name}</CardTitle>
-                <CardDescription>{item.cohort}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">Completed: {item.completionDate}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{item.participants} participants</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Target className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{item.successRate}% success rate</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{item.duration}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{item.location}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">Budget: {item.funding.budget}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{item.outcomes.employed} employed</span>
-                  </div>
+              </div>
+              <CardTitle className="text-lg">{item.name}</CardTitle>
+              <CardDescription>{item.cohort}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
+                <div className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">Completed: {item.completionDate}</span>
                 </div>
-                <div className="flex space-x-2 mt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleViewDetails(item)}
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleExportData(item)}
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
+                <div className="flex items-center space-x-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{item.participants} participants</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Target className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{item.successRate}% success rate</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{item.duration}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{item.location}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">Budget: {item.funding.budget}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{item.outcomes.employed} employed</span>
+                </div>
+              </div>
+              <div className="flex space-x-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleViewDetails(item)}
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleExportData(item)}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -362,11 +362,11 @@ export default function ArchivePage() {
                   >
                     <RotateCcw className="h-4 w-4" />
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
       )}
 
       {/* Detailed View Modal */}
@@ -379,200 +379,200 @@ export default function ArchivePage() {
             <DialogHeader className="p-6 pb-4 border-b bg-gray-50 flex-shrink-0">
               <DialogTitle className="text-xl">{selectedItem?.name}</DialogTitle>
               <DialogDescription className="text-base">
-                {selectedItem?.type} • {selectedItem?.cohort} • {selectedItem?.location}
-              </DialogDescription>
-            </DialogHeader>
+              {selectedItem?.type} • {selectedItem?.cohort} • {selectedItem?.location}
+            </DialogDescription>
+          </DialogHeader>
             
             <div className="flex-1 overflow-y-auto p-6 bg-white min-h-0">
-              {selectedItem && (
+          {selectedItem && (
                 <div className="space-y-6 pb-4">
-                  {/* Overview */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2">Overview</h3>
-                    <p className="text-muted-foreground">{selectedItem.description}</p>
-                  </div>
+              {/* Overview */}
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Overview</h3>
+                <p className="text-muted-foreground">{selectedItem.description}</p>
+              </div>
 
-                  {/* Key Metrics */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <div className="text-2xl font-bold text-blue-600">{selectedItem.participants}</div>
-                      <div className="text-sm text-gray-600">Participants</div>
-                    </div>
-                    <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <div className="text-2xl font-bold text-green-600">{selectedItem.successRate}%</div>
-                      <div className="text-sm text-gray-600">Success Rate</div>
-                    </div>
-                    <div className="text-center p-4 bg-purple-50 rounded-lg">
-                      <div className="text-2xl font-bold text-purple-600">{selectedItem.outcomes.employed}</div>
-                      <div className="text-sm text-gray-600">Employed</div>
-                    </div>
-                    <div className="text-center p-4 bg-orange-50 rounded-lg">
-                      <div className="text-2xl font-bold text-orange-600">{selectedItem.keyMetrics.satisfactionScore}</div>
-                      <div className="text-sm text-gray-600">Satisfaction</div>
-                    </div>
-                  </div>
+              {/* Key Metrics */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">{selectedItem.participants}</div>
+                  <div className="text-sm text-gray-600">Participants</div>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{selectedItem.successRate}%</div>
+                  <div className="text-sm text-gray-600">Success Rate</div>
+                </div>
+                <div className="text-center p-4 bg-purple-50 rounded-lg">
+                  <div className="text-2xl font-bold text-purple-600">{selectedItem.outcomes.employed}</div>
+                  <div className="text-sm text-gray-600">Employed</div>
+                </div>
+                <div className="text-center p-4 bg-orange-50 rounded-lg">
+                  <div className="text-2xl font-bold text-orange-600">{selectedItem.keyMetrics.satisfactionScore}</div>
+                  <div className="text-sm text-gray-600">Satisfaction</div>
+                </div>
+              </div>
 
-                  {/* Program Details */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3">Program Details</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Duration:</span>
-                          <span className="text-sm">{selectedItem.duration}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Facilitator:</span>
-                          <span className="text-sm">{selectedItem.facilitator}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Completion Date:</span>
-                          <span className="text-sm">{selectedItem.completionDate}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Location:</span>
-                          <span className="text-sm">{selectedItem.location}</span>
-                        </div>
-                      </div>
+              {/* Program Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Program Details</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Duration:</span>
+                      <span className="text-sm">{selectedItem.duration}</span>
                     </div>
-
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3">Demographics</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Age Range:</span>
-                          <span className="text-sm">{selectedItem.demographics.ageRange}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Gender:</span>
-                          <span className="text-sm">{selectedItem.demographics.gender}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Education:</span>
-                          <span className="text-sm">{selectedItem.demographics.education}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Background:</span>
-                          <span className="text-sm">{selectedItem.demographics.background}</span>
-                        </div>
-                      </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Facilitator:</span>
+                      <span className="text-sm">{selectedItem.facilitator}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Completion Date:</span>
+                      <span className="text-sm">{selectedItem.completionDate}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Location:</span>
+                      <span className="text-sm">{selectedItem.location}</span>
                     </div>
                   </div>
+                </div>
 
-                  {/* Curriculum */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">Curriculum</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                      {selectedItem.curriculum.map((item, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          {item}
-                        </Badge>
-                      ))}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Demographics</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Age Range:</span>
+                      <span className="text-sm">{selectedItem.demographics.ageRange}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Gender:</span>
+                      <span className="text-sm">{selectedItem.demographics.gender}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Education:</span>
+                      <span className="text-sm">{selectedItem.demographics.education}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Background:</span>
+                      <span className="text-sm">{selectedItem.demographics.background}</span>
                     </div>
                   </div>
+                </div>
+              </div>
 
-                  {/* Tools Used */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">Tools & Technologies</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      {selectedItem.tools.map((tool, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {tool}
-                        </Badge>
-                      ))}
+              {/* Curriculum */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Curriculum</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {selectedItem.curriculum.map((item, index) => (
+                    <Badge key={index} variant="secondary" className="text-xs">
+                      {item}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tools Used */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Tools & Technologies</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {selectedItem.tools.map((tool, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {tool}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* Funding & Outcomes */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Funding</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Sponsor:</span>
+                      <span className="text-sm">{selectedItem.funding.sponsor}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Budget:</span>
+                      <span className="text-sm">{selectedItem.funding.budget}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Scholarships:</span>
+                      <span className="text-sm">{selectedItem.funding.scholarships}</span>
                     </div>
                   </div>
+                </div>
 
-                  {/* Funding & Outcomes */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3">Funding</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Sponsor:</span>
-                          <span className="text-sm">{selectedItem.funding.sponsor}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Budget:</span>
-                          <span className="text-sm">{selectedItem.funding.budget}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Scholarships:</span>
-                          <span className="text-sm">{selectedItem.funding.scholarships}</span>
-                        </div>
-                      </div>
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Outcomes</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Employed:</span>
+                      <span className="text-sm">{selectedItem.outcomes.employed}</span>
                     </div>
-
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3">Outcomes</h3>
-                      <div className="space-y-2">
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Employed:</span>
-                          <span className="text-sm">{selectedItem.outcomes.employed}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Avg Salary:</span>
-                          <span className="text-sm">{selectedItem.outcomes.avgSalary}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Projects:</span>
-                          <span className="text-sm">{selectedItem.outcomes.projects}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">Certifications:</span>
-                          <span className="text-sm">{selectedItem.outcomes.certifications.length}</span>
-                        </div>
-                      </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Avg Salary:</span>
+                      <span className="text-sm">{selectedItem.outcomes.avgSalary}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Projects:</span>
+                      <span className="text-sm">{selectedItem.outcomes.projects}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">Certifications:</span>
+                      <span className="text-sm">{selectedItem.outcomes.certifications.length}</span>
                     </div>
                   </div>
+                </div>
+              </div>
 
-                  {/* Key Metrics */}
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">Key Performance Metrics</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="text-center p-3 bg-gray-50 rounded-lg">
-                        <div className="text-lg font-bold text-blue-600">{selectedItem.keyMetrics.attendanceRate}%</div>
-                        <div className="text-xs text-gray-600">Attendance Rate</div>
-                      </div>
-                      <div className="text-center p-3 bg-gray-50 rounded-lg">
-                        <div className="text-lg font-bold text-green-600">{selectedItem.keyMetrics.projectCompletionRate}%</div>
-                        <div className="text-xs text-gray-600">Project Completion</div>
-                      </div>
-                      <div className="text-center p-3 bg-gray-50 rounded-lg">
-                        <div className="text-lg font-bold text-purple-600">{selectedItem.keyMetrics.employmentRate}%</div>
-                        <div className="text-xs text-gray-600">Employment Rate</div>
-                      </div>
-                      <div className="text-center p-3 bg-gray-50 rounded-lg">
-                        <div className="text-lg font-bold text-orange-600">{selectedItem.keyMetrics.satisfactionScore}/5</div>
-                        <div className="text-xs text-gray-600">Satisfaction Score</div>
-                      </div>
-                    </div>
+              {/* Key Metrics */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Key Performance Metrics</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <div className="text-lg font-bold text-blue-600">{selectedItem.keyMetrics.attendanceRate}%</div>
+                    <div className="text-xs text-gray-600">Attendance Rate</div>
                   </div>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <div className="text-lg font-bold text-green-600">{selectedItem.keyMetrics.projectCompletionRate}%</div>
+                    <div className="text-xs text-gray-600">Project Completion</div>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <div className="text-lg font-bold text-purple-600">{selectedItem.keyMetrics.employmentRate}%</div>
+                    <div className="text-xs text-gray-600">Employment Rate</div>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded-lg">
+                    <div className="text-lg font-bold text-orange-600">{selectedItem.keyMetrics.satisfactionScore}/5</div>
+                    <div className="text-xs text-gray-600">Satisfaction Score</div>
+                  </div>
+                </div>
+              </div>
 
-                  {/* Certifications */}
-                  {selectedItem.outcomes.certifications.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-semibold mb-3">Certifications Earned</h3>
-                      <div className="space-y-2">
-                        {selectedItem.outcomes.certifications.map((cert, index) => (
-                          <Badge key={index} variant="secondary">
-                            {cert}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+              {/* Certifications */}
+              {selectedItem.outcomes.certifications.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Certifications Earned</h3>
+                  <div className="space-y-2">
+                    {selectedItem.outcomes.certifications.map((cert, index) => (
+                      <Badge key={index} variant="secondary">
+                        {cert}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
+          )}
+            </div>
             
             <DialogFooter className="p-6 pt-4 border-t bg-gray-50 flex-shrink-0">
-              <Button variant="outline" onClick={() => setShowModal(false)}>
-                Close
-              </Button>
-              <Button onClick={() => selectedItem && handleExportData(selectedItem)}>
-                <Download className="mr-2 h-4 w-4" />
-                Export Data
+            <Button variant="outline" onClick={() => setShowModal(false)}>
+              Close
+            </Button>
+            <Button onClick={() => selectedItem && handleExportData(selectedItem)}>
+              <Download className="mr-2 h-4 w-4" />
+              Export Data
               </Button>
               {selectedItem && (
                 <Button 

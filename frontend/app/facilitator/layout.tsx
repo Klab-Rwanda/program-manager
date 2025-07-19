@@ -2,14 +2,14 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { UserRole } from "@/lib/contexts/RoleContext";
+import { useAuth } from "@/lib/contexts/RoleContext";
 
 export default function FacilitatorLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { role, isAuthenticated } = useRole();
+  const { role, isAuthenticated } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
