@@ -44,4 +44,10 @@ router.route('/issue').post(checkRole(['Program Manager']), certController.issue
  */
 router.route('/my-certificates').get(checkRole(['Trainee']), certController.getMyCertificates);
 
+router.get('/', checkRole(['Program Manager']), certController.getAllCertificates);
+
+router.get('/templates', checkRole(['Program Manager']), certController.getCertificateTemplates);
+
+router.get('/eligible-students', checkRole(['Program Manager']), certController.getEligibleStudents);
+
 export default router;
