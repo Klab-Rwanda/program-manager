@@ -30,11 +30,11 @@ const menuItems = [
     { title: "Certificates", url: "/dashboard/certificates", icon: Award, roles: ['program_manager'], countKey: 'certificates' },
     { title: "Archive", url: "/dashboard/archive", icon: Archive, roles: ['program_manager'], countKey: 'archived' },
     // Facilitator
-    { title: "My Programs", url: "/facilitator/programs", icon: BookOpen, roles: ['facilitator'] },
-    { title: "Attendance Tracking", url: "/facilitator/attendance", icon: Calendar, roles: ['facilitator'] },
-    { title: "Curriculum Upload", url: "/facilitator/curriculum", icon: Upload, roles: ['facilitator'] },
-    { title: "Project Reviews", url: "/facilitator/reviews", icon: ClipboardCheck, roles: ['facilitator'] },
-    { title: "Weekly Roadmap", url: "/facilitator/roadmap", icon: Calendar, roles: ['facilitator'] },
+    { title: "My Programs", url: "/dashboard/fac-programs", icon: BookOpen, roles: ['facilitator'] },
+    { title: "Attendance Tracking", url: "/dashboard/Fac-attendance", icon: Calendar, roles: ['facilitator'] },
+    { title: "Curriculum Upload", url: "/dashboard/fac-curriculum", icon: Upload, roles: ['facilitator'] },
+    { title: "Project Reviews", url: "/dashboard/fac-reviews", icon: ClipboardCheck, roles: ['facilitator'] },
+    { title: "Weekly Roadmap", url: "/dashboard/fac-roadmap", icon: Calendar, roles: ['facilitator'] },
     // Trainee
     { title: "My Learning", url: "/dashboard/my-learning", icon: GraduationCap, roles: ['trainee'] },
     { title: "Submit Projects", url: "/dashboard/submit-projects", icon: FileText, roles: ['trainee'] },

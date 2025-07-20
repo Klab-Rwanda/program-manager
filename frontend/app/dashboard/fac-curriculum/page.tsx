@@ -84,6 +84,7 @@ export default function Curriculum() {
     },
   ]);
 
+  
   const programs = [
     { id: "software-engineering", name: "Software Engineering Bootcamp" },
     { id: "data-science", name: "Data Science Fundamentals" },
