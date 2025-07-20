@@ -1,29 +1,28 @@
 "use client"
 
 import { useState } from "react"
+import { Mail, BookOpen } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { Mail, Lock, BookOpen } from "lucide-react"
-import { useAuth } from "@/lib/contexts/RoleContext"
 
-export default function LoginPage() {
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-
-  const { login } = useAuth()
+  const [message, setMessage] = useState("")
+  const [error, setError] = useState("")
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
     setIsLoading(true)
+    setError("")
+    setMessage("")
 
     try {
-      await login(email, password)
-      router.push("/dashboard")
+      // TODO: Replace this with real API call
+      await new Promise((res) => setTimeout(res, 1000))
+      setMessage("A password reset link has been sent to your email.")
     } catch (err) {
-      setError("Invalid email or password. Please try again.")
+      setError("Something went wrong. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -35,13 +34,13 @@ export default function LoginPage() {
       <div className="w-full md:w-1/2 bg-white flex flex-col justify-center items-start p-8 md:p-20 z-10">
         <div className="animate-fadeIn">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-4 md:mb-6">
-            Unlock Your Potential.
+            Reset Your Password.
           </h1>
           <p className="text-base md:text-lg text-gray-600 leading-relaxed max-w-xl mb-2">
-            Welcome to the Klab ecosystem. Your central hub for learning, managing, and creating the future of tech in Rwanda.
+            Forgot your password? Don’t worry — we’ll send you a reset link.
           </p>
           <p className="text-base md:text-lg text-gray-600 leading-relaxed">
-            Let's build something amazing together.
+            Let’s get you back into your account.
           </p>
         </div>
       </div>
@@ -58,9 +57,9 @@ export default function LoginPage() {
                 <BookOpen className="h-8 w-8" />
               </div>
             </div>
-            <h2 className="text-2xl md:text-3xl font-semibold mb-2">Welcome Back!</h2>
+            <h2 className="text-2xl md:text-3xl font-semibold mb-2">Forgot Password</h2>
             <p className="text-gray-200 text-sm md:text-base">
-              Sign in to access your dashboard.
+              Enter your email to receive a reset link.
             </p>
           </div>
 
@@ -69,10 +68,15 @@ export default function LoginPage() {
               {error}
             </div>
           )}
+          {message && (
+            <div className="bg-green-600 border border-green-400 text-white px-3 py-3 rounded-md text-center">
+              {message}
+            </div>
+          )}
 
           <div>
             <label htmlFor="email" className="text-sm font-medium mb-2 block text-gray-200">
-              Email
+              Email Address
             </label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
@@ -89,38 +93,22 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div>
-            <label htmlFor="password" className="text-sm font-medium mb-2 block text-gray-200">
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
-              <input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-                className="w-full px-4 py-4 pl-12 rounded-lg border border-transparent bg-white/10 backdrop-blur-sm text-white placeholder-gray-400 text-base transition-all duration-200 focus:outline-none focus:border-blue-400 focus:bg-white/20 focus:shadow-[0_0_0_3px_rgba(96,165,250,0.4)]"
-              />
-            </div>
-            <div className="text-right mt-2">
-              <a href="/auth/forgot-password"
-                className="text-sm text-blue-300 hover:underline hover:text-white transition duration-200">
-              Forgot Password?
-              </a>
-            </div>
-          </div>
-
           <button
             type="submit"
             disabled={isLoading}
             className="w-full bg-white text-gray-600 py-4 font-semibold text-base border-none rounded-lg cursor-pointer transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 hover:bg-gray-300 hover:text-white hover:font-bold disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none"
           >
-            {isLoading ? "ACCESSING..." : "ACCESS DASHBOARD"}
+            {isLoading ? "Sending..." : "Send Reset Link"}
           </button>
+
+          <div className="text-center mt-2">
+            <a
+              href="/"
+              className="text-sm text-blue-300 hover:underline hover:text-white transition duration-200"
+            >
+              Back to Login
+            </a>
+          </div>
         </form>
       </div>
 
