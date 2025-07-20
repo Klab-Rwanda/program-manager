@@ -1,48 +1,62 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Lock } from "lucide-react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useState, useEffect } from "react";
+import { Lock } from "lucide-react";
+import { useRouter, useParams } from "next/navigation";
 
 export default function ResetPasswordPage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const token = searchParams.get("token")
+  const router = useRouter();
+  const { token } = useParams(); // ✅ Dynamic token from /reset-password/[token]
 
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [error, setError] = useState("")
-  const [message, setMessage] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setMessage("")
+    e.preventDefault();
+    setError("");
+    setMessage("");
 
     if (!token) {
-      setError("Invalid or missing token.")
-      return
+      setError("Invalid or missing token.");
+      return;
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match.")
-      return
+      setError("Passwords do not match.");
+      return;
     }
 
-    setIsLoading(true)
+    setIsLoading(true);
 
     try {
-      // TODO: Replace this with real API call
-      await new Promise((res) => setTimeout(res, 1000))
-      setMessage("Password reset successful! Redirecting to login...")
-      setTimeout(() => router.push("/"), 2000)
-    } catch (err) {
-      setError("Failed to reset password. Please try again.")
+      const response = await fetch(`http://localhost:8000/api/v1/auth/reset-password/${token}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          newPassword: password,
+          confirm: confirmPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to reset password.");
+      }
+
+      setMessage("✅ Password reset successful! Redirecting to login...");
+      setTimeout(() => router.push("/auth/login"), 2000);
+    } catch (err: any) {
+      setError(err.message || "Something went wrong.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row font-['Inter'] bg-gray-50">
@@ -128,9 +142,10 @@ export default function ResetPasswordPage() {
           >
             {isLoading ? "Resetting..." : "Reset Password"}
           </button>
-           <div className="text-center mt-2">
+
+          <div className="text-center mt-2">
             <a
-              href="/"
+              href="/auth/login"
               className="text-sm text-blue-300 hover:underline hover:text-white transition duration-200"
             >
               Back to Login
@@ -179,5 +194,5 @@ export default function ResetPasswordPage() {
         }
       `}</style>
     </div>
-  )
+  );
 }

@@ -12,22 +12,31 @@ export default function ForgotPasswordPage() {
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
-    setMessage("")
+  e.preventDefault();
+  setIsLoading(true);
+  setError("");
+  setMessage("");
 
-    try {
-      // TODO: Replace this with real API call
-      await new Promise((res) => setTimeout(res, 1000))
-      setMessage("A password reset link has been sent to your email.")
-    } catch (err) {
-      setError("Something went wrong. Please try again.")
-    } finally {
-      setIsLoading(false)
-    }
+  try {
+    const res = await fetch("http://localhost:8000/api/v1/auth/forgot-password", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.message || "Failed to send reset link");
+
+    setMessage(data.message || "Reset link sent successfully.");
+  } catch (err: any) {
+    setError(err.message);
+  } finally {
+    setIsLoading(false);
   }
-
+};
   return (
     <div className="min-h-screen flex flex-col md:flex-row font-['Inter'] bg-gray-50">
       {/* Left Panel */}

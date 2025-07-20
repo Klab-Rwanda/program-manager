@@ -16,6 +16,8 @@ const logSchema = new mongoose.Schema({
         enum: [
              'USER_LOGIN',
             'USER_CREATED',
+            'PASSWORD_RESET_REQUESTED',
+             'PASSWORD_RESET',
             // User Self-Service
             'USER_UPDATED_SELF',
             'USER_CHANGED_PASSWORD',
