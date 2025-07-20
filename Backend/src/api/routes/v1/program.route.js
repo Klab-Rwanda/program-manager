@@ -38,7 +38,7 @@ router.use(verifyJWT);
  */
 router.route('/')
     .get(programController.getAllPrograms)
-    .post(checkRole(['Program Manager', 'SuperAdmin']), programController.createProgram);
+    .post(verifyJWT, checkRole(['Program Manager', 'SuperAdmin']), programController.createProgram);
 
 /**
  * @openapi
@@ -77,10 +77,23 @@ router.route('/')
  *     responses:
  *       200: { description: 'Program deactivated successfully.' }
  */
+/**
+ * @openapi
+ * /programs/archived:
+ *   get:
+ *     tags: [Programs]
+ *     summary: Get all archived programs
+ *     description: (SuperAdmin or Program Manager) Retrieves all archived programs. Program Managers can only see their own archived programs.
+ *     security: { bearerAuth: [] }
+ *     responses:
+ *       200: { description: 'List of archived programs.' }
+ */
+router.route('/archived').get(checkRole(['SuperAdmin', 'Program Manager']), programController.getArchivedPrograms);
+
 router.route('/:id')
     .get(programController.getProgramById)
     .put(checkRole(['SuperAdmin', 'Program Manager']), programController.updateProgram)
-    .delete(checkRole(['SuperAdmin']), programController.deleteProgram);
+    .delete(checkRole(['SuperAdmin', 'Program Manager']), programController.deleteProgram);
 
 /**
  * @openapi
@@ -284,5 +297,35 @@ router.route('/:id/report/pdf').get(checkRole(['SuperAdmin', 'Program Manager'])
  */
 router.route('/:id/stats')
     .get(checkRole(['SuperAdmin', 'Program Manager']), programController.getProgramStats);
+
+/**
+ * @openapi
+ * /programs/{id}/archive:
+ *   patch:
+ *     tags: [Programs]
+ *     summary: Archive a program
+ *     description: (SuperAdmin or Program Manager) Archives a program by setting isActive to false. Program Managers can only archive programs they manage.
+ *     security: { bearerAuth: [] }
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: 'Program archived successfully.' }
+ */
+router.route('/:id/archive').patch(checkRole(['SuperAdmin', 'Program Manager']), programController.archiveProgram);
+
+/**
+ * @openapi
+ * /programs/{id}/unarchive:
+ *   patch:
+ *     tags: [Programs]
+ *     summary: Unarchive a program
+ *     description: (SuperAdmin or Program Manager) Unarchives a program by setting isActive to true. Program Managers can only unarchive programs they manage.
+ *     security: { bearerAuth: [] }
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: 'Program unarchived successfully.' }
+ */
+router.route('/:id/unarchive').patch(checkRole(['SuperAdmin', 'Program Manager']), programController.unarchiveProgram);
 
 export default router;

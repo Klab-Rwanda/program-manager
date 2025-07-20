@@ -1,58 +1,94 @@
-import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import dotenv from 'dotenv';
 import connectDB from './src/config/db.js';
-import v1Router from './src/api/routes/v1/index.route.js';
-import { ApiError } from './src/utils/ApiError.js';
-import swaggerUi from 'swagger-ui-express';
-import swaggerJsDoc from 'swagger-jsdoc';
-import swaggerOptions from './src/config/swagger.config.js';
-// Load environment variables
+
 dotenv.config();
 
-console.log('--- Environment Variable Check ---');
-console.log('Port:', process.env.PORT);
-console.log('Email Host:', process.env.EMAIL_HOST);
-console.log('Email User:', process.env.EMAIL_USER);
-console.log('Email Pass Loaded:', process.env.EMAIL_PASS ? 'Yes' : 'NO');
-console.log('CORS_ORIGIN used by server:', process.env.CORS_ORIGIN);
-console.log('---------------------------------');
-
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 5000;
 
-// Connect to Database
-connectDB();
+// Security middleware
+app.use(helmet());
 
-// --- Core Middlewares ---
-app.use(cors({ origin: process.env.CORS_ORIGIN, credentials: true }));
-app.use(express.json({ limit: '16kb' }));
-app.use(express.urlencoded({ extended: true, limit: '16kb' }));
-app.use(express.static('public'));
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
+});
+app.use(limiter);
 
+// CORS configuration
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
 
-app.use('/api/v1', v1Router);
-const swaggerSpecs = swaggerJsDoc(swaggerOptions);
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
+// API Routes
+import programRoutes from './src/api/routes/v1/program.route.js';
+import userRoutes from './src/api/routes/v1/user.route.js';
+import authRoutes from './src/api/routes/v1/auth.route.js';
+import dashboardRoutes from './src/api/routes/v1/dashboard.route.js';
+import attendanceRoutes from './src/api/routes/v1/attendance.route.js';
 
+app.use('/api/v1/programs', programRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/attendance', attendanceRoutes);
+
+// Basic route for testing
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Program Manager API is running!',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Error handling middleware
 app.use((err, req, res, next) => {
-    if (err instanceof ApiError) {
-        return res.status(err.statusCode).json({
-            success: false,
-            message: err.message,
-            errors: err.errors,
-        });
-    }
+  console.error(err.stack);
+  res.status(500).json({ 
+    error: 'Something went wrong!',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  });
+});
 
-    // For unexpected errors
-    console.error(err);
-    return res.status(500).json({
-        success: false,
-        message: 'Internal Server Error',
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// Connect to database and start server
+const startServer = async () => {
+  try {
+    await connectDB();
+    
+    app.listen(PORT, () => {
+      console.log(`🚀 Server is running on port ${PORT}`);
+      console.log(`📊 Health check: http://localhost:${PORT}/health`);
+      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
     });
-});
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server is running at http://localhost:${PORT}`);
-});
+startServer(); 

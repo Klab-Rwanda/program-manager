@@ -6,7 +6,7 @@ import { User } from '@/types'; // Import your new User type
 import api from '@/lib/api'; // Import the configured api client
 
 // Make sure your UserRole type covers all roles from the backend
-export type UserRole = 'SuperAdmin' | 'Program Manager' | 'Facilitator' | 'Trainee' | 'it_support';
+export type UserRole = 'super_admin' | 'program_manager' | 'facilitator' | 'trainee' | 'it_support';
 
 export interface AuthContextType {
   user: User | null;
@@ -25,9 +25,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true); // Add loading state
 
   const normalizeRole = (role: string): UserRole => {
-      // Your backend has "Program Manager", but frontend might use "program_manager".
-      // This function standardizes it. Let's stick to the backend's format for now.
-      return role as UserRole;
+      // Convert backend role names to frontend format
+      const roleMap: Record<string, UserRole> = {
+        'SuperAdmin': 'super_admin',
+        'Program Manager': 'program_manager',
+        'Facilitator': 'facilitator',
+        'Trainee': 'trainee',
+        'IT Support': 'it_support',
+        'it_support': 'it_support'
+      };
+      return roleMap[role] || role as UserRole;
   };
 
   const login = async (email: string, password: string): Promise<void> => {

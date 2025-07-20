@@ -1,16 +1,20 @@
 "use client"
 
-import { useState } from "react"
-import { Archive, Search, Filter, Eye, Download, Calendar, Users, Award, TrendingUp, X, FileText, MapPin, Clock, DollarSign, Target, BarChart3 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Archive, Search, Filter, Eye, Download, Calendar, Users, Award, TrendingUp, X, FileText, MapPin, Clock, DollarSign, Target, BarChart3, RotateCcw } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { getArchivedPrograms, unarchiveProgram, transformToArchiveItem, ArchivedProgram } from "@/lib/services/archive.service"
+import { exportArchivedPDF, exportArchivedExcel, downloadBlob, exportSingleProgramPDF } from "@/lib/services/export.service"
+import { toast } from "sonner"
+
 
 interface ArchiveItem {
-  id: number
+  id: string
   type: string
   name: string
   description: string
@@ -54,234 +58,35 @@ export default function ArchivePage() {
   const [filterYear, setFilterYear] = useState("all")
   const [selectedItem, setSelectedItem] = useState<ArchiveItem | null>(null)
   const [showModal, setShowModal] = useState(false)
+  const [archivedData, setArchivedData] = useState<ArchiveItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [unarchiving, setUnarchiving] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
 
-  const years = ["2023", "2022", "2021"]
+  const years = ["2024", "2023", "2022", "2021"]
   const types = ["program", "certificate", "report"]
 
-  const [archivedData] = useState<ArchiveItem[]>([
-    {
-      id: 1,
-      type: "program",
-      name: "Data Analysis Bootcamp for Women",
-      description: "Comprehensive 6-month data analysis program focusing on Excel, Power BI, Python, and SQL for female graduates",
-      completionDate: "2023-12-15",
-      participants: 28,
-      successRate: 89,
-      duration: "6 months",
-      facilitator: "Alice Uwimana",
-      curriculum: [
-        "Excel Advanced Functions",
-        "Power BI Dashboard Creation",
-        "Python for Data Analysis",
-        "SQL Database Management",
-        "Statistical Analysis",
-        "Data Visualization",
-      ],
-      demographics: {
-        ageRange: "22-28 years",
-        gender: "100% Female",
-        education: "University Graduates",
-        background: "STEM and Business backgrounds",
-      },
-      funding: {
-        sponsor: "Mastercard Foundation",
-        budget: "$45,000",
-        scholarships: 28,
-      },
-      outcomes: {
-        employed: 25,
-        avgSalary: "$800/month",
-        certifications: ["Microsoft Excel Expert", "Power BI Certified", "Python Data Analysis Certificate"],
-        projects: 4,
-      },
-      keyMetrics: {
-        attendanceRate: 94,
-        projectCompletionRate: 89,
-        employmentRate: 89,
-        satisfactionScore: 4.6,
-      },
-      tools: ["Microsoft Excel", "Power BI", "Python", "Jupyter Notebook", "SQL Server", "Tableau"],
-      location: "Kigali, Rwanda",
-      cohort: "Cohort 2023-B",
-    },
-    {
-      id: 2,
-      type: "program",
-      name: "Web Development Fundamentals",
-      description: "Full-stack web development program covering HTML, CSS, JavaScript, React, and Node.js for young entrepreneurs",
-      completionDate: "2023-11-30",
-      participants: 35,
-      successRate: 92,
-      duration: "4 months",
-      facilitator: "Bob Nkurunziza",
-      curriculum: [
-        "HTML5 & CSS3",
-        "JavaScript ES6+",
-        "React.js",
-        "Node.js & Express",
-        "MongoDB",
-        "Git & GitHub",
-        "Responsive Design",
-        "API Development",
-      ],
-      demographics: {
-        ageRange: "18-25 years",
-        gender: "60% Male, 40% Female",
-        education: "High School to University",
-        background: "Mixed backgrounds, entrepreneurship focus",
-      },
-      funding: {
-        sponsor: "Government of Rwanda - ICT Ministry",
-        budget: "$32,000",
-        scholarships: 35,
-      },
-      outcomes: {
-        employed: 32,
-        avgSalary: "$600/month",
-        certifications: ["freeCodeCamp Full Stack", "React Developer Certificate"],
-        projects: 6,
-      },
-      keyMetrics: {
-        attendanceRate: 96,
-        projectCompletionRate: 92,
-        employmentRate: 91,
-        satisfactionScore: 4.8,
-      },
-      tools: ["VS Code", "React", "Node.js", "MongoDB", "Git", "Figma", "Postman"],
-      location: "Kigali, Rwanda",
-      cohort: "Cohort 2023-A",
-    },
-    {
-      id: 3,
-      type: "certificate",
-      name: "Advanced React Development Certificates",
-      description: "Certificates issued for completing advanced React.js specialization program",
-      completionDate: "2023-10-20",
-      participants: 15,
-      successRate: 87,
-      duration: "3 months",
-      facilitator: "Carol Mukamana",
-      curriculum: [
-        "React Hooks",
-        "Context API",
-        "Redux Toolkit",
-        "Next.js",
-        "TypeScript",
-        "Testing with Jest",
-        "Performance Optimization",
-      ],
-      demographics: {
-        ageRange: "23-30 years",
-        gender: "53% Male, 47% Female",
-        education: "University Graduates with coding experience",
-        background: "Previous web development experience required",
-      },
-      funding: {
-        sponsor: "Private Partnership - Tech Companies",
-        budget: "$18,000",
-        scholarships: 15,
-      },
-      outcomes: {
-        employed: 13,
-        avgSalary: "$1,200/month",
-        certifications: ["React Advanced Certificate", "Next.js Developer Certificate"],
-        projects: 3,
-      },
-      keyMetrics: {
-        attendanceRate: 91,
-        projectCompletionRate: 87,
-        employmentRate: 87,
-        satisfactionScore: 4.7,
-      },
-      tools: ["React", "Next.js", "TypeScript", "Redux", "Jest", "Cypress", "Vercel"],
-      location: "Kigali, Rwanda",
-      cohort: "Advanced Cohort 2023",
-    },
-    {
-      id: 4,
-      type: "report",
-      name: "Q3 2023 Performance Report",
-      description: "Quarterly performance analysis covering all programs, employment outcomes, and financial metrics",
-      completionDate: "2023-09-30",
-      participants: 156,
-      successRate: 85,
-      duration: "3 months",
-      facilitator: "System Generated",
-      curriculum: ["Performance Analytics", "Employment Tracking", "Financial Analysis", "Stakeholder Reporting"],
-      demographics: {
-        ageRange: "18-35 years",
-        gender: "55% Female, 45% Male",
-        education: "Mixed education levels",
-        background: "Various technical backgrounds",
-      },
-      funding: {
-        sponsor: "Multiple Sponsors",
-        budget: "$125,000",
-        scholarships: 156,
-      },
-      outcomes: {
-        employed: 133,
-        avgSalary: "$750/month",
-        certifications: ["Various Technical Certificates"],
-        projects: 15,
-      },
-      keyMetrics: {
-        attendanceRate: 89,
-        projectCompletionRate: 85,
-        employmentRate: 85,
-        satisfactionScore: 4.5,
-      },
-      tools: ["Excel", "Power BI", "SQL", "Python", "Various Development Tools"],
-      location: "Multiple Locations",
-      cohort: "Q3 2023 Combined",
-    },
-    {
-      id: 5,
-      type: "program",
-      name: "Mobile App Development with Flutter",
-      description: "Cross-platform mobile development program using Flutter and Dart for building iOS and Android applications",
-      completionDate: "2023-08-15",
-      participants: 22,
-      successRate: 91,
-      duration: "5 months",
-      facilitator: "David Habimana",
-      curriculum: [
-        "Dart Programming",
-        "Flutter Framework",
-        "State Management",
-        "Firebase Integration",
-        "API Integration",
-        "App Store Deployment",
-        "UI/UX for Mobile",
-      ],
-      demographics: {
-        ageRange: "20-28 years",
-        gender: "45% Female, 55% Male",
-        education: "University Graduates in Computer Science",
-        background: "Some programming experience preferred",
-      },
-      funding: {
-        sponsor: "Google Developer Program",
-        budget: "$38,000",
-        scholarships: 22,
-      },
-      outcomes: {
-        employed: 20,
-        avgSalary: "$900/month",
-        certifications: ["Flutter Developer Certificate", "Google Mobile Developer"],
-        projects: 5,
-      },
-      keyMetrics: {
-        attendanceRate: 93,
-        projectCompletionRate: 91,
-        employmentRate: 91,
-        satisfactionScore: 4.9,
-      },
-      tools: ["Flutter", "Dart", "Android Studio", "VS Code", "Firebase", "Git", "Figma"],
-      location: "Kigali, Rwanda",
-      cohort: "Mobile Dev 2023",
-    },
-  ])
+  // Fetch archived programs from backend
+  const fetchArchivedPrograms = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const programs = await getArchivedPrograms()
+      const transformedData = programs.map(transformToArchiveItem)
+      setArchivedData(transformedData)
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to fetch archived programs')
+      toast.error("Failed to fetch archived programs")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchArchivedPrograms()
+  }, [])
 
   const filteredArchive = archivedData.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -321,9 +126,94 @@ export default function ArchivePage() {
     setShowModal(true)
   }
 
-  const handleExportData = (item: ArchiveItem) => {
-    // Implementation for exporting data
-    console.log("Exporting data for:", item.name)
+  const handleUnarchive = async (item: ArchiveItem) => {
+    if (!confirm(`Are you sure you want to unarchive "${item.name}"?`)) {
+      return
+    }
+
+    setUnarchiving(item.id)
+    try {
+      await unarchiveProgram(item.id)
+      toast.success(`${item.name} has been unarchived`)
+      // Refresh the archive data
+      fetchArchivedPrograms()
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to unarchive program")
+    } finally {
+      setUnarchiving(null)
+    }
+  }
+
+  const handleExportData = async (item: ArchiveItem) => {
+    setExporting(true)
+    try {
+      const blob = await exportSingleProgramPDF(item.id)
+      downloadBlob(blob, `${item.name}-report.pdf`)
+      toast.success(`Exported ${item.name} as PDF`)
+    } catch (err: any) {
+      toast.error("Failed to export program")
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleExportAll = async (format: 'pdf' | 'excel') => {
+    setExporting(true)
+    try {
+      let blob: Blob
+      if (format === 'pdf') {
+        blob = await exportArchivedPDF()
+      } else {
+        blob = await exportArchivedExcel()
+      }
+      
+      const filename = `archived-programs-${new Date().toISOString().split('T')[0]}.${format === 'pdf' ? 'pdf' : 'xlsx'}`
+      downloadBlob(blob, filename)
+      toast.success(`Exported all archived programs as ${format.toUpperCase()}`)
+      setShowExportModal(false)
+    } catch (err: any) {
+      toast.error(`Failed to export as ${format.toUpperCase()}`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Archive</h1>
+            <p className="text-muted-foreground">View archived programs, certificates, and reports</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+            <p className="mt-2 text-muted-foreground">Loading archived programs...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Archive</h1>
+            <p className="text-muted-foreground">View archived programs, certificates, and reports</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button onClick={fetchArchivedPrograms}>Try Again</Button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -334,9 +224,13 @@ export default function ArchivePage() {
           <p className="text-muted-foreground">View archived programs, certificates, and reports</p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowExportModal(true)}
+            disabled={exporting || archivedData.length === 0}
+          >
             <Download className="mr-2 h-4 w-4" />
-            Export All
+            {exporting ? "Exporting..." : "Export All"}
           </Button>
           <Button variant="outline">
             <BarChart3 className="mr-2 h-4 w-4" />
@@ -390,6 +284,17 @@ export default function ArchivePage() {
       </Card>
 
       {/* Archive Items */}
+      {filteredArchive.length === 0 ? (
+        <div className="text-center py-12">
+          <Archive className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">No archived items</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            {archivedData.length === 0 
+              ? "No programs have been archived yet." 
+              : "No items match your current filters."}
+          </p>
+        </div>
+      ) : (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filteredArchive.map((item) => (
           <Card key={item.id} className="relative">
@@ -399,13 +304,6 @@ export default function ArchivePage() {
                   {getTypeIcon(item.type)}
                   {getTypeBadge(item.type)}
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleViewDetails(item)}
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
               </div>
               <CardTitle className="text-lg">{item.name}</CardTitle>
               <CardDescription>{item.cohort}</CardDescription>
@@ -457,23 +355,38 @@ export default function ArchivePage() {
                 >
                   <Download className="h-4 w-4" />
                 </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleUnarchive(item)}
+                    disabled={unarchiving === item.id}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
+      )}
 
       {/* Detailed View Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{selectedItem?.name}</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="w-[70vw] max-w-4xl h-[85vh] max-h-[85vh] overflow-hidden p-0 z-[9999] bg-white !left-[320px] !top-[7vh] !transform-none">
+          {/* Custom overlay for better background */}
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[-1]" />
+          
+          <div className="flex flex-col h-full">
+            <DialogHeader className="p-6 pb-4 border-b bg-gray-50 flex-shrink-0">
+              <DialogTitle className="text-xl">{selectedItem?.name}</DialogTitle>
+              <DialogDescription className="text-base">
               {selectedItem?.type} • {selectedItem?.cohort} • {selectedItem?.location}
             </DialogDescription>
           </DialogHeader>
+            
+            <div className="flex-1 overflow-y-auto p-6 bg-white min-h-0">
           {selectedItem && (
-            <div className="space-y-6">
+                <div className="space-y-6 pb-4">
               {/* Overview */}
               <div>
                 <h3 className="text-lg font-semibold mb-2">Overview</h3>
@@ -652,13 +565,61 @@ export default function ArchivePage() {
               )}
             </div>
           )}
-          <DialogFooter>
+            </div>
+            
+            <DialogFooter className="p-6 pt-4 border-t bg-gray-50 flex-shrink-0">
             <Button variant="outline" onClick={() => setShowModal(false)}>
               Close
             </Button>
             <Button onClick={() => selectedItem && handleExportData(selectedItem)}>
               <Download className="mr-2 h-4 w-4" />
               Export Data
+              </Button>
+              {selectedItem && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleUnarchive(selectedItem)}
+                  disabled={unarchiving === selectedItem.id}
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Unarchive
+                </Button>
+              )}
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export Modal */}
+      <Dialog open={showExportModal} onOpenChange={setShowExportModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900">Export Archived Programs</DialogTitle>
+            <DialogDescription>
+              Choose the format to export all archived programs
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col space-y-4">
+            <Button
+              onClick={() => handleExportAll('pdf')}
+              disabled={exporting}
+              className="w-full bg-[#1f497d] hover:bg-[#1a3f6b] text-white"
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              Export as PDF
+            </Button>
+            <Button
+              onClick={() => handleExportAll('excel')}
+              disabled={exporting}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export as Excel
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowExportModal(false)}>
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>

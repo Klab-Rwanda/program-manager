@@ -25,19 +25,17 @@ export default function Dashboard() {
   }
 
   const renderDashboardByRole = () => {
-    // FIX: The roles from your backend are "SuperAdmin", "Program Manager", etc.
-    // The context normalizes them, but it's safer to compare with the exact strings.
-    // Let's adjust the context to normalize to lowercase_with_underscores for easier switching.
+    // The roles are normalized to snake_case in the context
     switch (role) {
-      case 'SuperAdmin':
+      case 'super_admin':
         return <SuperAdminDashboard />
-      case 'Program Manager':
+      case 'program_manager':
         return <ProgramManagerDashboard />
-      case 'Facilitator':
+      case 'facilitator':
         return <FacilitatorDashboard />
-      case 'Trainee':
+      case 'trainee':
         return <TraineeDashboard />
-      case 'it_support': // Assuming you have a role 'IT Support' in backend
+      case 'it_support':
         return <ITSupportDashboard />
       default:
         // This will show if the user is authenticated but has no role, or an unknown role

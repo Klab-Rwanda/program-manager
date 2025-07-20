@@ -1,5 +1,3 @@
-// components/layout/sidebar.tsx
-
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -8,47 +6,46 @@ import { usePathname } from "next/navigation";
 import {
   Activity, Archive, Award, BarChart3, Bell, BookOpen, Calendar,
   ChevronLeft, ChevronRight, ClipboardCheck, FileText, FolderOpen,
-  GraduationCap, Home, LogOut, Menu, MessageSquare, Settings, Ticket,
+  GraduationCap, Home, LogOut, Mail, Menu, MessageSquare, Moon, Settings, Sun, Ticket,
   TrendingUp, Upload, User, UserCheck, Users, Wrench
 } from "lucide-react";
 
 import { useAuth } from "@/lib/contexts/RoleContext";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
-import { getRoleDisplayName } from "@/lib/roles";
+import { useCounts } from "@/lib/contexts/CountsContext";
+import { useTheme } from "next-themes";
 
 const menuItems = [
-    // ... (Your menuItems array remains unchanged)
-    { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['SuperAdmin', 'Program Manager', 'Facilitator', 'Trainee', 'IT Support'] },
+    { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee', 'it_support'] },
     // Super Admin
-    { title: "User Management", url: "/dashboard/user-management", icon: Users, roles: ['SuperAdmin'] },
-    { title: "Master Log", url: "/dashboard/master-log", icon: Activity, roles: ['SuperAdmin'] },
-    { title: "Reports & Export", url: "/dashboard/reports-export", icon: BarChart3, roles: ['SuperAdmin'] },
-    { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['SuperAdmin'] },
+    { title: "User Management", url: "/dashboard/user-management", icon: Users, roles: ['super_admin'] },
+    { title: "Master Log", url: "/dashboard/master-log", icon: Activity, roles: ['super_admin'] },
+    { title: "Reports & Export", url: "/dashboard/reports-export", icon: BarChart3, roles: ['super_admin'] },
+    { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['super_admin'] },
     // Program Manager
-    { title: "Programs", url: "/dashboard/programs", icon: BookOpen, roles: ['Program Manager'], count: 12 },
-    { title: "Facilitators", url: "/dashboard/facilitators", icon: UserCheck, roles: ['Program Manager'], count: 45 },
-    { title: "Trainees", url: "/dashboard/trainees", icon: Users, roles: ['Program Manager'], count: 234 },
-    { title: "Attendance", url: "/dashboard/attendance", icon: Calendar, roles: ['Program Manager'] },
-    { title: "Certificates", url: "/dashboard/certificates", icon: Award, roles: ['Program Manager'], count: 89 },
-    { title: "Archive", url: "/dashboard/archive", icon: Archive, roles: ['Program Manager'] },
+    { title: "Programs", url: "/dashboard/programs", icon: BookOpen, roles: ['program_manager'], countKey: 'programs' },
+    { title: "Facilitators", url: "/dashboard/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },
+    { title: "Trainees", url: "/dashboard/trainees", icon: Users, roles: ['program_manager'], countKey: 'trainees' },
+    { title: "Attendance", url: "/dashboard/attendance", icon: Calendar, roles: ['program_manager'] },
+    { title: "Certificates", url: "/dashboard/certificates", icon: Award, roles: ['program_manager'], countKey: 'certificates' },
+    { title: "Archive", url: "/dashboard/archive", icon: Archive, roles: ['program_manager'], countKey: 'archived' },
     // Facilitator
-    { title: "My Programs", url: "/facilitator/programs", icon: BookOpen, roles: ['Facilitator'] },
-    { title: "Attendance Tracking", url: "/facilitator/attendance", icon: Calendar, roles: ['Facilitator'] },
-    { title: "Curriculum Upload", url: "/facilitator/curriculum", icon: Upload, roles: ['Facilitator'] },
-    { title: "Project Reviews", url: "/facilitator/reviews", icon: ClipboardCheck, roles: ['Facilitator'] },
-    { title: "Weekly Roadmap", url: "/facilitator/roadmap", icon: Calendar, roles: ['Facilitator'] },
+    { title: "My Programs", url: "/facilitator/programs", icon: BookOpen, roles: ['facilitator'] },
+    { title: "Attendance Tracking", url: "/facilitator/attendance", icon: Calendar, roles: ['facilitator'] },
+    { title: "Curriculum Upload", url: "/facilitator/curriculum", icon: Upload, roles: ['facilitator'] },
+    { title: "Project Reviews", url: "/facilitator/reviews", icon: ClipboardCheck, roles: ['facilitator'] },
+    { title: "Weekly Roadmap", url: "/facilitator/roadmap", icon: Calendar, roles: ['facilitator'] },
     // Trainee
-    { title: "My Learning", url: "/dashboard/my-learning", icon: GraduationCap, roles: ['Trainee'] },
-    { title: "Submit Projects", url: "/dashboard/submit-projects", icon: FileText, roles: ['Trainee'] },
-    { title: "My Progress", url: "/dashboard/my-progress", icon: TrendingUp, roles: ['Trainee'] },
-    { title: "Learning Resources", url: "/dashboard/resources", icon: FolderOpen, roles: ['Trainee'] },
+    { title: "My Learning", url: "/dashboard/my-learning", icon: GraduationCap, roles: ['trainee'] },
+    { title: "Submit Projects", url: "/dashboard/submit-projects", icon: FileText, roles: ['trainee'] },
+    { title: "My Progress", url: "/dashboard/my-progress", icon: TrendingUp, roles: ['trainee'] },
+    { title: "Learning Resources", url: "/dashboard/resources", icon: FolderOpen, roles: ['trainee'] },
     // IT Support
-    { title: "Support Tickets", url: "/dashboard/support-tickets", icon: MessageSquare, roles: ['IT Support'] },
-    { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['IT Support'] },
-    { title: "Maintenance", url: "/dashboard/maintenance", icon: Wrench, roles: ['IT Support'] },
+    { title: "Support Tickets", url: "/dashboard/support-tickets", icon: MessageSquare, roles: ['it_support'] },
+    { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['it_support'] },
+    { title: "Maintenance", url: "/dashboard/maintenance", icon: Wrench, roles: ['it_support'] },
     // Shared
-    { title: "Notifications", url: "/dashboard/notification", icon: Bell, roles: ['SuperAdmin', 'Program Manager', 'Facilitator', 'Trainee', 'IT Support'] },
-    { title: "Settings", url: "/dashboard/settings", icon: Settings, roles: ['SuperAdmin', 'Program Manager', 'Facilitator', 'Trainee', 'IT Support'] },
+   
 ];
 
 interface Notification {
@@ -60,15 +57,21 @@ interface Notification {
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { user, role, logout } = useAuth();
+  const { user, role, logout, isAuthenticated } = useAuth();
   const { isCollapsed, toggleSidebar, isMobile, isMobileMenuOpen, closeMobileMenu } = useSidebar();
+  const { counts } = useCounts();
+  const { theme, setTheme } = useTheme();
 
-  // State for the floating button dropdowns
+  // Debug logging
+  console.log('Sidebar: Current counts:', counts);
+  console.log('Sidebar: User:', user);
+  console.log('Sidebar: Role:', role);
+  console.log('Sidebar: IsAuthenticated:', isAuthenticated);
+
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Mock notifications
   const notifications: Notification[] = [
     { id: 1, message: "New trainee application received.", time: "2 mins ago", unread: true },
     { id: 2, message: "Project submitted by John Doe.", time: "15 mins ago", unread: true },
@@ -82,6 +85,11 @@ export function AppSidebar() {
 
   const sidebarWidth = isCollapsed ? '80px' : '280px';
 
+  // Don't render sidebar if not authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
+
   return (
     <>
       {isMobile && isMobileMenuOpen && (
@@ -91,7 +99,6 @@ export function AppSidebar() {
         />
       )}
 
-      {/* Main Sidebar */}
       <div
         className={`
           fixed left-0 top-0 h-screen flex flex-col z-[1000] bg-card border-r transition-all duration-300 ease-in-out
@@ -111,7 +118,7 @@ export function AppSidebar() {
                     kLab PMS
                   </span>
                   <span className="text-xs leading-tight text-muted-foreground">
-                    {role ? getRoleDisplayName(role) : 'Guest'}
+                    {role ? role : 'Guest'}
                   </span>
                 </div>
               )}
@@ -150,11 +157,11 @@ export function AppSidebar() {
                 {!isCollapsed && (
                   <>
                     <span className="flex-1 whitespace-nowrap">{item.title}</span>
-                    {item.count && (
+                    {item.countKey && counts[item.countKey as keyof typeof counts] > 0 && (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold
                         ${isActive ? 'bg-white/20' : 'bg-muted-foreground/20'}`
                       }>
-                        {item.count}
+                        {counts[item.countKey as keyof typeof counts]}
                       </span>
                     )}
                   </>
@@ -163,18 +170,20 @@ export function AppSidebar() {
             );
           })}
         </nav>
-        
-        {/* THIS IS THE SECTION THAT WAS REMOVED. WE ARE KEEPING IT GONE. */}
-        {/*
+
+        {/* Theme Toggle Section */}
         <div className="p-4 border-t">
-            ... user profile and logout button ...
+          <button 
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium hover:bg-muted ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            {(!isCollapsed || isMobile) && <span>{theme === 'dark' ? "Light Mode" : "Dark Mode"}</span>}
+          </button>
         </div>
-        */}
       </div>
 
-      {/* Floating Action Bubbles - RESTORED */}
       <div className="fixed bottom-8 right-8 z-[1001] flex flex-col gap-4">
-        {/* Notifications Bubble */}
         <div className="relative">
           <button 
             className="w-14 h-14 bg-[#1f497d] text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform"
@@ -189,9 +198,7 @@ export function AppSidebar() {
           </button>
           {showNotifications && (
             <div className="absolute bottom-16 right-0 w-80 bg-card border rounded-lg shadow-2xl z-20">
-              <div className="p-4 border-b">
-                <h3 className="font-semibold text-foreground">Notifications</h3>
-              </div>
+              <div className="p-4 border-b"><h3 className="font-semibold text-foreground">Notifications</h3></div>
               <div className="max-h-80 overflow-y-auto">
                 {notifications.map(n => (
                   <div key={n.id} className={`p-4 border-b ${n.unread ? 'bg-blue-50' : ''}`}>
@@ -204,7 +211,6 @@ export function AppSidebar() {
           )}
         </div>
 
-        {/* Settings Bubble */}
         <div className="relative">
           <button 
             className="w-14 h-14 bg-[#1f497d] text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform"
@@ -215,12 +221,10 @@ export function AppSidebar() {
           {showSettings && (
             <div className="absolute bottom-16 right-0 w-60 bg-card border rounded-lg shadow-2xl z-20 py-2">
               <Link href="/dashboard/settings" className="block px-4 py-2 text-sm text-foreground hover:bg-muted">Account Settings</Link>
-              <Link href="/dashboard/settings" className="block px-4 py-2 text-sm text-foreground hover:bg-muted">Appearance</Link>
             </div>
           )}
         </div>
 
-        {/* Profile/Logout Bubble */}
         <div className="relative">
           <button 
             className="w-14 h-14 bg-[#1f497d] text-white rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform"
@@ -234,7 +238,9 @@ export function AppSidebar() {
                 <p className="text-sm font-semibold truncate">{user?.name}</p>
                 <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </div>
-              <Link href="/dashboard/settings" className="block px-4 py-2 text-sm text-foreground hover:bg-muted">Profile</Link>
+              <Link href="/dashboard/profile" className="block px-4 py-2 text-sm text-foreground hover:bg-muted">
+                Profile
+              </Link>
               <button onClick={logout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">
                 Logout
               </button>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   Plus,
   Search,
@@ -33,251 +33,165 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-
-interface Trainee {
-  id: number
-  name: string
-  email: string
-  phone: string
-  location: string
-  status: string
-  enrolledPrograms: string[]
-  joinDate: string
-  lastActive: string
-  progress: number
-  attendance: number
-  completedProjects: number
-  totalProjects: number
-}
-
-interface Program {
-  id: number
-  name: string
-  category: string
-  status: string
-}
+import { getAllTrainees } from "@/lib/services/tarinee.service"
+import { getAllPrograms } from "@/lib/services/program.service"
+import { Program, Trainee } from "@/types/index"
+import {
+  createTrainee,
+  updateTrainee,
+  deleteTrainee
+} from "@/lib/services/tarinee.service";
 
 export default function TraineesPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all")
-  const [filterProgram, setFilterProgram] = useState("all")
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [showAssignModal, setShowAssignModal] = useState(false)
-  const [selectedTrainee, setSelectedTrainee] = useState<Trainee | null>(null)
-  const [showViewModal, setShowViewModal] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterProgram, setFilterProgram] = useState("all");
 
-  const [trainees, setTrainees] = useState<Trainee[]>([
-    {
-      id: 1,
-      name: "John Doe",
-      email: "john.doe@example.com",
-      phone: "+250 788 123 456",
-      location: "Kigali, Rwanda",
-      status: "active",
-      enrolledPrograms: ["Data Science Bootcamp", "Web Development Mastery"],
-      joinDate: "2024-01-15",
-      lastActive: "2024-01-20",
-      progress: 75,
-      attendance: 92,
-      completedProjects: 8,
-      totalProjects: 12,
-    },
-    {
-      id: 2,
-      name: "Jane Smith",
-      email: "jane.smith@example.com",
-      phone: "+250 789 234 567",
-      location: "Kigali, Rwanda",
-      status: "active",
-      enrolledPrograms: ["UI/UX Design Mastery"],
-      joinDate: "2024-01-10",
-      lastActive: "2024-01-19",
-      progress: 60,
-      attendance: 88,
-      completedProjects: 5,
-      totalProjects: 10,
-    },
-    {
-      id: 3,
-      name: "Alice Brown",
-      email: "alice.brown@example.com",
-      phone: "+250 787 345 678",
-      location: "Kigali, Rwanda",
-      status: "inactive",
-      enrolledPrograms: ["Mobile App Development"],
-      joinDate: "2023-12-01",
-      lastActive: "2024-01-10",
-      progress: 30,
-      attendance: 45,
-      completedProjects: 2,
-      totalProjects: 8,
-    },
-    {
-      id: 4,
-      name: "Bob Wilson",
-      email: "bob.wilson@example.com",
-      phone: "+250 786 456 789",
-      location: "Kigali, Rwanda",
-      status: "active",
-      enrolledPrograms: ["Data Science Bootcamp", "Cloud Computing Fundamentals"],
-      joinDate: "2024-01-05",
-      lastActive: "2024-01-20",
-      progress: 90,
-      attendance: 95,
-      completedProjects: 10,
-      totalProjects: 12,
-    },
-    {
-      id: 5,
-      name: "Emma Davis",
-      email: "emma.davis@example.com",
-      phone: "+250 785 567 890",
-      location: "Kigali, Rwanda",
-      status: "completed",
-      enrolledPrograms: ["UI/UX Design Mastery"],
-      joinDate: "2023-09-01",
-      lastActive: "2024-01-01",
-      progress: 100,
-      attendance: 98,
-      completedProjects: 12,
-      totalProjects: 12,
-    },
-  ])
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
 
-  const [programs] = useState<Program[]>([
-    { id: 1, name: "Data Science Bootcamp", category: "Data Science", status: "active" },
-    { id: 2, name: "Web Development Mastery", category: "Web Development", status: "active" },
-    { id: 3, name: "Mobile App Development", category: "Mobile Development", status: "active" },
-    { id: 4, name: "UI/UX Design Mastery", category: "Design", status: "active" },
-    { id: 5, name: "Cloud Computing Fundamentals", category: "Cloud Computing", status: "active" },
-  ])
+  const [selectedTrainee, setSelectedTrainee] = useState<Trainee | null>(null);
+  const [trainees, setTrainees] = useState<Trainee[]>([]);
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
+  const defaultTrainee: Trainee = {
+  _id: "",
+  name: "",
+  email: "",
+  role: "Trainee",
+  status: "Pending",
+  isActive: true,
+  createdAt: "",
+  updatedAt: "",
+  phone: "",
+  location: "",
+  enrolledPrograms: [],
+  progress: 0,
+  attendance: 0,
+  completedProjects: 0,
+  totalProjects: 0,
+  joinDate: "",
+  lastActive: ""
+};
 
-  const [newTrainee, setNewTrainee] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    location: "",
-    programs: [] as string[],
-  })
+ const handleCreateTrainee = async () => {
+  try {
+    const traineeToCreate = {
+      ...newTrainee,
+      _id: undefined,
+      createdAt: undefined,
+      updatedAt: undefined,
+    };
+    const created = await createTrainee(traineeToCreate);
+    setTrainees(prev => [...prev, created]);
+    setNewTrainee(defaultTrainee); 
+    setShowCreateModal(false);
+  } catch (err) {
+    console.error("Error creating trainee:", err);
+  }
+};
 
-  const [selectedPrograms, setSelectedPrograms] = useState<string[]>([])
+
+ const handleEditTrainee = async () => {
+  try {
+    const updated = await updateTrainee(newTrainee._id, newTrainee);
+    setTrainees(prev =>
+      prev.map(t => (t._id === updated._id ? updated : t))
+    );
+    setShowEditModal(false);
+  } catch (err) {
+    console.error("Error editing trainee:", err);
+  }
+};
+
+  const handleDeleteTrainee = async (id: string) => {
+  try {
+    await deleteTrainee(id);
+    setTrainees(prev => prev.filter(t => t._id !== id));
+    setShowDeleteModal(false);
+  } catch (err) {
+    console.error("Error deleting trainee:", err);
+  }
+};
+const [newTrainee, setNewTrainee] = useState<Trainee>(defaultTrainee);
+
+useEffect(() => {
+  async function loadData() {
+    const [traineeData, programData] = await Promise.all([
+      getAllTrainees(),
+      getAllPrograms()
+    ]);
+    setTrainees(traineeData);
+    setPrograms(programData);
+  }
+  loadData();
+}, []);
 
   const filteredTrainees = trainees.filter((trainee) => {
-    const matchesSearch = 
+    const matchesSearch =
       trainee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      trainee.email.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = filterStatus === "all" || trainee.status === filterStatus
-    const matchesProgram = filterProgram === "all" || trainee.enrolledPrograms.includes(filterProgram)
-    return matchesSearch && matchesStatus && matchesProgram
-  })
-
-  const handleCreateTrainee = () => {
-    if (!newTrainee.name || !newTrainee.email || !newTrainee.phone || !newTrainee.location) {
-      alert("Please fill in all required fields")
-      return
-    }
-
-    const trainee: Trainee = {
-      id: trainees.length + 1,
-      ...newTrainee,
-      enrolledPrograms: selectedPrograms,
-      status: "active",
-      joinDate: new Date().toISOString().split("T")[0],
-      lastActive: new Date().toISOString().split("T")[0],
-      progress: 0,
-      attendance: 0,
-      completedProjects: 0,
-      totalProjects: 0,
-    }
-    setTrainees([...trainees, trainee])
-    setNewTrainee({ name: "", email: "", phone: "", location: "", programs: [] })
-    setSelectedPrograms([])
-    setShowCreateModal(false)
-  }
-
-  const handleEditTrainee = () => {
-    if (!selectedTrainee) return
-
-    setTrainees(
-      trainees.map((trainee) =>
-        trainee.id === selectedTrainee.id
-          ? { ...trainee, ...newTrainee, enrolledPrograms: selectedPrograms }
-          : trainee,
-      ),
-    )
-    setNewTrainee({ name: "", email: "", phone: "", location: "", programs: [] })
-    setSelectedPrograms([])
-    setShowEditModal(false)
-  }
-
-  const handleDeleteTrainee = () => {
-    if (!selectedTrainee) return
-    setTrainees(trainees.filter((trainee) => trainee.id !== selectedTrainee.id))
-    setShowDeleteModal(false)
-  }
+      trainee.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus =
+      filterStatus === "all" || trainee.status === filterStatus;
+    const matchesProgram =
+      filterProgram === "all" || trainee.enrolledPrograms?.includes(filterProgram);
+    return matchesSearch && matchesStatus && matchesProgram;
+  });
 
   const openEditModal = (trainee: Trainee) => {
-    setSelectedTrainee(trainee)
-    setNewTrainee({
-      name: trainee.name,
-      email: trainee.email,
-      phone: trainee.phone,
-      location: trainee.location,
-      programs: trainee.enrolledPrograms,
-    })
-    setSelectedPrograms(trainee.enrolledPrograms)
-    setShowEditModal(true)
-  }
+    setSelectedTrainee(trainee);
+    setSelectedPrograms(trainee.enrolledPrograms || []);
+    setShowEditModal(true);
+  };
 
   const openDeleteModal = (trainee: Trainee) => {
-    setSelectedTrainee(trainee)
-    setShowDeleteModal(true)
-  }
+    setSelectedTrainee(trainee);
+    setShowDeleteModal(true);
+  };
 
   const openViewModal = (trainee: Trainee) => {
-    setSelectedTrainee(trainee)
-    setShowViewModal(true)
-  }
+    setSelectedTrainee(trainee);
+    setShowViewModal(true);
+  };
 
   const openAssignModal = (trainee: Trainee) => {
-    setSelectedTrainee(trainee)
-    setSelectedPrograms(trainee.enrolledPrograms)
-    setShowAssignModal(true)
-  }
+    setSelectedTrainee(trainee);
+    setSelectedPrograms(trainee.enrolledPrograms || []);
+    setShowAssignModal(true);
+  };
 
   const handleAssignPrograms = () => {
-    if (!selectedTrainee) return
-
-    setTrainees(
-      trainees.map((trainee) =>
-        trainee.id === selectedTrainee.id
-          ? { ...trainee, enrolledPrograms: selectedPrograms }
-          : trainee,
-      ),
-    )
-    setShowAssignModal(false)
-  }
+    if (!selectedTrainee) return;
+    const updated = trainees.map((trainee) =>
+      trainee._id === selectedTrainee._id
+        ? { ...trainee, enrolledPrograms: selectedPrograms }
+        : trainee
+    );
+    setTrainees(updated);
+    setShowAssignModal(false);
+  };
 
   const getStatusConfig = (status: string) => {
     switch (status) {
       case "active":
-        return { label: "Active", variant: "default" as const }
+        return { label: "Active", variant: "default" as const };
       case "inactive":
-        return { label: "Inactive", variant: "secondary" as const }
+        return { label: "Inactive", variant: "secondary" as const };
       case "completed":
-        return { label: "Completed", variant: "default" as const }
+        return { label: "Completed", variant: "default" as const };
       default:
-        return { label: status, variant: "outline" as const }
+        return { label: status, variant: "outline" as const };
     }
-  }
+  };
 
   const getProgressColor = (progress: number) => {
-    if (progress >= 80) return "text-green-600"
-    if (progress >= 60) return "text-yellow-600"
-    return "text-red-600"
-  }
+    if (progress >= 80) return "text-green-600";
+    if (progress >= 60) return "text-yellow-600";
+    return "text-red-600";
+  };
 
   return (
     <div className="space-y-6">
@@ -353,25 +267,29 @@ export default function TraineesPage() {
                   Programs
                 </Label>
                 <div className="col-span-3 space-y-2">
-                  {programs.map((program) => (
-                    <div key={program.id} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id={`program-${program.id}`}
-                        checked={selectedPrograms.includes(program.name)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedPrograms([...selectedPrograms, program.name])
-                          } else {
-                            setSelectedPrograms(selectedPrograms.filter(p => p !== program.name))
-                          }
-                        }}
-                      />
-                      <Label htmlFor={`program-${program.id}`} className="text-sm">
-                        {program.name}
-                      </Label>
-                    </div>
-                  ))}
+  {Array.isArray(programs) && programs.length > 0 ? (
+    programs.map((program) => (
+      <div key={program._id} className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          id={`program-${program._id}`}
+          checked={selectedPrograms.includes(program.name)}
+          onChange={(e) => {
+            setSelectedPrograms((prev) =>
+              e.target.checked
+                ? [...prev, program.name]
+                : prev.filter((p) => p !== program.name)
+            );
+          }}
+        />
+                     <label htmlFor={`program-${program._id}`} className="text-sm">
+          {program.name}
+        </label>
+      </div>
+    ))
+  ) : ( <p className="text-sm italic text-muted-foreground">No programs available.</p>
+  )}
+
                 </div>
               </div>
             </div>
@@ -410,13 +328,20 @@ export default function TraineesPage() {
             <SelectValue placeholder="Filter by program" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Programs</SelectItem>
-            {programs.map((program) => (
-              <SelectItem key={program.id} value={program.name}>
-                {program.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
+  <SelectItem value="all">All Programs</SelectItem>
+  {Array.isArray(programs) && programs.length > 0 ? (
+    programs.map((program) => (
+      <SelectItem key={program._id} value={program.name}>
+        {program.name}
+      </SelectItem>
+    ))
+  ) : (
+    <SelectItem value="none" disabled>
+      No programs found
+    </SelectItem>
+  )}
+</SelectContent>
+
         </Select>
       </div>
 
@@ -424,7 +349,7 @@ export default function TraineesPage() {
         {filteredTrainees.map((trainee) => {
           const statusConfig = getStatusConfig(trainee.status)
           return (
-            <Card key={trainee.id}>
+            <Card key={trainee._id}>
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
@@ -464,13 +389,17 @@ export default function TraineesPage() {
                   
                   <div>
                     <p className="text-sm text-muted-foreground mb-2">Enrolled Programs</p>
-                    <div className="space-y-1">
-                      {trainee.enrolledPrograms.map((program, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {program}
-                        </Badge>
-                      ))}
-                    </div>
+<div className="space-y-1">
+  {Array.isArray(trainee.enrolledPrograms) && trainee.enrolledPrograms.length > 0 ? (
+    trainee.enrolledPrograms.map((program, index) => (
+      <Badge key={index} variant="outline" className="text-xs">
+        {program}
+      </Badge>
+    ))
+  ) : (
+    <p className="text-xs text-gray-400 italic">No programs enrolled</p>
+  )}
+</div>
                   </div>
 
                   <div>
@@ -533,10 +462,10 @@ export default function TraineesPage() {
           </DialogHeader>
           <div className="space-y-4">
             {programs.map((program) => (
-              <div key={program.id} className="flex items-center space-x-2">
+              <div key={program._id} className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  id={`assign-program-${program.id}`}
+                  id={`assign-program-${program._id}`}
                   checked={selectedPrograms.includes(program.name)}
                   onChange={(e) => {
                     if (e.target.checked) {
@@ -546,7 +475,7 @@ export default function TraineesPage() {
                     }
                   }}
                 />
-                <Label htmlFor={`assign-program-${program.id}`} className="text-sm">
+                <Label htmlFor={`assign-program-${program._id}`} className="text-sm">
                   {program.name}
                 </Label>
               </div>
@@ -573,9 +502,10 @@ export default function TraineesPage() {
             <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteTrainee}>
-              Delete
-            </Button>
+            <Button
+            variant="destructive"  onClick={() => selectedTrainee && handleDeleteTrainee(selectedTrainee._id)}>
+                 Delete
+                </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -697,7 +627,9 @@ export default function TraineesPage() {
             <div>
               <h4 className="font-medium">Enrolled Programs</h4>
               <div className="mt-2 space-y-2">
-                {selectedTrainee?.enrolledPrograms.map((program, index) => (
+                {Array.isArray(selectedTrainee?.enrolledPrograms) &&
+  selectedTrainee.enrolledPrograms.map((program, index) => (
+
                   <div key={index} className="flex items-center justify-between p-2 border rounded">
                     <span className="text-sm">{program}</span>
                     <Badge variant="outline" className="text-xs">
