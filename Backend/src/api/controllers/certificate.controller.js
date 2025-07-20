@@ -2,7 +2,7 @@ import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { Certificate } from '../models/certificate.model.js';
-import { ProgramUser } from '../models/programUser.model.js';
+import { ProgramUser } from '../models/programUser.modal.js';
 import { User } from '../models/user.model.js';
 import { Program } from '../models/program.model.js';
 
@@ -32,7 +32,7 @@ const issueCertificate = asyncHandler(async (req, res) => {
 const getAllCertificates = asyncHandler(async (req, res) => {
   const certificates = await Certificate.find()
     .populate('trainee', 'name email')
-    .populate('program', 'name');
+    .populate('rogram', 'name');
 
   return res.status(200).json(new ApiResponse(200, certificates, "All certificates fetched successfully."));
 });

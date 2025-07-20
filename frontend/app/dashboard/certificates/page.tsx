@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   Award,
   Search,
@@ -28,300 +28,151 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-
-interface Certificate {
-  id: number
-  traineeName: string
-  traineeEmail: string
-  program: string
-  completionDate: string
-  issueDate: string | null
-  certificateId: string
-  status: string
-  grade: string
-  finalScore: number
-  attendanceRate: number
-  templateId: number
-}
-
-interface Template {
-  id: number
-  name: string
-  description: string
-  isDefault: boolean
-  style: string
-  colorScheme: string
-}
-
-interface Student {
-  id: number
-  name: string
-  email: string
-  program: string
-  finalScore: number
-  attendanceRate: number
-  completionDate: string
-  isEligible: boolean
-}
+import { Trainee, Program, Certificate, Template } from "@/types"
+import {
+  fetchCertificates,
+  fetchTemplates,
+  fetchEligibleTrainees,
+  fetchPrograms,
+  issueCertificatesToTrainees,
+} from "@/lib/services/certificates.services"
 
 export default function CertificatesPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [filterProgram, setFilterProgram] = useState("all")
-  const [filterStatus, setFilterStatus] = useState("all")
-  const [showTemplateModal, setShowTemplateModal] = useState(false)
-  const [showGenerateModal, setShowGenerateModal] = useState(false)
-  const [showPreviewModal, setShowPreviewModal] = useState(false)
-  const [selectedTemplate, setSelectedTemplate] = useState(1)
-  const [activeTab, setActiveTab] = useState("certificates")
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false)
-  const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
-  const [selectedStudents, setSelectedStudents] = useState<number[]>([])
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterProgram, setFilterProgram] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState(1);
+  const [activeTab, setActiveTab] = useState("certificates");
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
+  const [selectedTrainees, setSelectedTrainees] = useState<string[]>([]);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
 
-  const programs = ["Tekeher Experts", "Data Analytics Bootcamp", "Mobile App Development", "UI/UX Design Mastery"]
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [eligibleTrainees, setEligibleTrainees] = useState<Trainee[]>([]);
+  const [programs, setPrograms] = useState<Program[]>([]);
 
-  const [templates, setTemplates] = useState<Template[]>([
-    {
-      id: 1,
-      name: "Professional Certificate",
-      description: "Clean, professional design with company branding",
-      isDefault: true,
-      style: "professional",
-      colorScheme: "blue",
-    },
-    {
-      id: 2,
-      name: "Modern Achievement",
-      description: "Contemporary design with geometric elements",
-      isDefault: false,
-      style: "modern",
-      colorScheme: "gray",
-    },
-  ])
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [certData, templateData, traineeData, programData] = await Promise.all([
+          fetchCertificates(),
+          fetchTemplates(),
+          fetchEligibleTrainees(),
+          fetchPrograms(),
+        ]);
 
-  const [certificates, setCertificates] = useState<Certificate[]>([
-    {
-      id: 1,
-      traineeName: "John Doe",
-      traineeEmail: "john.doe@student.klab.rw",
-      program: "Tekeher Experts",
-      completionDate: "2024-01-15",
-      issueDate: "2024-01-20",
-      certificateId: "KLAB-TE-2024-001",
-      status: "issued",
-      grade: "A",
-      finalScore: 92,
-      attendanceRate: 95,
-      templateId: 1,
-    },
-    {
-      id: 2,
-      traineeName: "Jane Smith",
-      traineeEmail: "jane.smith@student.klab.rw",
-      program: "Data Analytics Bootcamp",
-      completionDate: "2024-02-10",
-      issueDate: "2024-02-15",
-      certificateId: "KLAB-DA-2024-002",
-      status: "issued",
-      grade: "A+",
-      finalScore: 96,
-      attendanceRate: 98,
-      templateId: 1,
-    },
-    {
-      id: 3,
-      traineeName: "Mike Johnson",
-      traineeEmail: "mike.johnson@student.klab.rw",
-      program: "UI/UX Design Mastery",
-      completionDate: "2024-01-01",
-      issueDate: null,
-      certificateId: "KLAB-UX-2024-003",
-      status: "ready",
-      grade: "B+",
-      finalScore: 87,
-      attendanceRate: 85,
-      templateId: 2,
-    },
-    {
-      id: 4,
-      traineeName: "Sarah Wilson",
-      traineeEmail: "sarah.wilson@student.klab.rw",
-      program: "Tekeher Experts",
-      completionDate: "2024-01-25",
-      issueDate: null,
-      certificateId: "KLAB-TE-2024-004",
-      status: "pending",
-      grade: "B",
-      finalScore: 82,
-      attendanceRate: 78,
-      templateId: 1,
-    },
-  ])
+        setCertificates(certData);
+        setTemplates(templateData);
+        setEligibleTrainees(traineeData);
+        setPrograms(programData);
+      } catch (error) {
+        console.error("Failed to fetch certificate page data:", error);
+      }
+    };
 
-  const [allStudents] = useState<Student[]>([
-    {
-      id: 1,
-      name: "Alice Johnson",
-      email: "alice.johnson@student.klab.rw",
-      program: "Tekeher Experts",
-      finalScore: 88,
-      attendanceRate: 92,
-      completionDate: "2024-01-30",
-      isEligible: true,
-    },
-    {
-      id: 2,
-      name: "Bob Wilson",
-      email: "bob.wilson@student.klab.rw",
-      program: "Data Analytics Bootcamp",
-      finalScore: 91,
-      attendanceRate: 89,
-      completionDate: "2024-02-05",
-      isEligible: true,
-    },
-    {
-      id: 3,
-      name: "Carol Davis",
-      email: "carol.davis@student.klab.rw",
-      program: "Mobile App Development",
-      finalScore: 65,
-      attendanceRate: 60,
-      completionDate: "2024-01-20",
-      isEligible: false,
-    },
-    {
-      id: 4,
-      name: "David Brown",
-      email: "david.brown@student.klab.rw",
-      program: "UI/UX Design Mastery",
-      finalScore: 85,
-      attendanceRate: 95,
-      completionDate: "2024-02-01",
-      isEligible: true,
-    },
-  ])
-
-  const eligibleStudents = allStudents.filter(
-    (student) => student.finalScore >= 80 && student.attendanceRate >= 85 && student.isEligible,
-  )
+    fetchData();
+  }, []);
 
   const filteredCertificates = certificates.filter((cert) => {
-    const matchesSearch = cert.traineeName.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesProgram = filterProgram === "all" || cert.program === filterProgram
-    const matchesStatus = filterStatus === "all" || cert.status === filterStatus
-    return matchesSearch && matchesProgram && matchesStatus
-  })
+    const matchesSearch = cert.traineeName.toLowerCase().includes(searchTerm.toLowerCase());
+    // Handle program filtering - compare by program name or ID depending on your data structure
+    const matchesProgram = filterProgram === "all" || 
+      cert.program === filterProgram || 
+      (programs.find(p => p._id === filterProgram)?.name === cert.program);
+    const matchesStatus = filterStatus === "all" || cert.status === filterStatus;
+    return matchesSearch && matchesProgram && matchesStatus;
+  });
+
+  const handleTraineeSelection = (traineeId: string) => {
+    setSelectedTrainees((prev) =>
+      prev.includes(traineeId) ? prev.filter((id) => id !== traineeId) : [...prev, traineeId]
+    );
+  };
+
+  const handleIssueCertificates = async () => {
+    if (selectedTrainees.length === 0) {
+      alert("Please select at least one trainee");
+      return;
+    }
+
+    try {
+      await issueCertificatesToTrainees(selectedTrainees, selectedTemplate);
+      alert("Certificates issued successfully!");
+      setSelectedTrainees([]);
+      setShowGenerateModal(false);
+      // Refresh certificates data
+      const certData = await fetchCertificates();
+      setCertificates(certData);
+    } catch (err) {
+      console.error("Error issuing certificates:", err);
+      alert("Failed to issue certificates. Please try again.");
+    }
+  };
+
+  const handleGenerateWithAI = async (formData: any) => {
+    setIsGeneratingAI(true);
+    try {
+      // Simulate AI generation
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Add AI generation logic here
+      setIsGeneratingAI(false);
+      setShowTemplateModal(false);
+    } catch (error) {
+      console.error("Error generating template:", error);
+      setIsGeneratingAI(false);
+    }
+  };
+
+  const handlePreviewTemplate = (template: Template) => {
+    setPreviewTemplate(template);
+    setShowPreviewModal(true);
+  };
+
+  const handleEditTemplate = (template: Template) => {
+    setEditingTemplate(template);
+    setShowEditModal(true);
+    setShowPreviewModal(false);
+  };
+
+  const handleSaveTemplate = (template: Template) => {
+    // Update template logic here
+    setTemplates(prev => prev.map(t => t.id === template.id ? template : t));
+    setShowEditModal(false);
+    setEditingTemplate(null);
+  };
+
+  const getGradeColor = (grade: string) => {
+    switch (grade.toLowerCase()) {
+      case 'a': return 'bg-green-100 text-green-800';
+      case 'b': return 'bg-blue-100 text-blue-800';
+      case 'c': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "issued":
-        return <CheckCircle className="h-4 w-4 text-green-600" />
-      case "ready":
-        return <Award className="h-4 w-4 text-yellow-600" />
-      case "pending":
-        return <Clock className="h-4 w-4 text-orange-600" />
+      case 'issued':
+        return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'ready':
+        return <Clock className="h-4 w-4 text-blue-600" />;
       default:
-        return <Clock className="h-4 w-4 text-gray-600" />
+        return <Clock className="h-4 w-4 text-gray-600" />;
     }
-  }
-
-  const getGradeColor = (grade: string) => {
-    switch (grade) {
-      case "A+":
-      case "A":
-        return "bg-green-100 text-green-800"
-      case "A-":
-      case "B+":
-        return "bg-blue-100 text-blue-800"
-      case "B":
-      case "B-":
-        return "bg-yellow-100 text-yellow-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const handleGenerateWithAI = async (formData: any) => {
-    setIsGeneratingAI(true)
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-
-    const newTemplate: Template = {
-      id: templates.length + 1,
-      name: `AI ${formData.style} Certificate`,
-      description: `AI-generated ${formData.style.toLowerCase()} certificate with ${formData.colorScheme} color scheme`,
-      isDefault: false,
-      style: formData.style,
-      colorScheme: formData.colorScheme,
-    }
-
-    setTemplates([...templates, newTemplate])
-    setIsGeneratingAI(false)
-    setShowTemplateModal(false)
-    alert("AI template generated successfully!")
-  }
-
-  const handlePreviewTemplate = (template: Template) => {
-    setPreviewTemplate(template)
-    setShowPreviewModal(true)
-  }
-
-  const handleEditTemplate = (template: Template) => {
-    setEditingTemplate(template)
-    setShowEditModal(true)
-  }
-
-  const handleSaveTemplate = (updatedTemplate: Template) => {
-    setTemplates(templates.map((t) => (t.id === updatedTemplate.id ? updatedTemplate : t)))
-    setShowEditModal(false)
-    setEditingTemplate(null)
-    alert("Template updated successfully!")
-  }
-
-  const handleIssueCertificates = async () => {
-    if (selectedStudents.length === 0) {
-      alert("Please select at least one student")
-      return
-    }
-
-    const studentsToIssue = eligibleStudents.filter((student) => selectedStudents.includes(student.id))
-
-    const newCertificates: Certificate[] = studentsToIssue.map((student) => ({
-      id: certificates.length + student.id,
-      traineeName: student.name,
-      traineeEmail: student.email,
-      program: student.program,
-      completionDate: student.completionDate,
-      issueDate: new Date().toISOString().split("T")[0],
-      certificateId: `KLAB-${student.program.split(" ")[0].toUpperCase()}-2024-${String(certificates.length + student.id).padStart(3, "0")}`,
-      status: "issued",
-      grade: student.finalScore >= 90 ? "A" : student.finalScore >= 80 ? "B" : "C",
-      finalScore: student.finalScore,
-      attendanceRate: student.attendanceRate,
-      templateId: selectedTemplate,
-    }))
-
-    setCertificates([...certificates, ...newCertificates])
-    setSelectedStudents([])
-    setShowGenerateModal(false)
-
-    alert(
-      `Successfully issued ${newCertificates.length} certificates! Students have been notified via email and certificates are available in their dashboards.`,
-    )
-  }
-
-  const handleStudentSelection = (studentId: number) => {
-    setSelectedStudents((prev) =>
-      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId],
-    )
-  }
+  };
 
   const certificateStats = {
     total: certificates.length,
     issued: certificates.filter((c) => c.status === "issued").length,
     ready: certificates.filter((c) => c.status === "ready").length,
-    eligible: eligibleStudents.length,
-  }
+    eligible: eligibleTrainees.length,
+  };
 
   return (
     <div className="space-y-6">
@@ -420,8 +271,8 @@ export default function CertificatesPage() {
               <SelectContent>
                 <SelectItem value="all">All Programs</SelectItem>
                 {programs.map((program) => (
-                  <SelectItem key={program} value={program}>
-                    {program}
+                  <SelectItem key={program._id} value={program._id}>
+                    {program.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -529,34 +380,28 @@ export default function CertificatesPage() {
 
         <TabsContent value="eligible" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {eligibleStudents.map((student) => (
-              <Card key={student.id}>
+            {eligibleTrainees.map((trainee) => (
+              <Card key={trainee._id}>
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
-                    {student.name}
+                    {trainee.name}
                     <Badge className="bg-green-100 text-green-800">Eligible</Badge>
                   </CardTitle>
-                  <CardDescription>{student.program}</CardDescription>
+                  <CardDescription>{trainee.program}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Final Score</span>
-                    <span className="font-semibold">{student.finalScore}%</span>
+                    <span className="text-sm text-muted-foreground">Progress</span>
+                    <span className="font-semibold">{trainee.progress}%</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">Attendance</span>
-                    <span className="font-semibold">{student.attendanceRate}%</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Completed</span>
-                    <span className="font-semibold">
-                      {new Date(student.completionDate).toLocaleDateString()}
-                    </span>
+                    <span className="font-semibold">{trainee.attendance}%</span>
                   </div>
                   <Button 
                     className="w-full" 
                     onClick={() => {
-                      setSelectedStudents([student.id])
+                      setSelectedTrainees([trainee._id])
                       setShowGenerateModal(true)
                     }}
                   >
@@ -619,18 +464,18 @@ export default function CertificatesPage() {
               </div>
             </div>
             <div>
-              <Label>Select Students ({selectedStudents.length} selected)</Label>
+              <Label>Select Students ({selectedTrainees.length} selected)</Label>
               <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
-                {eligibleStudents.map((student) => (
-                  <div key={student.id} className="flex items-center space-x-3 p-2 border rounded-lg">
+                {eligibleTrainees.map((trainee) => (
+                  <div key={trainee._id} className="flex items-center space-x-3 p-2 border rounded-lg">
                     <Checkbox
-                      checked={selectedStudents.includes(student.id)}
-                      onCheckedChange={() => handleStudentSelection(student.id)}
+                      checked={selectedTrainees.includes(trainee._id)}
+                      onCheckedChange={() => handleTraineeSelection(trainee._id)}
                     />
                     <div className="flex-1">
-                      <div className="font-medium">{student.name}</div>
+                      <div className="font-medium">{trainee.name}</div>
                       <div className="text-sm text-muted-foreground">
-                        {student.program} • {student.finalScore}% • {student.attendanceRate}% attendance
+                        {trainee.program} • {trainee.progress}% • {trainee.attendance}% attendance
                       </div>
                     </div>
                   </div>
@@ -644,10 +489,10 @@ export default function CertificatesPage() {
             </Button>
             <Button
               onClick={handleIssueCertificates}
-              disabled={!selectedTemplate || selectedStudents.length === 0}
+              disabled={!selectedTemplate || selectedTrainees.length === 0}
             >
               <Send className="mr-2 h-4 w-4" />
-              Issue & Send {selectedStudents.length} Certificate{selectedStudents.length !== 1 ? "s" : ""}
+              Issue & Send {selectedTrainees.length} Certificate{selectedTrainees.length !== 1 ? "s" : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -872,4 +717,4 @@ function EditTemplateForm({
       </DialogFooter>
     </div>
   )
-} 
+}

@@ -37,10 +37,12 @@ export interface Facilitator {
   promotionDate?: string;
 }
 
-// ----------------------------
-// Trainee (Extends User)
-// ----------------------------
+
 export interface Trainee extends User {
+  program: string;
+  completionDate: string | number | Date;
+  attendanceRate: number;
+  finalScore: number;
   phone: string;
   location: string;
   enrolledPrograms: string[]; // Array of program IDs
@@ -52,9 +54,7 @@ export interface Trainee extends User {
   lastActive: string;
 }
 
-// ----------------------------
-// Program
-// ----------------------------
+
 export interface Program {
   _id: string;
   name: string;
@@ -90,9 +90,7 @@ export interface Program {
   updatedAt: string;
 }
 
-// ----------------------------
-// Content Submission
-// ----------------------------
+
 export interface ContentSubmission {
   _id: string;
   facilitatorName: string;
@@ -107,9 +105,6 @@ export interface ContentSubmission {
   fileUrl?: string;
 }
 
-// ----------------------------
-// Course
-// ----------------------------
 export interface Course {
   _id: string;
   title: string;
@@ -122,9 +117,7 @@ export interface Course {
   updatedAt: string;
 }
 
-// ----------------------------
-// Program DTOs
-// ----------------------------
+
 export interface CreateProgramData {
   name: string;
   description: string;
@@ -137,4 +130,40 @@ export interface UpdateProgramData {
   description?: string;
   startDate?: string;
   endDate?: string;
+}
+
+
+export interface Certificate {
+  id: number
+  traineeName: string
+  traineeEmail: string
+  program: string
+  completionDate: string
+  issueDate: string | null
+  certificateId: string
+  status: string
+  grade: string
+  finalScore: number
+  attendanceRate: number
+  templateId: number
+}
+
+export interface Template {
+  id: number
+  name: string
+  description: string
+  isDefault: boolean
+  style: string
+  colorScheme: string
+}
+
+export interface Student {
+  id: number
+  name: string
+  email: string
+  program: string
+  finalScore: number
+  attendanceRate: number
+  completionDate: string
+  isEligible: boolean
 }
