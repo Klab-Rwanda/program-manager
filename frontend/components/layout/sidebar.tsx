@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity, Archive, Award, BarChart3, Bell, BookOpen, Calendar,
+  Calendar1,
   ChevronLeft, ChevronRight, ClipboardCheck, FileText, FolderOpen,
   GraduationCap, Home, LogOut, Mail, Menu, MessageSquare, Moon, Settings, Sun, Ticket,
   TrendingUp, Upload, User, UserCheck, Users, Wrench
@@ -38,6 +39,7 @@ const menuItems = [
     // Trainee
     { title: "My Learning", url: "/dashboard/Trainee/my-learning", icon: GraduationCap, roles: ['trainee'] },
     { title: "Submit Projects", url: "/dashboard/Trainee/submit-projects", icon: FileText, roles: ['trainee'] },
+    { title: "Attendance", url: "/dashboard/Trainee/Trattendance", icon: Calendar1, roles: ['trainee'] },
     { title: "My Progress", url: "/dashboard/Trainee/my-progress", icon: TrendingUp, roles: ['trainee'] },
     { title: "Learning Resources", url: "/dashboard/Trainee/resources", icon: FolderOpen, roles: ['trainee'] },
     // IT Support
