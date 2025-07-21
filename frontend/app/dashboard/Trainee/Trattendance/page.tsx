@@ -1,12 +1,10 @@
 "use client"
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   MapPin,
   QrCode,
   Clock,
   Users,
-  Camera,
-  Scan,
   AlertCircle,
   CheckCircle2,
   XCircle,
@@ -15,13 +13,11 @@ import {
   Wifi,
   RefreshCw,
   Timer,
-  Eye,
   Map,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-
-import Image from "next/image"
-import  Logo from "@/images/logo.png"
+import LiveMap from "@/components/LiveMap" // New import
+import LiveQRCode from "@/components/LiveQrCode" // New import
 
 // Type definitions
 interface Location {
@@ -62,25 +58,20 @@ interface Session {
 
 type AttendanceStatus = "pending" | "success" | "failed" | "location_denied"
 
-export default function TrattendancePage() {
+export default function Index() {
+  // Changed export name to Index
   // State management
-  const [selectedSessionType, setSelectedSessionType] = useState<"physical" | "online" | null>(null) // New state for user's choice
+  const [selectedSessionType, setSelectedSessionType] = useState<"physical" | "online" | null>(null)
   const [currentSession, setCurrentSession] = useState<Session | null>(null)
   const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>("pending")
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
   const [sessionLocation, setSessionLocation] = useState<Location | null>(null)
   const [distance, setDistance] = useState<number | null>(null)
-  const [qrScanning, setQrScanning] = useState<boolean>(false)
-  const [faceCapturing, setFaceCapturing] = useState<boolean>(false)
+  const [isScanning, setIsScanning] = useState<boolean>(false) // Added isScanning state
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [timeRemaining, setTimeRemaining] = useState<string | null>(null)
   const [sessionExpired, setSessionExpired] = useState<boolean>(false)
-
-  // Camera and QR refs
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
 
   // kLab Rwanda location
   const klabLocation: Location = {
@@ -101,7 +92,7 @@ export default function TrattendancePage() {
     endTime: new Date(Date.now() + 7 * 60000).toISOString(), // 7 minutes from now (5 min attendance window)
     location: klabLocation,
     status: "active",
-    qrCodeData: "QR_WEB_DEV_001_" + Date.now(),
+    qrCodeData: "SESSION_WEB_DEV_001_FACILITATOR_QR", // This is the facilitator's session QR
     accessLink: "https://attend.klab.rw/join/WEB_DEV_001",
   }
 
@@ -116,7 +107,7 @@ export default function TrattendancePage() {
     if (type === "physical") {
       setSessionLocation(sessionWithChosenType.location)
     }
-  }, []) // Removed baseMockSession from dependency array
+  }, [])
 
   // Timer for session countdown
   useEffect(() => {
@@ -141,7 +132,7 @@ export default function TrattendancePage() {
     updateTimer()
     const interval = setInterval(updateTimer, 1000)
     return () => clearInterval(interval)
-  }, [currentSession]) // Depend on currentSession
+  }, [currentSession])
 
   // Function to open Google Maps in a new tab
   const handleViewOnMap = useCallback(() => {
@@ -208,6 +199,29 @@ export default function TrattendancePage() {
     })
   }, [])
 
+  // Simulate saving attendance to backend
+  const saveAttendanceToBackend = async (
+    sessionId: string,
+    studentId: string, // Assuming student ID is part of the QR data or user context
+    sessionType: "physical" | "online",
+    locationData?: UserLocation,
+    distanceData?: number,
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      // Simulate API call delay
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      // For demo purposes, simulate successful save
+      return {
+        success: true,
+        message: `Attendance marked successfully for ${sessionType} session`,
+      }
+    } catch (error) {
+      console.error("Error saving attendance to backend:", error)
+      return { success: false, message: error instanceof Error ? error.message : "Unknown error saving attendance." }
+    }
+  }
+
   // Mark physical attendance
   const markPhysicalAttendance = async (): Promise<void> => {
     if (sessionExpired) {
@@ -216,6 +230,7 @@ export default function TrattendancePage() {
     }
     try {
       setLoading(true)
+      setIsScanning(true) // Set scanning true for physical attendance
       setError(null)
 
       const location = await getCurrentLocation()
@@ -225,10 +240,25 @@ export default function TrattendancePage() {
         const dist = calculateDistance(location.lat, location.lng, sessionLocation.lat, sessionLocation.lng)
         setDistance(Math.round(dist))
 
+        // Add scanning animation delay
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+
         if (dist <= sessionLocation.radius) {
-          // Simulate API call
-          await new Promise((resolve) => setTimeout(resolve, 1500))
-          setAttendanceStatus("success")
+          // Call backend API to save physical attendance
+          const backendResult = await saveAttendanceToBackend(
+            currentSession!.sessionId, // currentSession is guaranteed to exist here
+            "STUDENT_ID_DEMO", // Placeholder student ID
+            "physical",
+            location,
+            Math.round(dist),
+          )
+
+          if (backendResult.success) {
+            setAttendanceStatus("success")
+          } else {
+            setAttendanceStatus("failed")
+            setError(backendResult.message)
+          }
         } else {
           setAttendanceStatus("failed")
           setError(
@@ -237,57 +267,17 @@ export default function TrattendancePage() {
         }
       }
     } catch (err) {
-      console.error("Location error:", err)
+      console.error("Location or backend error:", err)
       const errorMessage = err instanceof Error ? err.message : "Unknown error occurred"
       setError(errorMessage)
       setAttendanceStatus("location_denied")
     } finally {
       setLoading(false)
+      setIsScanning(false) // Reset scanning state
     }
   }
 
-  // Start camera for QR scanning and face capture
-  const startCamera = async (): Promise<MediaStream> => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: 480, height: 360 },
-      })
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        streamRef.current = stream
-      }
-      return stream
-    } catch (err) {
-      console.error("Camera error:", err)
-      setError("Failed to access camera. Please allow camera permissions.")
-      throw err
-    }
-  }
-
-  // Stop camera
-  const stopCamera = (): void => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
-  }
-
-  // Simulate QR code scanning
-  const simulateQRScanning = async (): Promise<string | null> => {
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    return currentSession?.qrCodeData || null
-  }
-
-  // Simulate face recognition
-  const simulateFaceRecognition = async (): Promise<boolean> => {
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-    return Math.random() > 0.2 // 80% success rate for demo
-  }
-
-  // Handle QR code attendance
+  // Handle QR code attendance (simplified: no camera, no face recognition)
   const markQRAttendance = async (): Promise<void> => {
     if (sessionExpired) {
       setError("Attendance period has ended. Contact your instructor.")
@@ -296,40 +286,29 @@ export default function TrattendancePage() {
     try {
       setLoading(true)
       setError(null)
-      setQrScanning(true)
+      // Simulate a brief moment for the student to acknowledge the QR code
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      await startCamera()
+      // Call backend API to save online attendance
+      const backendResult = await saveAttendanceToBackend(
+        currentSession!.sessionId, // currentSession is guaranteed to exist here
+        "STUDENT_ID_DEMO", // Placeholder student ID
+        "online",
+      )
 
-      // Simulate QR scanning
-      const scannedData = await simulateQRScanning()
-
-      if (scannedData === currentSession?.qrCodeData) {
-        setQrScanning(false)
-        setFaceCapturing(true)
-
-        // Simulate face recognition
-        const faceMatch = await simulateFaceRecognition()
-
-        if (faceMatch) {
-          setAttendanceStatus("success")
-        } else {
-          setAttendanceStatus("failed")
-          setError("Face recognition failed. Please try again or contact your instructor.")
-        }
+      if (backendResult.success) {
+        setAttendanceStatus("success")
       } else {
         setAttendanceStatus("failed")
-        setError("Invalid QR code. Please scan the correct session QR code.")
+        setError(backendResult.message)
       }
     } catch (err) {
-      console.error("QR attendance error:", err)
+      console.error("Online attendance error:", err)
       const errorMessage = err instanceof Error ? err.message : "Unknown error occurred"
       setError(errorMessage)
       setAttendanceStatus("failed")
     } finally {
       setLoading(false)
-      setQrScanning(false)
-      setFaceCapturing(false)
-      stopCamera()
     }
   }
 
@@ -339,7 +318,7 @@ export default function TrattendancePage() {
     setError(null)
     setUserLocation(null)
     setDistance(null)
-    stopCamera()
+    setIsScanning(false) // Reset scanning state
     setSelectedSessionType(null) // Allow user to choose again
     setCurrentSession(null)
   }
@@ -531,26 +510,13 @@ export default function TrattendancePage() {
                 <h3 className="font-semibold text-gray-900">Location-Based Attendance</h3>
               </div>
 
-              {/* Static Map Placeholder with "View on Map" button overlay */}
-              <div className="bg-gray-100 rounded-xl overflow-hidden w-full h-48 relative flex items-center justify-center">
-                <Image
-                  src= {Logo}
-                  alt="Map of kLab Rwanda"
-                  width={180}
-                   height={300}
-                  className="rounded-lg object-contain"
-                />
-                <div className="relative z-10">
-                  <Button
-                    onClick={handleViewOnMap}
-                    variant="outline"
-                    className="flex items-center gap-2 text-[#1f497d] hover:text-[#1a3d6b] hover:bg-gray-200 bg-white/80 backdrop-blur-sm"
-                  >
-                    <Map className="h-5 w-5" />
-                    View kLab on Map
-                  </Button>
-                </div>
-              </div>
+              {/* Live Interactive Map */}
+              <LiveMap
+                sessionLocation={sessionLocation!}
+                userLocation={userLocation}
+                isScanning={isScanning}
+                distance={distance}
+              />
 
               <div className="space-y-3">
                 <div className="bg-gray-50 rounded-lg p-4">
@@ -602,7 +568,7 @@ export default function TrattendancePage() {
                 {loading ? (
                   <>
                     <RefreshCw className="h-4 w-4 animate-spin" />
-                    Getting Location...
+                    {isScanning ? "Scanning Location..." : "Getting Location..."}
                   </>
                 ) : (
                   <>
@@ -611,10 +577,22 @@ export default function TrattendancePage() {
                   </>
                 )}
               </Button>
+
+              <div className="flex items-center justify-center">
+                <Button
+                  onClick={handleViewOnMap}
+                  variant="outline"
+                  size="sm"
+                  className="text-[#1f497d] hover:text-[#1a3d6b] border-[#1f497d]/20 bg-transparent"
+                >
+                  <Map className="h-4 w-4 mr-2" />
+                  Open in Google Maps
+                </Button>
+              </div>
             </div>
           </div>
         )}
-        {/* Online Session QR + Face Recognition */}
+        {/* Online Session QR Display and Attendance */}
         {currentSession.type === "online" && attendanceStatus === "pending" && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <div className="space-y-4">
@@ -622,78 +600,48 @@ export default function TrattendancePage() {
                 <div className="p-2 bg-[#1f497d]/10 rounded-lg">
                   <QrCode className="h-5 w-5 text-[#1f497d]" />
                 </div>
-                <h3 className="font-semibold text-gray-900">QR Code + Face Verification</h3>
+                <h3 className="font-semibold text-gray-900">Online Session Attendance</h3>
               </div>
 
               <div className="space-y-3">
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-sm font-medium text-gray-700 mb-3">Steps to mark attendance:</p>
+                  <p className="text-sm font-medium text-gray-700 mb-3">📋 Steps to mark attendance:</p>
                   <div className="space-y-2">
                     <div className="flex items-start gap-2">
                       <span className="flex-shrink-0 w-5 h-5 bg-[#1f497d] text-white rounded-full flex items-center justify-center text-xs font-medium">
                         1
                       </span>
-                      <p className="text-xs text-gray-600">Scan the QR code displayed by your instructor</p>
+                      <p className="text-xs text-gray-600">Confirm you see the QR code displayed by your instructor.</p>
                     </div>
                     <div className="flex items-start gap-2">
                       <span className="flex-shrink-0 w-5 h-5 bg-[#1f497d] text-white rounded-full flex items-center justify-center text-xs font-medium">
                         2
                       </span>
-                      <p className="text-xs text-gray-600">Allow camera access for face verification</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="flex-shrink-0 w-5 h-5 bg-[#1f497d] text-white rounded-full flex items-center justify-center text-xs font-medium">
-                        3
-                      </span>
-                      <p className="text-xs text-gray-600">Look directly at the camera for recognition</p>
+                      <p className="text-xs text-gray-600">Click 'Mark Attendance' below.</p>
                     </div>
                   </div>
                 </div>
 
-                {(qrScanning || faceCapturing) && (
-                  <div className="bg-[#1f497d]/5 rounded-lg p-4 border border-[#1f497d]/20">
-                    <div className="text-center">
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        className="w-full max-w-xs mx-auto rounded-lg mb-3 shadow-sm"
-                      />
-                      <canvas ref={canvasRef} className="hidden" />
-
-                      <div className="flex items-center justify-center gap-2 text-[#1f497d]">
-                        {qrScanning && (
-                          <>
-                            <Scan className="h-5 w-5 animate-pulse" />
-                            <span className="text-sm font-medium">Scanning QR Code...</span>
-                          </>
-                        )}
-                        {faceCapturing && (
-                          <>
-                            <Eye className="h-5 w-5 animate-pulse" />
-                            <span className="text-sm font-medium">Verifying Face...</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* Live QR Code Display */}
+                <div className="bg-gray-100 rounded-xl overflow-hidden w-full h-48 relative flex items-center justify-center p-4">
+                  <LiveQRCode data={currentSession.qrCodeData} size={180} className="mx-auto" />
+                </div>
               </div>
 
               <Button
                 onClick={markQRAttendance}
-                disabled={loading || qrScanning || faceCapturing || sessionExpired}
+                disabled={loading || sessionExpired}
                 className="w-full bg-[#1f497d] hover:bg-[#1a3d6b] disabled:bg-gray-400 text-white py-3 px-4 rounded-xl font-medium flex items-center justify-center gap-2 transition-all duration-200 shadow-sm hover:shadow-md disabled:shadow-none"
               >
                 {loading ? (
                   <>
                     <RefreshCw className="h-4 w-4 animate-spin" />
-                    Processing...
+                    Marking Attendance...
                   </>
                 ) : (
                   <>
-                    <Camera className="h-4 w-4" />
-                    Start QR Scan & Face Verification
+                    <QrCode className="h-4 w-4" />
+                    Mark Attendance
                   </>
                 )}
               </Button>

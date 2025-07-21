@@ -1,18 +1,15 @@
-"use client";
-
-import type React from "react";
-
-import { useState } from "react";
-import { Upload, FileText, Download, Trash2, Eye, Plus, Search } from "lucide-react";
-
-import { AppSidebar } from "@/components/layout/sidebar";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+"use client"
+import type React from "react"
+import { useState } from "react"
+import { FileText, Download, Eye, Plus, Search, File, Presentation, Palette } from "lucide-react"
+import { AppSidebar } from "@/components/layout/sidebar"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import {
   Dialog,
   DialogContent,
@@ -20,26 +17,25 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 
 export default function Curriculum() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("all");
-  const [filterProgram, setFilterProgram] = useState("all");
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterType, setFilterType] = useState("all")
+  const [filterProgram, setFilterProgram] = useState("all")
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [uploadData, setUploadData] = useState({
     program: "",
     title: "",
     description: "",
     type: "",
-  });
-
+  })
   // Mock curriculum data
   const [curriculumFiles, setCurriculumFiles] = useState([
     {
@@ -82,48 +78,40 @@ export default function Curriculum() {
       downloads: 15,
       status: "Draft",
     },
-  ]);
+  ])
 
-  
   const programs = [
     { id: "software-engineering", name: "Software Engineering Bootcamp" },
     { id: "data-science", name: "Data Science Fundamentals" },
     { id: "mobile-dev", name: "Mobile App Development" },
     { id: "ui-ux", name: "UI/UX Design Workshop" },
-  ];
-
+  ]
   const filteredFiles = curriculumFiles.filter((file) => {
     const matchesSearch =
       file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      file.program.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === "all" || file.type.toLowerCase() === filterType.toLowerCase();
-    const matchesProgram = filterProgram === "all" || file.program === filterProgram;
-
-    return matchesSearch && matchesType && matchesProgram;
-  });
-
+      file.program.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesType = filterType === "all" || file.type.toLowerCase() === filterType.toLowerCase()
+    const matchesProgram = filterProgram === "all" || file.program === filterProgram
+    return matchesSearch && matchesType && matchesProgram
+  })
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
+    const files = event.target.files
     if (files && files.length > 0) {
-      setSelectedFiles(Array.from(files));
+      setSelectedFiles(Array.from(files))
     }
-  };
-
+  }
   const handleUploadSubmit = () => {
     if (!uploadData.program || !uploadData.title || selectedFiles.length === 0) {
-      alert("Please fill in all required fields and select files");
-      return;
+      alert("Please fill in all required fields and select files")
+      return
     }
-
-    setIsUploading(true);
-    setUploadProgress(0);
-
+    setIsUploading(true)
+    setUploadProgress(0)
     // Simulate upload progress
     const interval = setInterval(() => {
       setUploadProgress((prev) => {
         if (prev >= 100) {
-          clearInterval(interval);
-
+          clearInterval(interval)
           // Add new files to the list
           const newFiles = selectedFiles.map((file, index) => ({
             id: curriculumFiles.length + index + 1,
@@ -140,21 +128,18 @@ export default function Curriculum() {
             uploadDate: new Date().toISOString().split("T")[0],
             downloads: 0,
             status: "Active",
-          }));
-
-          setCurriculumFiles((prev) => [...prev, ...newFiles]);
-          setUploadDialogOpen(false);
-          setSelectedFiles([]);
-          setUploadData({ program: "", title: "", description: "", type: "" });
-          alert(`Successfully uploaded ${selectedFiles.length} file(s)!`);
-
-          return 100;
+          }))
+          setCurriculumFiles((prev) => [...prev, ...newFiles])
+          setUploadDialogOpen(false)
+          setSelectedFiles([])
+          setUploadData({ program: "", title: "", description: "", type: "" })
+          alert(`Successfully uploaded ${selectedFiles.length} file(s)!`)
+          return 100
         }
-        return prev + 10;
-      });
-    }, 200);
-  };
-
+        return prev + 10
+      })
+    }, 200)
+  }
   const handleExportList = () => {
     const csvContent = [
       ["Name", "Program", "Type", "Size", "Upload Date", "Downloads", "Status"],
@@ -169,51 +154,46 @@ export default function Curriculum() {
       ]),
     ]
       .map((row) => row.join(","))
-      .join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `curriculum-files-${new Date().toISOString().split("T")[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-
-    alert("File list exported successfully!");
-  };
-
+      .join("\n")
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `curriculum-files-${new Date().toISOString().split("T")[0]}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+    alert("File list exported successfully!")
+  }
   const getFileIcon = (type: string) => {
     switch (type.toLowerCase()) {
       case "pdf":
-        return "📄";
+        return <FileText className="h-6 w-6" />
       case "powerpoint":
       case "pptx":
-        return "📊";
+        return <Presentation className="h-6 w-6" />
       case "word":
       case "docx":
-        return "📝";
+        return <FileText className="h-6 w-6" />
       case "sketch":
-        return "🎨";
+        return <Palette className="h-6 w-6" />
       default:
-        return "📁";
+        return <File className="h-6 w-6" />
     }
-  };
-
+  }
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Active":
-        return "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400";
+        return "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
       case "Draft":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400";
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400"
       case "Archived":
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400";
+        return "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400"
       default:
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400";
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
     }
-  };
-
+  }
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -223,7 +203,6 @@ export default function Curriculum() {
           <Separator orientation="vertical" className="mr-2 h-4" />
           <h1 className="text-lg font-semibold">Curriculum Upload</h1>
         </header>
-
         <div className="flex flex-1 flex-col gap-4 p-4">
           {/* Header Section */}
           <div className="flex items-center justify-between">
@@ -242,13 +221,17 @@ export default function Curriculum() {
                 <DialogHeader>
                   <DialogTitle>Upload Curriculum Files</DialogTitle>
                   <DialogDescription>
-                    Upload new curriculum materials for your programs. Supported formats: PDF, PowerPoint, Word, and more.
+                    Upload new curriculum materials for your programs. Supported formats: PDF, PowerPoint, Word, and
+                    more.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="program">Program</Label>
-                    <Select value={uploadData.program} onValueChange={(value) => setUploadData({ ...uploadData, program: value })}>
+                    <Select
+                      value={uploadData.program}
+                      onValueChange={(value) => setUploadData({ ...uploadData, program: value })}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select a program" />
                       </SelectTrigger>
@@ -290,9 +273,7 @@ export default function Curriculum() {
                       onChange={handleFileUpload}
                     />
                     {selectedFiles.length > 0 && (
-                      <div className="text-sm text-muted-foreground">
-                        Selected {selectedFiles.length} file(s)
-                      </div>
+                      <div className="text-sm text-muted-foreground">Selected {selectedFiles.length} file(s)</div>
                     )}
                   </div>
                   {isUploading && (
@@ -320,7 +301,6 @@ export default function Curriculum() {
               </DialogContent>
             </Dialog>
           </div>
-
           {/* Search and Filter */}
           <div className="flex items-center gap-4">
             <div className="relative flex-1 max-w-sm">
@@ -362,7 +342,6 @@ export default function Curriculum() {
               Export List
             </Button>
           </div>
-
           {/* Files Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredFiles.map((file) => (
@@ -395,11 +374,11 @@ export default function Curriculum() {
                     Uploaded: {new Date(file.uploadDate).toLocaleDateString()}
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1">
+                    <Button variant="outline" size="sm" className="flex-1 bg-transparent">
                       <Eye className="mr-2 h-3 w-3" />
                       Preview
                     </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
+                    <Button variant="outline" size="sm" className="flex-1 bg-transparent">
                       <Download className="mr-2 h-3 w-3" />
                       Download
                     </Button>
@@ -408,7 +387,6 @@ export default function Curriculum() {
               </Card>
             ))}
           </div>
-
           {filteredFiles.length === 0 && (
             <div className="text-center py-8">
               <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -418,5 +396,5 @@ export default function Curriculum() {
         </div>
       </SidebarInset>
     </SidebarProvider>
-  );
+  )
 }
