@@ -18,32 +18,31 @@ import { useTheme } from "next-themes";
 const menuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee', 'it_support'] },
     // Super Admin
-    { title: "User Management", url: "/dashboard/user-management", icon: Users, roles: ['super_admin'] },
-    { title: "Master Log", url: "/dashboard/master-log", icon: Activity, roles: ['super_admin'] },
-    { title: "Reports & Export", url: "/dashboard/reports-export", icon: BarChart3, roles: ['super_admin'] },
-    { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['super_admin'] },
+    { title: "User Management", url: "/dashboard/SuperAdmin/user-management", icon: Users, roles: ['super_admin'] },
+    { title: "Master Log", url: "/dashboard/SuperAdmin/master-log", icon: Activity, roles: ['super_admin'] },
+    { title: "Reports & Export", url: "/dashboard/SuperAdmin/reports-export", icon: BarChart3, roles: ['super_admin'] },
+    { title: "System Monitoring", url: "/dashboard/SuperAdmin/system-monitoring", icon: Activity, roles: ['super_admin', 'it_support'] },
     // Program Manager
-    { title: "Programs", url: "/dashboard/programs", icon: BookOpen, roles: ['program_manager'], countKey: 'programs' },
-    { title: "Facilitators", url: "/dashboard/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },
-    { title: "Trainees", url: "/dashboard/trainees", icon: Users, roles: ['program_manager'], countKey: 'trainees' },
-    { title: "Attendance", url: "/dashboard/attendance", icon: Calendar, roles: ['program_manager'] },
-    { title: "Certificates", url: "/dashboard/certificates", icon: Award, roles: ['program_manager'], countKey: 'certificates' },
-    { title: "Archive", url: "/dashboard/archive", icon: Archive, roles: ['program_manager'], countKey: 'archived' },
+    { title: "Programs", url: "/dashboard/Manager/programs", icon: BookOpen, roles: ['program_manager'], countKey: 'programs' },
+    { title: "Facilitators", url: "/dashboard/Manager/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },
+    { title: "Trainees", url: "/dashboard/Manager/trainees", icon: Users, roles: ['program_manager'], countKey: 'trainees' },
+    { title: "Attendance", url: "/dashboard/Manager/attendance", icon: Calendar, roles: ['program_manager'] },
+    { title: "Certificates", url: "/dashboard/Manager/certificates", icon: Award, roles: ['program_manager'], countKey: 'certificates' },
+    { title: "Archive", url: "/dashboard/Manager/archive", icon: Archive, roles: ['program_manager'], countKey: 'archived' },
     // Facilitator
-    { title: "My Programs", url: "/dashboard/fac-programs", icon: BookOpen, roles: ['facilitator'] },
-    { title: "Attendance Tracking", url: "/dashboard/Fac-attendance", icon: Calendar, roles: ['facilitator'] },
-    { title: "Curriculum Upload", url: "/dashboard/fac-curriculum", icon: Upload, roles: ['facilitator'] },
-    { title: "Project Reviews", url: "/dashboard/fac-reviews", icon: ClipboardCheck, roles: ['facilitator'] },
-    { title: "Weekly Roadmap", url: "/dashboard/fac-roadmap", icon: Calendar, roles: ['facilitator'] },
+    { title: "My Programs", url: "/dashboard/Facilitator/fac-programs", icon: BookOpen, roles: ['facilitator'] },
+    { title: "Attendance Tracking", url: "/dashboard/Facilitator/Fac-attendance", icon: Calendar, roles: ['facilitator'] },
+    { title: "Curriculum Upload", url: "/dashboard/Facilitator/fac-curriculum", icon: Upload, roles: ['facilitator'] },
+    { title: "Project Reviews", url: "/dashboard/Facilitator/fac-reviews", icon: ClipboardCheck, roles: ['facilitator'] },
+    { title: "Weekly Roadmap", url: "/dashboard/Facilitator/fac-roadmap", icon: Calendar, roles: ['facilitator'] },
     // Trainee
-    { title: "My Learning", url: "/dashboard/my-learning", icon: GraduationCap, roles: ['trainee'] },
-    { title: "Submit Projects", url: "/dashboard/submit-projects", icon: FileText, roles: ['trainee'] },
-    { title: "My Progress", url: "/dashboard/my-progress", icon: TrendingUp, roles: ['trainee'] },
-    { title: "Learning Resources", url: "/dashboard/resources", icon: FolderOpen, roles: ['trainee'] },
+    { title: "My Learning", url: "/dashboard/Trainee/my-learning", icon: GraduationCap, roles: ['trainee'] },
+    { title: "Submit Projects", url: "/dashboard/Trainee/submit-projects", icon: FileText, roles: ['trainee'] },
+    { title: "My Progress", url: "/dashboard/Trainee/my-progress", icon: TrendingUp, roles: ['trainee'] },
+    { title: "Learning Resources", url: "/dashboard/Trainee/resources", icon: FolderOpen, roles: ['trainee'] },
     // IT Support
-    { title: "Support Tickets", url: "/dashboard/support-tickets", icon: MessageSquare, roles: ['it_support'] },
-    { title: "System Monitoring", url: "/dashboard/system-monitoring", icon: Activity, roles: ['it_support'] },
-    { title: "Maintenance", url: "/dashboard/maintenance", icon: Wrench, roles: ['it_support'] },
+    { title: "Support Tickets", url: "/dashboard/it-support/support-tickets", icon: MessageSquare, roles: ['it_support'] },
+    { title: "Maintenance", url: "/dashboard/it-support/maintenance", icon: Wrench, roles: ['it_support'] },
     // Shared
    
 ];
