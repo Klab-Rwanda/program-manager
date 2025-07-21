@@ -78,7 +78,7 @@ export default function Index() {
     lat: -1.9441,
     lng: 30.0619,
     address: "44 KG 548 St, Kigali - kLab Rwanda",
-    radius: 100, // meters
+    radius: 6000, // meters
   }
 
   // Mock session data (now serves as a base)
@@ -605,7 +605,7 @@ export default function Index() {
 
               <div className="space-y-3">
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-sm font-medium text-gray-700 mb-3">📋 Steps to mark attendance:</p>
+                  <p className="text-sm font-medium text-gray-700 mb-3">Steps to mark attendance:</p>
                   <div className="space-y-2">
                     <div className="flex items-start gap-2">
                       <span className="flex-shrink-0 w-5 h-5 bg-[#1f497d] text-white rounded-full flex items-center justify-center text-xs font-medium">
