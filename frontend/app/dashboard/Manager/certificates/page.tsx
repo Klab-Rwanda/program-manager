@@ -18,6 +18,8 @@ import {
   Calendar,
   Loader2,
   X,
+  Archive,
+  AwardIcon
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,7 +46,7 @@ export default function CertificatesPage() {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState(1);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("1"); // Fixed: Changed to string type
   const [activeTab, setActiveTab] = useState("certificates");
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
@@ -174,6 +176,17 @@ export default function CertificatesPage() {
     eligible: eligibleTrainees.length,
   };
 
+  // Empty state component
+  const EmptyState = ({ type, title, description }: { type: string, title: string, description: string }) => (
+    <div className="flex flex-col items-center justify-center py-12">
+      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gray-100 mb-4">
+        <Award className="h-10 w-10 text-gray-400" />
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
+      <p className="text-sm text-gray-500 text-center max-w-sm">{description}</p>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -186,7 +199,10 @@ export default function CertificatesPage() {
             <Wand2 className="mr-2 h-4 w-4" />
             AI Templates
           </Button>
-          <Button onClick={() => setShowGenerateModal(true)}>
+          <Button 
+            onClick={() => setShowGenerateModal(true)}
+            disabled={eligibleTrainees.length === 0}
+          >
             <Award className="mr-2 h-4 w-4" />
             Issue Certificates
           </Button>
@@ -197,7 +213,7 @@ export default function CertificatesPage() {
         <Card>
           <CardContent className="flex items-center space-x-4 p-6">
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100">
-              <Award className="h-6 w-6 text-gray-600" />
+              <Award className="h-6 w-6 text-custom-blue" />
             </div>
             <div>
               <p className="text-2xl font-bold">{certificateStats.total}</p>
@@ -207,8 +223,8 @@ export default function CertificatesPage() {
         </Card>
         <Card>
           <CardContent className="flex items-center space-x-4 p-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-100">
-              <CheckCircle className="h-6 w-6 text-green-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100">
+              <CheckCircle className="h-6 w-6 text-custom-blue" />
             </div>
             <div>
               <p className="text-2xl font-bold">{certificateStats.issued}</p>
@@ -218,8 +234,8 @@ export default function CertificatesPage() {
         </Card>
         <Card>
           <CardContent className="flex items-center space-x-4 p-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
-              <Clock className="h-6 w-6 text-blue-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100">
+              <Clock className="h-6 w-6 text-custom-blue" />
             </div>
             <div>
               <p className="text-2xl font-bold">{certificateStats.ready}</p>
@@ -229,8 +245,8 @@ export default function CertificatesPage() {
         </Card>
         <Card>
           <CardContent className="flex items-center space-x-4 p-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-100">
-              <Users className="h-6 w-6 text-purple-600" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100">
+              <Users className="h-6 w-6 text-custom-blue" />
             </div>
             <div>
               <p className="text-2xl font-bold">{certificateStats.eligible}</p>
@@ -290,128 +306,152 @@ export default function CertificatesPage() {
             </Select>
           </div>
 
-          <div className="space-y-4">
-            {filteredCertificates.map((certificate) => (
-              <Card key={certificate.id}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-                        <span className="text-sm font-semibold text-blue-600">
-                          {certificate.traineeName.split(" ").map((n) => n[0]).join("")}
-                        </span>
+          {filteredCertificates.length === 0 ? (
+            <EmptyState
+              type="certificates"
+              title="No certificates found"
+              description="No certificates match your current search criteria. Try adjusting your filters or issue new certificates to eligible students."
+            />
+          ) : (
+            <div className="space-y-4">
+              {filteredCertificates.map((certificate) => (
+                <Card key={certificate.id}>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
+                          <span className="text-sm font-semibold text-blue-600">
+                            {certificate.traineeName.split(" ").map((n) => n[0]).join("")}
+                          </span>
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">{certificate.traineeName}</h3>
+                          <p className="text-sm text-muted-foreground">{certificate.traineeEmail}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-semibold">{certificate.traineeName}</h3>
-                        <p className="text-sm text-muted-foreground">{certificate.traineeEmail}</p>
+                      <div className="flex items-center space-x-4">
+                        <Badge variant="outline">{certificate.program}</Badge>
+                        <Badge className={getGradeColor(certificate.grade)}>{certificate.grade}</Badge>
+                        <div className="flex items-center space-x-2">
+                          {getStatusIcon(certificate.status)}
+                          <span className="text-sm capitalize">{certificate.status}</span>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Button variant="outline" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-4">
-                      <Badge variant="outline">{certificate.program}</Badge>
-                      <Badge className={getGradeColor(certificate.grade)}>{certificate.grade}</Badge>
-                      <div className="flex items-center space-x-2">
-                        {getStatusIcon(certificate.status)}
-                        <span className="text-sm capitalize">{certificate.status}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="templates" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {templates.map((template) => (
-              <Card key={template.id}>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    {template.name}
-                    {template.isDefault && (
-                      <Badge variant="secondary" className="flex items-center space-x-1">
-                        <Star className="h-3 w-3" />
-                        <span>Default</span>
-                      </Badge>
-                    )}
-                  </CardTitle>
-                  <CardDescription>{template.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="h-32 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center">
-                    <span className="text-sm text-muted-foreground">Certificate Preview</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Button variant="outline" size="sm" onClick={() => handleEditTemplate(template)}>
-                      <Edit3 className="mr-2 h-4 w-4" />
-                      Edit
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => handlePreviewTemplate(template)}>
-                      <Eye className="mr-2 h-4 w-4" />
-                      Preview
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center p-6 h-full">
-                <Wand2 className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="font-semibold mb-2">Generate with AI</h3>
-                <p className="text-sm text-muted-foreground text-center mb-4">
-                  Create custom certificate templates using AI
-                </p>
-                <Button onClick={() => setShowTemplateModal(true)}>
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  Generate Template
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="eligible" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {eligibleTrainees.map((trainee) => (
-              <Card key={trainee._id}>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    {trainee.name}
-                    <Badge className="bg-green-100 text-green-800">Eligible</Badge>
-                  </CardTitle>
-                  <CardDescription>{trainee.program}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Progress</span>
-                    <span className="font-semibold">{trainee.progress}%</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Attendance</span>
-                    <span className="font-semibold">{trainee.attendance}%</span>
-                  </div>
-                  <Button 
-                    className="w-full" 
-                    onClick={() => {
-                      setSelectedTrainees([trainee._id])
-                      setShowGenerateModal(true)
-                    }}
-                  >
-                    <Award className="mr-2 h-4 w-4" />
-                    Generate Certificate
+          {templates.length === 0 ? (
+            <EmptyState
+              type="templates"
+              title="No certificate templates"
+              description="Create your first certificate template using AI to get started with issuing certificates."
+            />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {templates.map((template) => (
+                <Card key={template.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      {template.name}
+                      {template.isDefault && (
+                        <Badge variant="secondary" className="flex items-center space-x-1">
+                          <Star className="h-3 w-3" />
+                          <span>Default</span>
+                        </Badge>
+                      )}
+                    </CardTitle>
+                    <CardDescription>{template.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="h-32 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center">
+                      <span className="text-sm text-muted-foreground">Certificate Preview</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button variant="outline" size="sm" onClick={() => handleEditTemplate(template)}>
+                        <Edit3 className="mr-2 h-4 w-4" />
+                        Edit
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handlePreviewTemplate(template)}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        Preview
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center p-6 h-full">
+                  <Wand2 className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="font-semibold mb-2">Generate with AI</h3>
+                  <p className="text-sm text-muted-foreground text-center mb-4">
+                    Create custom certificate templates using AI
+                  </p>
+                  <Button onClick={() => setShowTemplateModal(true)}>
+                    <Wand2 className="mr-2 h-4 w-4" />
+                    Generate Template
                   </Button>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="eligible" className="space-y-4">
+          {eligibleTrainees.length === 0 ? (
+            <EmptyState
+              type="eligible"
+              title="No eligible students"
+              description="No students have completed their programs yet. Students will appear here once they meet the requirements for certificate eligibility."
+            />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {eligibleTrainees.map((trainee) => (
+                <Card key={trainee._id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      {trainee.name}
+                      <Badge className="bg-green-100 text-green-800">Eligible</Badge>
+                    </CardTitle>
+                    <CardDescription>{trainee.program}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Progress</span>
+                      <span className="font-semibold">{trainee.progress}%</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Attendance</span>
+                      <span className="font-semibold">{trainee.attendance}%</span>
+                    </div>
+                    <Button 
+                      className="w-full" 
+                      onClick={() => {
+                        setSelectedTrainees([trainee._id])
+                        setShowGenerateModal(true)
+                      }}
+                    >
+                      <Award className="mr-2 h-4 w-4" />
+                      Generate Certificate
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -453,9 +493,9 @@ export default function CertificatesPage() {
                   <div
                     key={template.id}
                     className={`p-3 border rounded-lg cursor-pointer ${
-                      selectedTemplate === template.id ? "border-blue-500 bg-blue-50" : "border-gray-200"
+                      selectedTemplate === template.id.toString() ? "border-blue-500 bg-blue-50" : "border-gray-200"
                     }`}
-                    onClick={() => setSelectedTemplate(template.id)}
+                    onClick={() => setSelectedTemplate(template.id.toString())} // Fixed: Convert to string
                   >
                     <div className="font-medium">{template.name}</div>
                     <div className="text-sm text-muted-foreground">{template.description}</div>

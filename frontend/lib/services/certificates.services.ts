@@ -1,5 +1,5 @@
 import api from "../api";
-import { Certificate, Program, Student, Template } from "@/types";
+import { Certificate, Program, Student, Template } from "@/types/index";
 
 // ✅ 1. Fetch all issued certificates
 export const fetchCertificates = async (): Promise<Certificate[]> => {

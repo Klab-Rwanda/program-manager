@@ -157,7 +157,7 @@ export interface Template {
   colorScheme: string
 }
 
-export interface Student {
+export interface Student extends Trainee {
   id: number
   name: string
   email: string

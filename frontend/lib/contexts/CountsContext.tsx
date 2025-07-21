@@ -12,6 +12,7 @@ import { getAllPrograms } from "../services/program.service";
 import { getArchivedPrograms } from "../services/archive.service";
 import { getAllFacilitators } from "@/lib/services/facilitator.service";
 import { getAllTrainees } from "@/lib/services/tarinee.service";
+import { fetchCertificates } from "@/lib/services/certificates.services";
 
 interface CountsContextType {
   counts: {
@@ -69,6 +70,10 @@ export function CountsProvider({ children }: { children: ReactNode }) {
         const trainees = await getAllTrainees();
         console.log("CountsContext: Trainees fetched:", trainees.length);
 
+         console.log("CountsContext: Fetching certificates...");
+        const certificates = await fetchCertificates();
+        console.log("CountsContext: Certificates fetched:", certificates.length);
+
 
         setCounts(prev => {
   const newCounts = {
@@ -77,7 +82,7 @@ export function CountsProvider({ children }: { children: ReactNode }) {
     archived: archivedPrograms.length,
     facilitators: facilitators.length,
     trainees: trainees.length,
-    certificates: 15 
+    certificates: certificates.length
   };
   console.log("CountsContext: Updated counts:", newCounts);
   return newCounts;
