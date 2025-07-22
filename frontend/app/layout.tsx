@@ -1,3 +1,4 @@
+// app/layout.tsx
 import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
@@ -6,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { RoleProvider } from "@/lib/contexts/RoleContext"
 import { CountsProvider } from "@/lib/contexts/CountsContext"
 import { SidebarProvider } from "@/lib/contexts/SidebarContext"
+import { Toaster } from "sonner" // Import Toaster for sonner toasts
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -28,6 +30,7 @@ export default function RootLayout({
             <SidebarProvider>
               <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
                 {children}
+                <Toaster richColors position="top-right" /> {/* Add the Toaster component */}
               </ThemeProvider>
             </SidebarProvider>
           </CountsProvider>
@@ -35,4 +38,4 @@ export default function RootLayout({
       </body>
     </html>
   )
-} 
+}

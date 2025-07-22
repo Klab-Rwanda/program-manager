@@ -213,4 +213,15 @@ manageRouter.route('/:id/status').patch(checkRole(['SuperAdmin']), userControlle
 // Mount all the management routes under the /manage path
 router.use('/manage', manageRouter);
 
+manageRouter.route('/:id')
+    .get(checkRole(['SuperAdmin']), userController.getUserById)
+    .patch(checkRole(['SuperAdmin']), userController.updateUserDetailsByAdmin) // Add this
+    .delete(checkRole(['SuperAdmin']), userController.deleteUserByAdmin);
+
+// User status update by Admin (already existing, verify it uses `updateUserStatus`)
+manageRouter.route('/:id/status').patch(checkRole(['SuperAdmin']), userController.updateUserStatus);
+
+// Mount all the management routes under the /manage path
+router.use('/manage', manageRouter);
+
 export default router;

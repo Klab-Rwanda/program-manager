@@ -1,660 +1,214 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import {
-  Plus,
-  Search,
-  Filter,
-  Edit,
-  Trash2,
-  Eye,
-  Users,
-  CheckCircle,
-  Clock,
-  AlertTriangle,
-  Award,
-  Send,
-  XCircle,
-  Calendar,
-  BookOpen,
-  UserPlus,
-  Settings,
-  GraduationCap,
-  Mail,
-  Phone,
-  MapPin,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { getAllTrainees } from "@/lib/services/tarinee.service"
-import { getAllPrograms } from "@/lib/services/program.service"
-import { Program, Trainee } from "@/types/index"
-import {
-  createTrainee,
-  updateTrainee,
-  deleteTrainee
-} from "@/lib/services/tarinee.service";
+import { useEffect, useState, useCallback } from "react";
+import { Plus, Search, BookOpen, Eye, Edit, Trash2, GraduationCap, Loader2, UserPlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { getAllTrainees, createTrainee, assignTraineeToProgram } from "@/lib/services/trainee.service";
+import { getAllPrograms } from "@/lib/services/program.service";
+import { Program, Trainee } from "@/types";
+import { useAuth } from "@/lib/contexts/RoleContext";
+
+const initialTraineeData = { name: "", email: "" };
 
 export default function TraineesPage() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterProgram, setFilterProgram] = useState("all");
-
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showAssignModal, setShowAssignModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-
-  const [selectedTrainee, setSelectedTrainee] = useState<Trainee | null>(null);
+  const { user } = useAuth();
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
-  const [selectedPrograms, setSelectedPrograms] = useState<string[]>([]);
-  const defaultTrainee: Trainee = {
-  _id: "",
-  name: "",
-  email: "",
-  role: "Trainee",
-  status: "Pending",
-  isActive: true,
-  createdAt: "",
-  updatedAt: "",
-  phone: "",
-  location: "",
-  enrolledPrograms: [],
-  progress: 0,
-  attendance: 0,
-  completedProjects: 0,
-  totalProjects: 0,
-  joinDate: "",
-  lastActive: ""
-};
+  const [loading, setLoading] = useState(true);
 
- const handleCreateTrainee = async () => {
-  try {
-    const traineeToCreate = {
-      ...newTrainee,
-      _id: undefined,
-      createdAt: undefined,
-      updatedAt: undefined,
-    };
-    const created = await createTrainee(traineeToCreate);
-    setTrainees(prev => [...prev, created]);
-    setNewTrainee(defaultTrainee); 
-    setShowCreateModal(false);
-  } catch (err) {
-    console.error("Error creating trainee:", err);
-  }
-};
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterProgram, setFilterProgram] = useState("all");
 
+  const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+  const [isAssignModalOpen, setAssignModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const [selectedTrainee, setSelectedTrainee] = useState<Trainee | null>(null);
+  const [programToAssign, setProgramToAssign] = useState<string>("");
+  const [newTraineeData, setNewTraineeData] = useState(initialTraineeData);
 
- const handleEditTrainee = async () => {
-  try {
-    const updated = await updateTrainee(newTrainee._id, newTrainee);
-    setTrainees(prev =>
-      prev.map(t => (t._id === updated._id ? updated : t))
-    );
-    setShowEditModal(false);
-  } catch (err) {
-    console.error("Error editing trainee:", err);
-  }
-};
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [traineeData, programData] = await Promise.all([
+        getAllTrainees(),
+        getAllPrograms()
+      ]);
+      setTrainees(traineeData);
+      setPrograms(programData);
+    } catch (err) {
+      toast.error("Failed to load data.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const handleDeleteTrainee = async (id: string) => {
-  try {
-    await deleteTrainee(id);
-    setTrainees(prev => prev.filter(t => t._id !== id));
-    setShowDeleteModal(false);
-  } catch (err) {
-    console.error("Error deleting trainee:", err);
-  }
-};
-const [newTrainee, setNewTrainee] = useState<Trainee>(defaultTrainee);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-useEffect(() => {
-  async function loadData() {
-    const [traineeData, programData] = await Promise.all([
-      getAllTrainees(),
-      getAllPrograms()
-    ]);
-    setTrainees(traineeData);
-    setPrograms(programData);
-  }
-  loadData();
-}, []);
-
-  const filteredTrainees = trainees.filter((trainee) => {
-    const matchesSearch =
-      trainee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      trainee.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus =
-      filterStatus === "all" || trainee.status === filterStatus;
-    const matchesProgram =
-      filterProgram === "all" || trainee.enrolledPrograms?.includes(filterProgram);
-    return matchesSearch && matchesStatus && matchesProgram;
-  });
-
-  const openEditModal = (trainee: Trainee) => {
-    setSelectedTrainee(trainee);
-    setSelectedPrograms(trainee.enrolledPrograms || []);
-    setShowEditModal(true);
+  const handleCreateTrainee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      await createTrainee(newTraineeData);
+      toast.success("Trainee created successfully! Credentials sent via email.");
+      setCreateModalOpen(false);
+      setNewTraineeData(initialTraineeData);
+      fetchData(); // Refresh the list
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to create trainee.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const openDeleteModal = (trainee: Trainee) => {
-    setSelectedTrainee(trainee);
-    setShowDeleteModal(true);
-  };
-
-  const openViewModal = (trainee: Trainee) => {
-    setSelectedTrainee(trainee);
-    setShowViewModal(true);
+  const handleAssignProgram = async () => {
+    if (!selectedTrainee || !programToAssign) {
+      toast.error("Please select a program to assign.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await assignTraineeToProgram(programToAssign, selectedTrainee._id);
+      toast.success(`${selectedTrainee.name} has been enrolled in the program.`);
+      setAssignModalOpen(false);
+      fetchData(); // Refresh to see updated enrollments
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to assign program.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const openAssignModal = (trainee: Trainee) => {
     setSelectedTrainee(trainee);
-    setSelectedPrograms(trainee.enrolledPrograms || []);
-    setShowAssignModal(true);
-  };
-
-  const handleAssignPrograms = () => {
-    if (!selectedTrainee) return;
-    const updated = trainees.map((trainee) =>
-      trainee._id === selectedTrainee._id
-        ? { ...trainee, enrolledPrograms: selectedPrograms }
-        : trainee
-    );
-    setTrainees(updated);
-    setShowAssignModal(false);
-  };
-
-  const getStatusConfig = (status: string) => {
-    switch (status) {
-      case "active":
-        return { label: "Active", variant: "default" as const };
-      case "inactive":
-        return { label: "Inactive", variant: "secondary" as const };
-      case "completed":
-        return { label: "Completed", variant: "default" as const };
-      default:
-        return { label: status, variant: "outline" as const };
+    if (programs.length > 0) {
+      setProgramToAssign(programs[0]._id);
     }
+    setAssignModalOpen(true);
   };
 
-  const getProgressColor = (progress: number) => {
-    if (progress >= 80) return "text-green-600";
-    if (progress >= 60) return "text-yellow-600";
-    return "text-red-600";
-  };
+  const filteredTrainees = trainees.filter(trainee => {
+      const matchesSearch = trainee.name.toLowerCase().includes(searchTerm.toLowerCase()) || trainee.email.toLowerCase().includes(searchTerm.toLowerCase());
+      const traineePrograms = programs.filter(p => p.trainees?.some(t => t._id === trainee._id)).map(p => p.name);
+      const matchesProgram = filterProgram === 'all' || traineePrograms.includes(filterProgram);
+      return matchesSearch && matchesProgram;
+  });
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Trainee Assignment</h1>
-          <p className="text-muted-foreground">
-            Manage trainee enrollments and program assignments
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">Trainee Management</h1>
+          <p className="text-muted-foreground">Add new trainees and assign them to your programs.</p>
         </div>
-        <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Trainee
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Add New Trainee</DialogTitle>
-              <DialogDescription>
-                Enroll a new trainee in the system.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">
-                  Name
-                </Label>
-                <Input
-                  id="name"
-                  value={newTrainee.name}
-                  onChange={(e) => setNewTrainee({ ...newTrainee, name: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="email" className="text-right">
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={newTrainee.email}
-                  onChange={(e) => setNewTrainee({ ...newTrainee, email: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="phone" className="text-right">
-                  Phone
-                </Label>
-                <Input
-                  id="phone"
-                  value={newTrainee.phone}
-                  onChange={(e) => setNewTrainee({ ...newTrainee, phone: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="location" className="text-right">
-                  Location
-                </Label>
-                <Input
-                  id="location"
-                  value={newTrainee.location}
-                  onChange={(e) => setNewTrainee({ ...newTrainee, location: e.target.value })}
-                  className="col-span-3"
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label className="text-right">
-                  Programs
-                </Label>
-                <div className="col-span-3 space-y-2">
-  {Array.isArray(programs) && programs.length > 0 ? (
-    programs.map((program) => (
-      <div key={program._id} className="flex items-center space-x-2">
-        <input
-          type="checkbox"
-          id={`program-${program._id}`}
-          checked={selectedPrograms.includes(program.name)}
-          onChange={(e) => {
-            setSelectedPrograms((prev) =>
-              e.target.checked
-                ? [...prev, program.name]
-                : prev.filter((p) => p !== program.name)
-            );
-          }}
-        />
-                     <label htmlFor={`program-${program._id}`} className="text-sm">
-          {program.name}
-        </label>
+        <Button onClick={() => setCreateModalOpen(true)} className="bg-[#1f497d] hover:bg-[#1a3f6b]">
+          <Plus className="mr-2 h-4 w-4" />
+          Add Trainee
+        </Button>
       </div>
-    ))
-  ) : ( <p className="text-sm italic text-muted-foreground">No programs available.</p>
-  )}
 
-                </div>
-              </div>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center space-x-2">
+            <Input placeholder="Search trainees by name or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="max-w-sm"/>
+            <Select value={filterProgram} onValueChange={setFilterProgram}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Filter by program" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Programs</SelectItem>
+                {programs.map(p => <SelectItem key={p._id} value={p.name}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin"/></div> : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredTrainees.map((trainee) => (
+                <Card key={trainee._id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center space-x-3">
+                            <GraduationCap className="h-8 w-8 text-primary"/>
+                            <div>
+                               <CardTitle className="text-lg">{trainee.name}</CardTitle>
+                               <CardDescription>{trainee.email}</CardDescription>
+                            </div>
+                       </div>
+                       <Badge variant={trainee.isActive ? "default" : "secondary"}>{trainee.status}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                     <p className="text-sm text-muted-foreground">
+                        Enrolled in: {trainee.enrolledPrograms.join(', ') || 'No programs'}
+                     </p>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => openAssignModal(trainee)}>
+                        <UserPlus className="h-4 w-4 mr-2" /> Assign to Program
+                      </Button>
+                      <Button variant="ghost" size="icon"><Eye className="h-4 w-4"/></Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+               {filteredTrainees.length === 0 && <p className="col-span-full text-center text-muted-foreground py-10">No trainees found matching your criteria.</p>}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Create Trainee Modal */}
+      <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add New Trainee</DialogTitle></DialogHeader>
+          <form onSubmit={handleCreateTrainee} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input id="name" value={newTraineeData.name} onChange={(e) => setNewTraineeData(d => ({...d, name: e.target.value}))} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" type="email" value={newTraineeData.email} onChange={(e) => setNewTraineeData(d => ({...d, email: e.target.value}))} required />
             </div>
             <DialogFooter>
-              <Button type="submit" onClick={handleCreateTrainee}>
-                Add Trainee
+              <Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Add Trainee
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search trainees..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterProgram} onValueChange={setFilterProgram}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Filter by program" />
-          </SelectTrigger>
-          <SelectContent>
-  <SelectItem value="all">All Programs</SelectItem>
-  {Array.isArray(programs) && programs.length > 0 ? (
-    programs.map((program) => (
-      <SelectItem key={program._id} value={program.name}>
-        {program.name}
-      </SelectItem>
-    ))
-  ) : (
-    <SelectItem value="none" disabled>
-      No programs found
-    </SelectItem>
-  )}
-</SelectContent>
-
-        </Select>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredTrainees.map((trainee) => {
-          const statusConfig = getStatusConfig(trainee.status)
-          return (
-            <Card key={trainee._id}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <GraduationCap className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{trainee.name}</CardTitle>
-                      <CardDescription>{trainee.email}</CardDescription>
-                    </div>
-                  </div>
-                  <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Phone</p>
-                      <p className="font-medium">{trainee.phone}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Location</p>
-                      <p className="font-medium">{trainee.location}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Progress</p>
-                      <p className={`font-medium ${getProgressColor(trainee.progress)}`}>
-                        {trainee.progress}%
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Attendance</p>
-                      <p className="font-medium">{trainee.attendance}%</p>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">Enrolled Programs</p>
-<div className="space-y-1">
-  {Array.isArray(trainee.enrolledPrograms) && trainee.enrolledPrograms.length > 0 ? (
-    trainee.enrolledPrograms.map((program, index) => (
-      <Badge key={index} variant="outline" className="text-xs">
-        {program}
-      </Badge>
-    ))
-  ) : (
-    <p className="text-xs text-gray-400 italic">No programs enrolled</p>
-  )}
-</div>
-                  </div>
-
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-2">Projects</p>
-                    <p className="text-sm font-medium">
-                      {trainee.completedProjects}/{trainee.totalProjects} completed
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-muted-foreground">
-                      Joined: {trainee.joinDate}
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openViewModal(trainee)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditModal(trainee)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openAssignModal(trainee)}
-                      >
-                        <BookOpen className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openDeleteModal(trainee)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
-
-      {/* Assign Programs Modal */}
-      <Dialog open={showAssignModal} onOpenChange={setShowAssignModal}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Assign Programs to {selectedTrainee?.name}</DialogTitle>
-            <DialogDescription>
-              Select programs to assign to this trainee.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {programs.map((program) => (
-              <div key={program._id} className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id={`assign-program-${program._id}`}
-                  checked={selectedPrograms.includes(program.name)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedPrograms([...selectedPrograms, program.name])
-                    } else {
-                      setSelectedPrograms(selectedPrograms.filter(p => p !== program.name))
-                    }
-                  }}
-                />
-                <Label htmlFor={`assign-program-${program._id}`} className="text-sm">
-                  {program.name}
-                </Label>
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button onClick={handleAssignPrograms}>
-              Assign Programs
-            </Button>
-          </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Modal */}
-      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+      {/* Assign Program Modal */}
+      <Dialog open={isAssignModalOpen} onOpenChange={setAssignModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Trainee</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{selectedTrainee?.name}"? This action cannot be undone.
-            </DialogDescription>
+            <DialogTitle>Assign Program to {selectedTrainee?.name}</DialogTitle>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
-              Cancel
-            </Button>
-            <Button
-            variant="destructive"  onClick={() => selectedTrainee && handleDeleteTrainee(selectedTrainee._id)}>
-                 Delete
-                </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Trainee Modal */}
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Edit Trainee</DialogTitle>
-            <DialogDescription>
-              Update the trainee details.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-name" className="text-right">
-                Name
-              </Label>
-              <Input
-                id="edit-name"
-                value={newTrainee.name}
-                onChange={(e) => setNewTrainee({ ...newTrainee, name: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-email" className="text-right">
-                Email
-              </Label>
-              <Input
-                id="edit-email"
-                type="email"
-                value={newTrainee.email}
-                onChange={(e) => setNewTrainee({ ...newTrainee, email: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-phone" className="text-right">
-                Phone
-              </Label>
-              <Input
-                id="edit-phone"
-                value={newTrainee.phone}
-                onChange={(e) => setNewTrainee({ ...newTrainee, phone: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit-location" className="text-right">
-                Location
-              </Label>
-              <Input
-                id="edit-location"
-                value={newTrainee.location}
-                onChange={(e) => setNewTrainee({ ...newTrainee, location: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
+          <div className="space-y-4 py-4">
+            <Label>Program</Label>
+            <Select value={programToAssign} onValueChange={setProgramToAssign}>
+              <SelectTrigger><SelectValue placeholder="Select a program to enroll" /></SelectTrigger>
+              <SelectContent>
+                {programs.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <DialogFooter>
-            <Button onClick={handleEditTrainee}>
-              Update Trainee
+            <Button variant="outline" onClick={() => setAssignModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleAssignProgram} disabled={isSubmitting}>
+                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Assign
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Trainee Modal */}
-      <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>{selectedTrainee?.name}</DialogTitle>
-            <DialogDescription>
-              Detailed view of the trainee information.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <h4 className="font-medium">Contact Information</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center space-x-2">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span>{selectedTrainee?.email}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{selectedTrainee?.phone}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span>{selectedTrainee?.location}</span>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <h4 className="font-medium">Progress Overview</h4>
-                <div className="space-y-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Overall Progress:</span>
-                    <span className={`ml-2 font-medium ${getProgressColor(selectedTrainee?.progress || 0)}`}>
-                      {selectedTrainee?.progress}%
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Attendance Rate:</span>
-                    <span className="ml-2 font-medium">{selectedTrainee?.attendance}%</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Projects Completed:</span>
-                    <span className="ml-2 font-medium">
-                      {selectedTrainee?.completedProjects}/{selectedTrainee?.totalProjects}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div>
-              <h4 className="font-medium">Enrolled Programs</h4>
-              <div className="mt-2 space-y-2">
-                {Array.isArray(selectedTrainee?.enrolledPrograms) &&
-  selectedTrainee.enrolledPrograms.map((program, index) => (
-
-                  <div key={index} className="flex items-center justify-between p-2 border rounded">
-                    <span className="text-sm">{program}</span>
-                    <Badge variant="outline" className="text-xs">
-                      Enrolled
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <h4 className="font-medium">Activity Timeline</h4>
-              <div className="mt-2 space-y-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Joined:</span>
-                  <span className="ml-2">{selectedTrainee?.joinDate}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Last Active:</span>
-                  <span className="ml-2">{selectedTrainee?.lastActive}</span>
-                </div>
-              </div>
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
     </div>
-  )
-} 
+  );
+}

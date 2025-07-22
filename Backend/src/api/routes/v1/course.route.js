@@ -92,6 +92,28 @@ router.route('/program/:programId').get(courseController.getCoursesForProgram);
  *       403: { description: 'Forbidden, user is not the facilitator of this course.' }
  *       404: { description: 'Course not found.' }
  */
+
+/**
+ * @openapi
+ * /courses/program/{programId}:
+ *   get:
+ *     tags: [Courses]
+ *     summary: Get all courses for a specific program
+ *     description: Retrieves a list of all approved courses for a given program. Accessible to any user enrolled in the program.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { name: programId, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: 'A list of courses.' }
+ */
+router.route('/program/:programId').get(
+    // You might want to add a role check here, e.g.,
+    // checkRole(['Trainee', 'Facilitator', 'Program Manager', 'SuperAdmin']),
+    // but the controller itself (getCoursesForProgram) does not enforce it.
+    // If you need strict enrollment-based access, add middleware to verify user is in program.
+    courseController.getCoursesForProgram
+);
 router.route('/:courseId/request-approval').patch(
     checkRole(['Facilitator']),
     courseController.requestCourseApproval
