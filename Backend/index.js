@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import connectDB from './src/config/db.js';
+import v1Router from './src/api/routes/v1/index.route.js';
 
 dotenv.config();
 
@@ -31,17 +32,14 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // API Routes
-import programRoutes from './src/api/routes/v1/program.route.js';
-import userRoutes from './src/api/routes/v1/user.route.js';
-import authRoutes from './src/api/routes/v1/auth.route.js';
-import dashboardRoutes from './src/api/routes/v1/dashboard.route.js';
-import attendanceRoutes from './src/api/routes/v1/attendance.route.js';
+// import programRoutes from './src/api/routes/v1/program.route.js';
+// import userRoutes from './src/api/routes/v1/user.route.js';
+// import authRoutes from './src/api/routes/v1/auth.route.js';
+// import dashboardRoutes from './src/api/routes/v1/dashboard.route.js';
+// import attendanceRoutes from './src/api/routes/v1/attendance.route.js';
 
-app.use('/api/v1/programs', programRoutes);
-app.use('/api/v1/users', userRoutes);
-app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/dashboard', dashboardRoutes);
-app.use('/api/v1/attendance', attendanceRoutes);
+// Register all v1 routes
+app.use('/api/v1', v1Router);
 
 // Basic route for testing
 app.get('/', (req, res) => {

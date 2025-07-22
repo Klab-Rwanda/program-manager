@@ -1,9 +1,9 @@
 "use client";
 
-import type React from "react";
+import React from "react";
 
 import { useState } from "react";
-import { Upload, FileText, Download, Trash2, Eye, Plus, Search } from "lucide-react";
+import { Upload, FileText, Download, Trash2, Eye, Plus, Search, Pencil, X } from "lucide-react";
 
 import { AppSidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import api from "@/lib/api";
+import { useRef } from "react";
+import { useSidebar } from "@/lib/contexts/SidebarContext";
 
 export default function Curriculum() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -40,63 +43,67 @@ export default function Curriculum() {
     type: "",
   });
 
-  // Mock curriculum data
-  const [curriculumFiles, setCurriculumFiles] = useState([
-    {
-      id: 1,
-      name: "Web Development Fundamentals.pdf",
-      program: "Software Engineering Bootcamp",
-      type: "PDF",
-      size: "2.4 MB",
-      uploadDate: "2024-01-15",
-      downloads: 45,
-      status: "Active",
-    },
-    {
-      id: 2,
-      name: "JavaScript Advanced Concepts.pptx",
-      program: "Software Engineering Bootcamp",
-      type: "PowerPoint",
-      size: "5.1 MB",
-      uploadDate: "2024-01-14",
-      downloads: 32,
-      status: "Active",
-    },
-    {
-      id: 3,
-      name: "Data Analysis with Python.pdf",
-      program: "Data Science Fundamentals",
-      type: "PDF",
-      size: "3.8 MB",
-      uploadDate: "2024-01-12",
-      downloads: 28,
-      status: "Active",
-    },
-    {
-      id: 4,
-      name: "Mobile UI Design Guidelines.sketch",
-      program: "Mobile App Development",
-      type: "Sketch",
-      size: "12.3 MB",
-      uploadDate: "2024-01-10",
-      downloads: 15,
-      status: "Draft",
-    },
-  ]);
+  // Fetch curriculum files from backend
+  const [curriculumFiles, setCurriculumFiles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const programs = [
-    { id: "software-engineering", name: "Software Engineering Bootcamp" },
-    { id: "data-science", name: "Data Science Fundamentals" },
-    { id: "mobile-dev", name: "Mobile App Development" },
-    { id: "ui-ux", name: "UI/UX Design Workshop" },
-  ];
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editData, setEditData] = useState<any>(null);
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Video preview dialog state
+  const [videoDialogOpen, setVideoDialogOpen] = useState(false);
+  const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
+
+  // Remove the hardcoded programs array
+  const [programs, setPrograms] = useState<any[]>([]);
+
+  // Fetch real programs from backend
+  React.useEffect(() => {
+    const fetchPrograms = async () => {
+      try {
+        const response = await api.get("/programs");
+        setPrograms(response.data.data || []);
+      } catch (err) {
+        setPrograms([]);
+      }
+    };
+    fetchPrograms();
+  }, []);
+
+  const { isCollapsed, isMobile } = useSidebar();
+  const sidebarMargin = isMobile ? '0' : (isCollapsed ? '80px' : '280px');
+
+  // Fetch courses on mount
+  React.useEffect(() => {
+    const fetchCourses = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await api.get("/courses");
+        setCurriculumFiles(response.data.data || []);
+      } catch (err: any) {
+        setError("Failed to load curriculum files");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCourses();
+  }, []);
 
   const filteredFiles = curriculumFiles.filter((file) => {
+    const name = file.name || "";
+    // file.program can be an object (from backend) or string (from fallback/mock)
+    const programName = (file.program && file.program.name) ? file.program.name : (file.program || "");
     const matchesSearch =
-      file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      file.program.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === "all" || file.type.toLowerCase() === filterType.toLowerCase();
-    const matchesProgram = filterProgram === "all" || file.program === filterProgram;
+      name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      programName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = filterType === "all" || (file.type || "").toLowerCase() === filterType.toLowerCase();
+    // For filterProgram, match _id if program is object, or string fallback
+    const matchesProgram = filterProgram === "all" || (file.program?._id || file.program) === filterProgram;
 
     return matchesSearch && matchesType && matchesProgram;
   });
@@ -108,7 +115,7 @@ export default function Curriculum() {
     }
   };
 
-  const handleUploadSubmit = () => {
+  const handleUploadSubmit = async () => {
     if (!uploadData.program || !uploadData.title || selectedFiles.length === 0) {
       alert("Please fill in all required fields and select files");
       return;
@@ -117,41 +124,40 @@ export default function Curriculum() {
     setIsUploading(true);
     setUploadProgress(0);
 
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
+    try {
+      const formData = new FormData();
+      formData.append("title", uploadData.title);
+      formData.append("description", uploadData.description);
+      formData.append("programId", uploadData.program);
+      // Only allow one file per course (as per backend model)
+      formData.append("courseDocument", selectedFiles[0]);
 
-          // Add new files to the list
-          const newFiles = selectedFiles.map((file, index) => ({
-            id: curriculumFiles.length + index + 1,
-            name: file.name,
-            program: programs.find((p) => p.id === uploadData.program)?.name || "",
-            type: file.type.includes("pdf")
-              ? "PDF"
-              : file.type.includes("powerpoint") || file.type.includes("presentation")
-                ? "PowerPoint"
-                : file.type.includes("word") || file.type.includes("document")
-                  ? "Word"
-                  : "Document",
-            size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-            uploadDate: new Date().toISOString().split("T")[0],
-            downloads: 0,
-            status: "Active",
-          }));
-
-          setCurriculumFiles((prev) => [...prev, ...newFiles]);
-          setUploadDialogOpen(false);
-          setSelectedFiles([]);
-          setUploadData({ program: "", title: "", description: "", type: "" });
-          alert(`Successfully uploaded ${selectedFiles.length} file(s)!`);
-
-          return 100;
-        }
-        return prev + 10;
+      await api.post("/courses", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            setUploadProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total));
+          }
+        },
       });
-    }, 200);
+
+      setUploadDialogOpen(false);
+      setSelectedFiles([]);
+      setUploadData({ program: "", title: "", description: "", type: "" });
+      setUploadProgress(0);
+      // Refresh curriculum list
+      setLoading(true);
+      try {
+        const response = await api.get("/courses");
+        setCurriculumFiles(response.data.data || []);
+      } catch {}
+      setLoading(false);
+      alert("Successfully uploaded curriculum file!");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to upload file");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleExportList = () => {
@@ -184,6 +190,7 @@ export default function Curriculum() {
   };
 
   const getFileIcon = (type: string) => {
+    if (!type) return "📁"; // Default icon for undefined type
     switch (type.toLowerCase()) {
       case "pdf":
         return "📄";
@@ -213,209 +220,559 @@ export default function Curriculum() {
     }
   };
 
+  const openEditDialog = (file: any) => {
+    setEditData({ ...file });
+    setEditFile(null);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editData) return;
+    setIsUploading(true);
+    setUploadProgress(0);
+    try {
+      const formData = new FormData();
+      if (editData.title) formData.append("title", editData.title);
+      if (editData.description) formData.append("description", editData.description);
+      if (editData.type) formData.append("type", editData.type); // Add type to formData
+      if (editFile) formData.append("courseDocument", editFile);
+      await api.put(`/courses/${editData._id}`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            setUploadProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total));
+          }
+        },
+      });
+      setEditDialogOpen(false);
+      setEditData(null);
+      setEditFile(null);
+      setUploadProgress(0);
+      // Refresh curriculum list
+      setLoading(true);
+      try {
+        const response = await api.get("/courses");
+        setCurriculumFiles(response.data.data || []);
+      } catch {}
+      setLoading(false);
+      alert("Curriculum updated successfully!");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to update curriculum");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDelete = async (file: any) => {
+    if (!window.confirm(`Are you sure you want to delete '${file.title || file.name}'? This cannot be undone.`)) return;
+    setLoading(true);
+    try {
+      await api.delete(`/courses/${file._id}`);
+      // Refresh curriculum list
+      const response = await api.get("/courses");
+      setCurriculumFiles(response.data.data || []);
+      alert("Curriculum deleted successfully!");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to delete curriculum");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestApproval = async (file: any) => {
+    setLoading(true);
+    try {
+      await api.patch(`/courses/${file._id}/request-approval`);
+      // Refresh curriculum list
+      const response = await api.get("/courses");
+      setCurriculumFiles(response.data.data || []);
+      alert("Course submitted for approval!");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to request approval");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownload = async (file: any) => {
+    try {
+      const response = await api.get(`/courses/${file._id}/download`, { responseType: 'blob' });
+      
+      // Get the correct file extension and MIME type
+      const fileName = file.name || file.title || 'curriculum-file';
+      const fileExtension = fileName.split('.').pop()?.toLowerCase();
+      const detectedType = file.type || fileExtension;
+      
+      // Define MIME types
+      const mimeTypes: { [key: string]: string } = {
+        'pdf': 'application/pdf',
+        'mp4': 'video/mp4',
+        'avi': 'video/x-msvideo',
+        'mov': 'video/quicktime',
+        'wmv': 'video/x-ms-wmv',
+        'flv': 'video/x-flv',
+        'webm': 'video/webm',
+        'mkv': 'video/x-matroska',
+        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'txt': 'text/plain',
+        'mp3': 'audio/mpeg',
+        'wav': 'audio/wav'
+      };
+      
+      const mimeType = mimeTypes[detectedType?.toLowerCase()] || 'application/octet-stream';
+      
+      // Create blob with correct MIME type
+      const blob = new Blob([response.data], { type: mimeType });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create download link with proper filename
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('Download error:', err);
+      alert('Failed to download file');
+    }
+  };
+
+  const handlePreview = async (file: any) => {
+    try {
+      console.log('Preview file:', file);
+      console.log('File type:', file.type);
+      console.log('File name:', file.name || file.title);
+      
+      const response = await api.get(`/courses/${file._id}/download`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      
+      // Get file type from file.type or detect from filename
+      const fileName = file.name || file.title || '';
+      const fileExtension = fileName.split('.').pop()?.toLowerCase();
+      const detectedType = file.type || fileExtension;
+      
+      // Check if it's a video file
+      const isVideo = detectedType && ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'].includes(detectedType.toLowerCase());
+      console.log('Detected type:', detectedType);
+      console.log('Is video:', isVideo);
+      
+      if (isVideo) {
+        // For videos, create a video player dialog
+        console.log('Opening video dialog');
+        setCurrentVideoUrl(url);
+        setVideoDialogOpen(true);
+      } else {
+        // For other files (PDF, images, etc.), open in new tab
+        console.log('Opening in new tab');
+        window.open(url, '_blank');
+        // Optionally revokeObjectURL after some time
+        setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+      }
+    } catch (err: any) {
+      console.error('Preview error:', err);
+      alert('Failed to preview file');
+    }
+  };
+
+  // Function to get file type for preview button text
+  const getPreviewButtonText = (file: any) => {
+    // Get file type from file.type or detect from filename
+    const fileName = file.name || file.title || '';
+    const fileExtension = fileName.split('.').pop()?.toLowerCase();
+    const detectedType = file.type || fileExtension;
+    
+    if (!detectedType) return 'Preview';
+    
+    if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv'].includes(detectedType.toLowerCase())) {
+      return 'Play Video';
+    }
+    return 'Preview';
+  };
+
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <h1 className="text-lg font-semibold">Curriculum Upload</h1>
-        </header>
+        <div className="flex flex-col h-screen min-h-0" style={{ marginLeft: sidebarMargin }}>
+          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+            {/* <SidebarTrigger className="-ml-1" /> */}
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <h1 className="text-lg font-semibold">Curriculum Upload</h1>
+          </header>
 
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          {/* Header Section */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight">Curriculum Management</h2>
-              <p className="text-muted-foreground">Upload and manage curriculum materials for your programs</p>
-            </div>
-            <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-[#1f497d] hover:bg-[#1a3d6b]">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Upload Files
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Upload Curriculum Files</DialogTitle>
-                  <DialogDescription>
-                    Upload new curriculum materials for your programs. Supported formats: PDF, PowerPoint, Word, and more.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="program">Program</Label>
-                    <Select value={uploadData.program} onValueChange={(value) => setUploadData({ ...uploadData, program: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a program" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {programs.map((program) => (
-                          <SelectItem key={program.id} value={program.id}>
-                            {program.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Title</Label>
-                    <Input
-                      id="title"
-                      placeholder="e.g., JavaScript Fundamentals"
-                      value={uploadData.title}
-                      onChange={(e) => setUploadData({ ...uploadData, title: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      placeholder="Brief description of the curriculum material"
-                      value={uploadData.description}
-                      onChange={(e) => setUploadData({ ...uploadData, description: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="files">Files</Label>
-                    <Input
-                      id="files"
-                      type="file"
-                      multiple
-                      accept=".pdf,.pptx,.docx,.sketch,.zip"
-                      onChange={handleFileUpload}
-                    />
-                    {selectedFiles.length > 0 && (
-                      <div className="text-sm text-muted-foreground">
-                        Selected {selectedFiles.length} file(s)
+          <div className="flex-1 min-h-0 flex flex-col gap-4 p-4 overflow-y-auto">
+            {/* Header Section */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight">Curriculum Management</h2>
+                <p className="text-muted-foreground">Upload and manage curriculum materials for your programs</p>
+              </div>
+              <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-[#1f497d] hover:bg-[#1a3d6b]">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Upload Files
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Upload Curriculum Files</DialogTitle>
+                    <DialogDescription>
+                      Upload new curriculum materials for your programs. Supported formats: PDF, PowerPoint, Word, and more.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="program">Program</Label>
+                      <Select value={uploadData.program} onValueChange={(value) => setUploadData({ ...uploadData, program: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a program" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {programs.map((program) => (
+                            <SelectItem key={program._id} value={program._id}>
+                              {program.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="title">Title</Label>
+                      <Input
+                        id="title"
+                        placeholder="e.g., JavaScript Fundamentals"
+                        value={uploadData.title}
+                        onChange={(e) => setUploadData({ ...uploadData, title: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="Brief description of the curriculum material"
+                        value={uploadData.description}
+                        onChange={(e) => setUploadData({ ...uploadData, description: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="fileType">File Type</Label>
+                      <Select value={uploadData.type} onValueChange={(value) => setUploadData({ ...uploadData, type: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select file type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pdf">PDF</SelectItem>
+                          <SelectItem value="mp4">Video (MP4)</SelectItem>
+                          <SelectItem value="avi">Video (AVI)</SelectItem>
+                          <SelectItem value="mov">Video (MOV)</SelectItem>
+                          <SelectItem value="pptx">PowerPoint</SelectItem>
+                          <SelectItem value="docx">Word Document</SelectItem>
+                          <SelectItem value="jpg">Image (JPG)</SelectItem>
+                          <SelectItem value="png">Image (PNG)</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="files">Files</Label>
+                      <Input
+                        id="files"
+                        type="file"
+                        multiple
+                        accept="*"
+                        onChange={handleFileUpload}
+                      />
+                      {selectedFiles.length > 0 && (
+                        <div className="text-sm text-muted-foreground">
+                          Selected {selectedFiles.length} file(s)
+                        </div>
+                      )}
+                    </div>
+                    {isUploading && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span>Uploading...</span>
+                          <span>{uploadProgress}%</span>
+                        </div>
+                        <Progress value={uploadProgress} className="h-2" />
                       </div>
                     )}
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1 bg-[#1f497d] hover:bg-[#1a3d6b]"
+                        onClick={handleUploadSubmit}
+                        disabled={isUploading}
+                      >
+                        {isUploading ? "Uploading..." : "Upload Files"}
+                      </Button>
+                      <Button variant="outline" onClick={() => setUploadDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                  {isUploading && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span>Uploading...</span>
-                        <span>{uploadProgress}%</span>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {/* Search and Filter */}
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search files..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={filterType} onValueChange={setFilterType}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Filter by type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="pdf">PDF</SelectItem>
+                  <SelectItem value="powerpoint">PowerPoint</SelectItem>
+                  <SelectItem value="word">Word</SelectItem>
+                  <SelectItem value="sketch">Sketch</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterProgram} onValueChange={setFilterProgram}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Filter by program" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Programs</SelectItem>
+                  {programs.map((program) => (
+                    <SelectItem key={program._id} value={program._id}>
+                      {program.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" onClick={handleExportList}>
+                <Download className="mr-2 h-4 w-4" />
+                Export List
+              </Button>
+            </div>
+
+            {/* Files Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredFiles.map((file) => (
+                <Card key={file.id} className="overflow-hidden">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <CardTitle className="text-lg">{file.title || file.name || 'Untitled'}</CardTitle>
+                        <CardDescription className="line-clamp-2">
+                          {file.program && typeof file.program === 'object' && file.program.name 
+                            ? file.program.name 
+                            : (file.program || 'Unknown Program')}
+                        </CardDescription>
                       </div>
-                      <Progress value={uploadProgress} className="h-2" />
+                      <div className="text-2xl">{getFileIcon(file.type)}</div>
                     </div>
-                  )}
-                  <div className="flex gap-2">
-                    <Button
-                      className="flex-1 bg-[#1f497d] hover:bg-[#1a3d6b]"
-                      onClick={handleUploadSubmit}
-                      disabled={isUploading}
-                    >
-                      {isUploading ? "Uploading..." : "Upload Files"}
-                    </Button>
-                    <Button variant="outline" onClick={() => setUploadDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {/* Search and Filter */}
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search files..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+                    <div className="flex items-center gap-2">
+                      <Badge className={getStatusColor(file.status)}>{file.status}</Badge>
+                      <Badge variant="outline">{file.type}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Size</span>
+                        <div className="font-medium">{file.size}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Downloads</span>
+                        <div className="font-medium">{file.downloads}</div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Uploaded: {file.createdAt ? new Date(file.createdAt).toLocaleDateString() : 'Date not available'}
+                    </div>
+                    <div className="space-y-2">
+                      {/* Primary Actions Row */}
+                      <div className="flex gap-1">
+                        <Button variant="outline" size="sm" className="flex-1 text-xs px-2" onClick={() => handlePreview(file)}>
+                          <Eye className="mr-1 h-3 w-3" />
+                          {getPreviewButtonText(file)}
+                        </Button>
+                        <Button variant="outline" size="sm" className="flex-1 text-xs px-2" onClick={() => handleDownload(file)}>
+                          <Download className="mr-1 h-3 w-3" />
+                          Get
+                        </Button>
+                      </div>
+                      
+                      {/* Secondary Actions Row */}
+                      {file.status !== 'Approved' && (
+                        <div className="flex gap-1">
+                          <Button variant="outline" size="sm" className="flex-1 text-xs px-2" onClick={() => openEditDialog(file)}>
+                            <Pencil className="mr-1 h-3 w-3" />
+                            Edit
+                          </Button>
+                          <Button variant="outline" size="sm" className="flex-1 text-xs px-2" onClick={() => handleRequestApproval(file)}>
+                            <Upload className="mr-1 h-3 w-3" />
+                            Submit
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {/* Delete Action Row */}
+                      {file.status !== 'Approved' && (
+                        <div className="flex gap-1">
+                          <Button variant="destructive" size="sm" className="flex-1 text-xs px-2" onClick={() => handleDelete(file)}>
+                            <Trash2 className="mr-1 h-3 w-3" />
+                            Delete
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="pdf">PDF</SelectItem>
-                <SelectItem value="powerpoint">PowerPoint</SelectItem>
-                <SelectItem value="word">Word</SelectItem>
-                <SelectItem value="sketch">Sketch</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterProgram} onValueChange={setFilterProgram}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Filter by program" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Programs</SelectItem>
-                {programs.map((program) => (
-                  <SelectItem key={program.id} value={program.name}>
-                    {program.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" onClick={handleExportList}>
-              <Download className="mr-2 h-4 w-4" />
-              Export List
-            </Button>
-          </div>
 
-          {/* Files Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredFiles.map((file) => (
-              <Card key={file.id} className="overflow-hidden">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <CardTitle className="text-lg">{file.name}</CardTitle>
-                      <CardDescription className="line-clamp-2">{file.program}</CardDescription>
-                    </div>
-                    <div className="text-2xl">{getFileIcon(file.type)}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={getStatusColor(file.status)}>{file.status}</Badge>
-                    <Badge variant="outline">{file.type}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Size</span>
-                      <div className="font-medium">{file.size}</div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Downloads</span>
-                      <div className="font-medium">{file.downloads}</div>
-                    </div>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    Uploaded: {new Date(file.uploadDate).toLocaleDateString()}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1">
-                      <Eye className="mr-2 h-3 w-3" />
-                      Preview
-                    </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
-                      <Download className="mr-2 h-3 w-3" />
-                      Download
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {filteredFiles.length === 0 && (
+              <div className="text-center py-8">
+                <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No curriculum files found</p>
+              </div>
+            )}
           </div>
-
-          {filteredFiles.length === 0 && (
-            <div className="text-center py-8">
-              <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No curriculum files found</p>
-            </div>
-          )}
         </div>
       </SidebarInset>
+
+      {/* Edit Curriculum Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Curriculum</DialogTitle>
+            <DialogDescription>Update the title, description, or replace the file.</DialogDescription>
+          </DialogHeader>
+          {editData && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Title</Label>
+                <Input
+                  id="edit-title"
+                  value={editData.title}
+                  onChange={e => setEditData({ ...editData, title: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  value={editData.description}
+                  onChange={e => setEditData({ ...editData, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-fileType">File Type</Label>
+                <Select value={editData.type} onValueChange={(value) => setEditData({ ...editData, type: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select file type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pdf">PDF</SelectItem>
+                    <SelectItem value="mp4">Video (MP4)</SelectItem>
+                    <SelectItem value="avi">Video (AVI)</SelectItem>
+                    <SelectItem value="mov">Video (MOV)</SelectItem>
+                    <SelectItem value="pptx">PowerPoint</SelectItem>
+                    <SelectItem value="docx">Word Document</SelectItem>
+                    <SelectItem value="jpg">Image (JPG)</SelectItem>
+                    <SelectItem value="png">Image (PNG)</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-file">Replace File (optional)</Label>
+                <Input
+                  id="edit-file"
+                  type="file"
+                  accept="*"
+                  ref={editFileInputRef}
+                  onChange={e => setEditFile(e.target.files?.[0] || null)}
+                />
+              </div>
+              {isUploading && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-2" />
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button className="flex-1 bg-[#1f497d] hover:bg-[#1a3d6b]" onClick={handleEditSubmit} disabled={isUploading}>
+                  {isUploading ? "Updating..." : "Update"}
+                </Button>
+                <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Video Preview Dialog */}
+      {videoDialogOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-50">
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+            style={{ marginLeft: sidebarMargin, marginRight: '1rem' }}
+          >
+            <div className="p-6 border-b">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">Video Preview</h2>
+                  <p className="text-sm text-muted-foreground">Watch the uploaded video</p>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => {
+                    setVideoDialogOpen(false);
+                    setCurrentVideoUrl(null);
+                    if (currentVideoUrl) {
+                      window.URL.revokeObjectURL(currentVideoUrl);
+                    }
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            {currentVideoUrl && (
+              <div className="p-6">
+                <div className="relative w-full h-full max-h-[70vh] flex items-center justify-center">
+                  <video 
+                    controls 
+                    className="w-full h-full max-h-[70vh] object-contain rounded-lg"
+                    src={currentVideoUrl}
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </SidebarProvider>
   );
 }

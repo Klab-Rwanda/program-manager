@@ -42,6 +42,23 @@ router.route('/').post(
 
 /**
  * @openapi
+ * /courses:
+ *   get:
+ *     tags: [Courses]
+ *     summary: Get all courses (curriculum files)
+ *     description: Retrieves a list of all courses (curriculum files) for facilitators and program managers.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: 'A list of courses.' }
+ */
+router.route('/').get(
+    checkRole(['Facilitator', 'Program Manager']),
+    courseController.getAllCourses
+);
+
+/**
+ * @openapi
  * /courses/{courseId}/approve:
  *   patch:
  *     tags: [Courses]
@@ -96,5 +113,74 @@ router.route('/:courseId/request-approval').patch(
     checkRole(['Facilitator']),
     courseController.requestCourseApproval
 );
+
+/**
+ * @openapi
+ * /courses/{courseId}/download:
+ *   get:
+ *     tags: [Courses]
+ *     summary: Download a course file
+ *     description: Download the uploaded document for a course (facilitator or program manager only).
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { name: courseId, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: 'File downloaded.' }
+ *       404: { description: 'Course or file not found.' }
+ */
+router.route('/:courseId/download').get(
+    checkRole(['Facilitator', 'Program Manager']),
+    courseController.downloadCourseFile
+);
+
+/**
+ * @openapi
+ * /courses/{courseId}:
+ *   put:
+ *     tags: [Courses]
+ *     summary: Update course metadata or replace file
+ *     description: Facilitator can update their own course (not approved).
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { name: courseId, in: path, required: true, schema: { type: string } }
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title: { type: string }
+ *               description: { type: string }
+ *               courseDocument: { type: string, format: binary }
+ *     responses:
+ *       200: { description: 'Course updated.' }
+ *       403: { description: 'Forbidden.' }
+ *       404: { description: 'Course not found.' }
+ *   delete:
+ *     tags: [Courses]
+ *     summary: Delete a course
+ *     description: Facilitator can delete their own course (not approved).
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { name: courseId, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: 'Course deleted.' }
+ *       403: { description: 'Forbidden.' }
+ *       404: { description: 'Course not found.' }
+ */
+router.route('/:courseId')
+    .put(
+        checkRole(['Facilitator']),
+        upload.single('courseDocument'),
+        courseController.updateCourse
+    )
+    .delete(
+        checkRole(['Facilitator']),
+        courseController.deleteCourse
+    );
 
 export default router;
