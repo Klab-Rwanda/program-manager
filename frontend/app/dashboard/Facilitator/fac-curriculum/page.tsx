@@ -1,3 +1,4 @@
+
 // app/dashboard/Facilitator/fac-curriculum/page.tsx
 "use client";
 
@@ -9,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+
 import {
   Dialog,
   DialogContent,
@@ -16,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+
   DialogFooter // Added DialogFooter for submit/cancel buttons
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -212,6 +215,7 @@ export default function CurriculumPage() { // Renamed from Curriculum to Curricu
     }
   }
 
+
   const handleExportList = () => {
     // This will export the currently filtered list to CSV.
     const csvContent = [
@@ -229,6 +233,8 @@ export default function CurriculumPage() { // Renamed from Curriculum to Curricu
       .map((row) => row.join(","))
       .join("\n")
 
+
+
     const blob = new Blob([csvContent], { type: "text/csv" })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -238,6 +244,7 @@ export default function CurriculumPage() { // Renamed from Curriculum to Curricu
     a.click()
     document.body.removeChild(a)
     window.URL.revokeObjectURL(url)
+
 
     toast.success("File list exported successfully!");
   }
@@ -416,6 +423,7 @@ export default function CurriculumPage() { // Renamed from Curriculum to Curricu
                       <p className="mt-2 text-sm text-gray-500">or drag and drop your file here</p>
                       <p className="text-xs text-gray-400">PDF, PowerPoint, Word, Images (Max 50MB)</p>
                     </div>
+
                   </div>
 
                   {selectedFiles.length > 0 && (
@@ -434,6 +442,7 @@ export default function CurriculumPage() { // Renamed from Curriculum to Curricu
                     </div>
                   )}
                 </div>
+
 
                 {isUploading && (
                   <div className="space-y-2">
@@ -485,6 +494,7 @@ export default function CurriculumPage() { // Renamed from Curriculum to Curricu
               <p className="text-sm text-muted-foreground">
                 Supports PDF, PowerPoint, Word, Images, and more. Max file size: 50MB
               </p>
+
             </div>
             <Button
               type="button" // Added type="button"
@@ -495,6 +505,7 @@ export default function CurriculumPage() { // Renamed from Curriculum to Curricu
               Choose Files
             </Button>
           </div>
+
         </CardContent>
       </Card>
 
@@ -572,6 +583,7 @@ export default function CurriculumPage() { // Renamed from Curriculum to Curricu
                 >
                   <div className="flex items-center gap-4">
                     <div className="text-2xl">{getFileIcon(file.type)}</div>
+
                     <div className="space-y-1">
                       <p className="font-medium text-card-foreground">{file.name}</p>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -588,6 +600,7 @@ export default function CurriculumPage() { // Renamed from Curriculum to Curricu
                   <div className="flex items-center gap-2">
                     <Badge className={getStatusColor(file.status)}>{file.status}</Badge>
                     <Badge variant="outline">{file.type}</Badge>
+
                     <Button type="button" variant="ghost" size="sm" onClick={() => handlePreviewFile(file)}>
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -654,3 +667,4 @@ export default function CurriculumPage() { // Renamed from Curriculum to Curricu
     </div>
   )
 }
+

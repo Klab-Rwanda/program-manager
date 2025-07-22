@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -33,8 +34,10 @@ export default function TraineeAttendancePage() {
       setError(err.response?.data?.message || "Failed to load sessions.");
     } finally {
       setLoading(false);
+
     }
   }, []);
+
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
 
@@ -83,6 +86,7 @@ export default function TraineeAttendancePage() {
 
   if (loading) {
     return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+
   }
 
   return (
@@ -122,6 +126,7 @@ export default function TraineeAttendancePage() {
                         </div>
                     ))}
                 </div>
+
             ) : (
                 <div className="text-center py-6 text-muted-foreground">
                     <CheckCircle className="mx-auto h-8 w-8 mb-2 text-green-500"/>
@@ -148,6 +153,7 @@ export default function TraineeAttendancePage() {
                  <div className="text-center py-6 text-muted-foreground">
                     <Info className="mx-auto h-8 w-8 mb-2 text-gray-400"/>
                     <p>You have no other scheduled or completed sessions.</p>
+
                 </div>
             )}
         </CardContent>

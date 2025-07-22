@@ -303,7 +303,7 @@ export function SuperAdminDashboard() {
             variant="outline"
             className="border-white text-white hover:bg-white hover:text-black bg-transparent"
           >
-            <Users className="mr-2 h-4 w-4" />
+            <Users size={16} />
             Manage Users
           </Button>
         </div>
