@@ -106,7 +106,7 @@ export const verifySessionQRCode = (scannedData) => {
  * @returns {string} Unique session identifier
  */
 export const generateSessionId = () => {
-    return uuidv4();
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
 
 /**

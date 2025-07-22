@@ -1,7 +1,8 @@
+// app/dashboard/curriculum/page.tsx
 "use client"
 
-import { useState } from "react"
-import { Upload, FileText, Download, Trash2, Eye, Plus, Search } from "lucide-react"
+import { useState, useEffect, useCallback } from "react" // Added useEffect, useCallback
+import { Upload, FileText, Download, Trash2, Eye, Plus, Search, Loader2, AlertCircle, XCircle } from "lucide-react" // Added Loader2, AlertCircle, XCircle
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,137 +20,195 @@ import {
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { toast } from "sonner" // Import toast
+import { Alert, AlertDescription } from "@/components/ui/alert" // For error display
+
+import { useAuth } from "@/lib/contexts/RoleContext" // Import useAuth for role check
+import api from "@/lib/api" // Import api
+import { Program as BackendProgram, Course as BackendCourse } from "@/types" // Import backend types
+
+// Frontend-specific Resource interface (maps to backend Course, plus display fields)
+interface CurriculumFile {
+  id: string // Backend _id for Course
+  name: string // Backend Course title
+  program: string // Program name (for display)
+  programId: string // Program _id (for filtering)
+  type: string // Derived: "PDF", "PowerPoint", "Word", "Sketch"
+  size: string // Mocked or derived
+  uploadDate: string // Backend Course createdAt
+  downloads: number // Mocked
+  status: 'Draft' | 'PendingApproval' | 'Approved' | 'Rejected'; // Backend Course status
+  description?: string; // Backend Course description
+  contentUrl?: string; // Backend Course contentUrl for download/preview
+}
 
 export default function Curriculum() {
+  const { user, role, loading: authLoading } = useAuth(); // Get user and role
+
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
-  const [filterProgram, setFilterProgram] = useState("all")
+  const [filterProgram, setFilterProgram] = useState("all") // Use program _id for filter
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [isUploading, setIsUploading] = useState(false)
+  const [isUploading, setIsUploading] = useState(false) // For file upload progress
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [uploadData, setUploadData] = useState({
-    program: "",
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]) // Files selected for new upload
+  const [uploadData, setUploadData] = useState({ // Form data for new upload
+    programId: "", // Use programId here
     title: "",
     description: "",
-    type: "",
-  })
+  });
 
-  // Mock curriculum data
-  const [curriculumFiles, setCurriculumFiles] = useState([
-    {
-      id: 1,
-      name: "Web Development Fundamentals.pdf",
-      program: "Software Engineering Bootcamp",
-      type: "PDF",
-      size: "2.4 MB",
-      uploadDate: "2024-01-15",
-      downloads: 45,
-      status: "Active",
-    },
-    {
-      id: 2,
-      name: "JavaScript Advanced Concepts.pptx",
-      program: "Software Engineering Bootcamp",
-      type: "PowerPoint",
-      size: "5.1 MB",
-      uploadDate: "2024-01-14",
-      downloads: 32,
-      status: "Active",
-    },
-    {
-      id: 3,
-      name: "Data Analysis with Python.pdf",
-      program: "Data Science Fundamentals",
-      type: "PDF",
-      size: "3.8 MB",
-      uploadDate: "2024-01-12",
-      downloads: 28,
-      status: "Active",
-    },
-    {
-      id: 4,
-      name: "Mobile UI Design Guidelines.sketch",
-      program: "Mobile App Development",
-      type: "Sketch",
-      size: "12.3 MB",
-      uploadDate: "2024-01-10",
-      downloads: 15,
-      status: "Draft",
-    },
-  ])
+  const [curriculumFiles, setCurriculumFiles] = useState<CurriculumFile[]>([]); // All curriculum files
+  const [availablePrograms, setAvailablePrograms] = useState<BackendProgram[]>([]); // Programs for dropdown
+  const [isLoading, setIsLoading] = useState(true); // General loading state
+  const [error, setError] = useState<string | null>(null); // General error state
 
-  const programs = [
-    { id: "software-engineering", name: "Software Engineering Bootcamp" },
-    { id: "data-science", name: "Data Science Fundamentals" },
-    { id: "mobile-dev", name: "Mobile App Development" },
-    { id: "ui-ux", name: "UI/UX Design Workshop" },
-  ]
+  // Fetch all programs and then all courses relevant to the user
+  const fetchCurriculumData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // 1. Fetch programs (filtered by role on backend)
+      const programsRes = await api.get('/programs');
+      const fetchedPrograms: BackendProgram[] = programsRes.data.data;
+      setAvailablePrograms(fetchedPrograms);
 
+      const allFetchedCourses: CurriculumFile[] = [];
+
+      // 2. Fetch courses for each program the user has access to
+      for (const program of fetchedPrograms) {
+        try {
+          const coursesRes = await api.get(`/courses/program/${program._id}`);
+          const courses: BackendCourse[] = coursesRes.data.data;
+
+          courses.forEach(course => {
+            const fileExtension = course.contentUrl ? course.contentUrl.split('.').pop()?.toLowerCase() : 'unknown';
+            let resourceType = 'Document';
+            if (fileExtension === 'pdf') resourceType = 'PDF';
+            else if (fileExtension && ['ppt', 'pptx'].includes(fileExtension)) resourceType = 'PowerPoint';
+            else if (fileExtension && ['doc', 'docx'].includes(fileExtension)) resourceType = 'Word';
+            else if (fileExtension && ['sketch', 'fig'].includes(fileExtension)) resourceType = 'Design'; // Assuming Sketch/Figma equivalent
+            else if (fileExtension && ['zip', 'rar'].includes(fileExtension)) resourceType = 'Archive';
+
+            allFetchedCourses.push({
+              id: course._id,
+              name: course.title,
+              program: program.name, // Display program name
+              programId: program._id, // Store program ID for filtering
+              type: resourceType,
+              size: (Math.random() * 5 + 1).toFixed(1) + ' MB', // Mock size
+              uploadDate: course.createdAt.split('T')[0],
+              downloads: Math.floor(Math.random() * 100), // Mock downloads
+              status: course.status, // Backend status
+              description: course.description,
+              contentUrl: course.contentUrl
+            });
+          });
+        } catch (innerErr: any) {
+          console.warn(`Failed to fetch courses for program ${program.name}:`, innerErr.response?.data?.message || innerErr.message);
+          // Continue to next program, don't break loop for one failure
+        }
+      }
+      setCurriculumFiles(allFetchedCourses);
+
+      // Set default program in form if available
+      if (fetchedPrograms.length > 0) {
+        setUploadData(prev => ({ ...prev, programId: fetchedPrograms[0]._id }));
+      }
+
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to load curriculum data.");
+      toast.error(err.response?.data?.message || "Failed to load curriculum data.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [role]); // Re-fetch if role changes
+
+  useEffect(() => {
+    // Only fetch if authenticated and is a Program Manager or Facilitator
+    if (!authLoading && (role === 'program_manager' || role === 'super_admin' || role === 'facilitator')) {
+      fetchCurriculumData();
+    }
+  }, [authLoading, role, fetchCurriculumData]);
+
+
+  // Filter logic for searching and applying filters
   const filteredFiles = curriculumFiles.filter((file) => {
     const matchesSearch =
       file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      file.program.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesType = filterType === "all" || file.type.toLowerCase() === filterType.toLowerCase()
-    const matchesProgram = filterProgram === "all" || file.program === filterProgram
+      file.program.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = filterType === "all" || file.type.toLowerCase() === filterType.toLowerCase();
+    const matchesProgram = filterProgram === "all" || file.programId === filterProgram; // Filter by ID now
 
-    return matchesSearch && matchesType && matchesProgram
-  })
+    return matchesSearch && matchesType && matchesProgram;
+  });
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
     if (files && files.length > 0) {
-      setSelectedFiles(Array.from(files))
+      setSelectedFiles(Array.from(files));
     }
   }
 
-  const handleUploadSubmit = () => {
-    if (!uploadData.program || !uploadData.title || selectedFiles.length === 0) {
-      alert("Please fill in all required fields and select files")
-      return
+  const handleUploadSubmit = async () => {
+    if (!uploadData.programId || !uploadData.title || selectedFiles.length === 0) {
+      toast.error("Please fill in all required fields and select files.");
+      return;
     }
 
-    setIsUploading(true)
-    setUploadProgress(0)
+    setIsUploading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('title', uploadData.title);
+      formData.append('description', uploadData.description);
+      formData.append('programId', uploadData.programId);
+      // Assuming only one file for `upload.single` as per `createCourse` route
+      formData.append('courseDocument', selectedFiles[0]); // 'courseDocument' matches multer field name
 
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval)
+      // Progress simulation for single file upload
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => (prev < 90 ? prev + 10 : 90)); // Stop at 90 for a moment
+      }, 200);
 
-          // Add new files to the list
-          const newFiles = selectedFiles.map((file, index) => ({
-            id: curriculumFiles.length + index + 1,
-            name: file.name,
-            program: programs.find((p) => p.id === uploadData.program)?.name || "",
-            type: file.type.includes("pdf")
-              ? "PDF"
-              : file.type.includes("powerpoint") || file.type.includes("presentation")
-                ? "PowerPoint"
-                : file.type.includes("word") || file.type.includes("document")
-                  ? "Word"
-                  : "Document",
-            size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-            uploadDate: new Date().toISOString().split("T")[0],
-            downloads: 0,
-            status: "Active",
-          }))
+      const response = await api.post('/courses', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percentCompleted);
+          }
+        },
+      });
 
-          setCurriculumFiles((prev) => [...prev, ...newFiles])
-          setUploadDialogOpen(false)
-          setSelectedFiles([])
-          setUploadData({ program: "", title: "", description: "", type: "" })
-          alert(`Successfully uploaded ${selectedFiles.length} file(s)!`)
+      clearInterval(progressInterval); // Clear the manual progress simulation
+      setUploadProgress(100); // Ensure it reaches 100%
 
-          return 100
-        }
-        return prev + 10
-      })
-    }, 200)
+      if (response.data.success) {
+        toast.success(response.data.message || "Course content uploaded successfully!");
+        setUploadDialogOpen(false); // Close modal
+        setSelectedFiles([]); // Clear selected files
+        setUploadData({ programId: availablePrograms[0]?._id || '', title: "", description: "" }); // Reset form
+        fetchCurriculumData(); // Refresh list to show new file
+      } else {
+        toast.error(response.data.message || "Failed to upload course content.");
+      }
+
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to upload course content.");
+      toast.error(err.response?.data?.message || "Failed to upload course content.");
+      console.error(err);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0); // Reset progress bar
+    }
   }
 
   const handleExportList = () => {
+    // This will export the currently filtered list to CSV.
     const csvContent = [
       ["Name", "Program", "Type", "Size", "Upload Date", "Downloads", "Status"],
       ...filteredFiles.map((file) => [
@@ -175,37 +234,79 @@ export default function Curriculum() {
     document.body.removeChild(a)
     window.URL.revokeObjectURL(url)
 
-    alert("File list exported successfully!")
+    toast.success("File list exported successfully!");
   }
 
+  const handleDeleteFile = async (fileId: string, fileName: string) => {
+    if (!confirm(`Are you sure you want to delete "${fileName}"? This cannot be undone.`)) {
+        return;
+    }
+    // Your backend's course controller doesn't have a delete route.
+    // This would require a new DELETE /courses/:id endpoint.
+    // For now, we'll simulate frontend deletion and show a toast.
+    toast.info(`Simulating deletion of ${fileName}. (Backend delete endpoint not implemented)`);
+    setCurriculumFiles(prev => prev.filter(file => file.id !== fileId));
+  }
+
+  const handlePreviewFile = (file: CurriculumFile) => {
+    if (file.contentUrl) {
+      window.open(file.contentUrl, '_blank');
+      toast.info(`Opening preview for ${file.name}.`);
+    } else {
+      toast.error("No preview URL available for this file.");
+    }
+  }
+
+  const handleDownloadFile = (file: CurriculumFile) => {
+    if (file.contentUrl) {
+      // For actual downloads, the server should send a file.
+      // For now, opening the URL in a new tab might trigger download depending on browser/server.
+      window.open(file.contentUrl, '_blank');
+      toast.success(`Downloading ${file.name}.`);
+    } else {
+      toast.error("No download URL available for this file.");
+    }
+  }
+
+  // UI Helper functions for icons and colors
   const getFileIcon = (type: string) => {
     switch (type.toLowerCase()) {
-      case "pdf":
-        return "📄"
-      case "powerpoint":
-      case "pptx":
-        return "📊"
-      case "word":
-      case "docx":
-        return "📝"
-      case "sketch":
-        return "🎨"
-      default:
-        return "📁"
+      case "pdf": return "📄"
+      case "powerpoint": return "📊"
+      case "word": return "📝"
+      case "sketch": case "design": return "🎨"
+      case "archive": return "📁"
+      default: return "📄"
     }
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Active":
-        return "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-      case "Draft":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400"
-      case "Archived":
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400"
-      default:
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+      case "Approved": return "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+      case "Draft": return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400"
+      case "PendingApproval": return "bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+      case "Rejected": return "bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400"
+      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400"
     }
+  }
+
+  // Render nothing or a loading spinner if authentication is still loading
+  if (authLoading) {
+    return (
+      <div className="flex justify-center items-center h-full min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Access control: Only Program Manager, Super Admin, and Facilitator should see this page
+  if (!user || (role !== 'program_manager' && role !== 'super_admin' && role !== 'facilitator')) {
+    return (
+        <Card>
+            <CardHeader><CardTitle>Access Denied</CardTitle></CardHeader>
+            <CardContent><p className="text-muted-foreground">You do not have permission to view this page.</p></CardContent>
+        </Card>
+    );
   }
 
   return (
@@ -234,21 +335,35 @@ export default function Curriculum() {
                 <DialogDescription>Add new learning materials to your programs</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
+                {error && (
+                  <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription className="flex items-center justify-between">
+                          {error}
+                          <Button variant="ghost" size="sm" onClick={() => setError(null)}><XCircle className="h-4 w-4" /></Button>
+                      </AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-2">
-                  <Label htmlFor="program">Target Program *</Label>
+                  <Label htmlFor="programId">Target Program *</Label>
                   <Select
-                    value={uploadData.program}
-                    onValueChange={(value) => setUploadData({ ...uploadData, program: value })}
+                    value={uploadData.programId}
+                    onValueChange={(value) => setUploadData({ ...uploadData, programId: value })}
+                    disabled={availablePrograms.length === 0}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select a program" />
                     </SelectTrigger>
                     <SelectContent>
-                      {programs.map((program) => (
-                        <SelectItem key={program.id} value={program.id}>
-                          {program.name}
-                        </SelectItem>
-                      ))}
+                      {availablePrograms.length === 0 ? (
+                        <SelectItem value="" disabled>No programs available</SelectItem>
+                      ) : (
+                        availablePrograms.map((program) => (
+                          <SelectItem key={program._id} value={program._id}>
+                            {program.name}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -270,6 +385,7 @@ export default function Curriculum() {
                     placeholder="Brief description of the resource"
                     value={uploadData.description}
                     onChange={(e) => setUploadData({ ...uploadData, description: e.target.value })}
+                    rows={3}
                   />
                 </div>
 
@@ -280,36 +396,36 @@ export default function Curriculum() {
                     <div>
                       <Button variant="outline" asChild>
                         <label htmlFor="file-upload" className="cursor-pointer">
-                          Choose Files
+                          Choose File
                         </label>
                       </Button>
                       <input
                         id="file-upload"
                         type="file"
-                        multiple
-                        accept=".pdf,.ppt,.pptx,.doc,.docx,.jpg,.jpeg,.png,.gif"
+                        // Only allow single file upload because backend createCourse expects single.
+                        // For multiple, backend needs multer.array or multiple API calls.
+                        accept=".pdf,.ppt,.pptx,.doc,.docx,.jpg,.jpeg,.png,.gif,.zip,.rar"
                         onChange={handleFileUpload}
                         className="hidden"
                       />
-                      <p className="mt-2 text-sm text-gray-500">or drag and drop your files here</p>
-                      <p className="text-xs text-gray-400">PDF, PowerPoint, Word, Images (Max 50MB each)</p>
+                      <p className="mt-2 text-sm text-gray-500">or drag and drop your file here</p>
+                      <p className="text-xs text-gray-400">PDF, PowerPoint, Word, Images (Max 50MB)</p>
                     </div>
                   </div>
 
                   {selectedFiles.length > 0 && (
                     <div className="mt-3 space-y-2">
-                      <Label>Selected Files:</Label>
-                      {selectedFiles.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-muted rounded">
+                      <Label>Selected File:</Label>
+                      {/* Display only the first selected file for now */}
+                      <div className="flex items-center justify-between p-2 bg-muted rounded">
                           <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4" />
-                            <span className="text-sm">{file.name}</span>
+                              <FileText className="h-4 w-4" />
+                              <span className="text-sm">{selectedFiles[0].name}</span>
                           </div>
                           <span className="text-xs text-muted-foreground">
-                            {(file.size / (1024 * 1024)).toFixed(1)} MB
+                              {(selectedFiles[0].size / (1024 * 1024)).toFixed(1)} MB
                           </span>
-                        </div>
-                      ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -317,7 +433,7 @@ export default function Curriculum() {
                 {isUploading && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span>Uploading files...</span>
+                      <span>Uploading file...</span>
                       <span>{uploadProgress}%</span>
                     </div>
                     <Progress value={uploadProgress} className="h-2" />
@@ -328,9 +444,9 @@ export default function Curriculum() {
                   <Button
                     className="flex-1 bg-website-primary hover:bg-website-primary/90"
                     onClick={handleUploadSubmit}
-                    disabled={isUploading}
+                    disabled={isUploading || selectedFiles.length === 0 || !uploadData.programId || !uploadData.title}
                   >
-                    {isUploading ? "Uploading..." : "Upload Files"}
+                    {isUploading ? "Uploading..." : "Upload File"}
                   </Button>
                   <Button variant="outline" onClick={() => setUploadDialogOpen(false)}>
                     Cancel
@@ -342,7 +458,7 @@ export default function Curriculum() {
         </div>
       </div>
 
-      {/* Upload Section */}
+      {/* Upload Section (Visually for drag-and-drop, trigger modal) */}
       <Card className="border border-border bg-card">
         <CardHeader>
           <CardTitle className="text-card-foreground">Upload Curriculum Materials</CardTitle>
@@ -390,7 +506,8 @@ export default function Curriculum() {
             <SelectItem value="pdf">PDF</SelectItem>
             <SelectItem value="powerpoint">PowerPoint</SelectItem>
             <SelectItem value="word">Word</SelectItem>
-            <SelectItem value="sketch">Sketch</SelectItem>
+            <SelectItem value="design">Design</SelectItem> {/* Changed to 'Design' */}
+            <SelectItem value="archive">Archive</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterProgram} onValueChange={setFilterProgram}>
@@ -399,11 +516,15 @@ export default function Curriculum() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Programs</SelectItem>
-            {programs.map((program) => (
-              <SelectItem key={program.id} value={program.name}>
-                {program.name}
-              </SelectItem>
-            ))}
+            {availablePrograms.length === 0 ? (
+                <SelectItem value="" disabled>No programs available</SelectItem>
+            ) : (
+                availablePrograms.map((program) => (
+                  <SelectItem key={program._id} value={program._id}>
+                    {program.name}
+                  </SelectItem>
+                ))
+            )}
           </SelectContent>
         </Select>
       </div>
@@ -415,52 +536,57 @@ export default function Curriculum() {
           <CardDescription>Manage your uploaded curriculum materials</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {filteredFiles.map((file) => (
-              <div
-                key={file.id}
-                className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="text-2xl">{getFileIcon(file.type)}</div>
-                  <div className="space-y-1">
-                    <p className="font-medium text-card-foreground">{file.name}</p>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span>{file.program}</span>
-                      <span>•</span>
-                      <span>{file.size}</span>
-                      <span>•</span>
-                      <span>{new Date(file.uploadDate).toLocaleDateString()}</span>
-                      <span>•</span>
-                      <span>{file.downloads} downloads</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge className={getStatusColor(file.status)}>{file.status}</Badge>
-                  <Button variant="ghost" size="sm">
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {filteredFiles.length === 0 && (
+          {isLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : filteredFiles.length === 0 ? (
             <div className="text-center py-12">
-              <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
+              <FileText className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="mt-4 text-lg font-semibold text-card-foreground">No files found</h3>
               <p className="mt-2 text-muted-foreground">
                 {searchTerm || filterType !== "all" || filterProgram !== "all"
                   ? "Try adjusting your search terms or filters"
                   : "Upload your first curriculum file to get started"}
               </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className="flex items-center justify-between p-4 rounded-lg border border-border bg-muted/30"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="text-2xl">{getFileIcon(file.type)}</div>
+                    <div className="space-y-1">
+                      <p className="font-medium text-card-foreground">{file.name}</p>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span>{file.program}</span>
+                        <span>•</span>
+                        <span>{file.size}</span>
+                        <span>•</span>
+                        <span>{new Date(file.uploadDate).toLocaleDateString()}</span>
+                        <span>•</span>
+                        <span>{file.downloads} downloads</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className={getStatusColor(file.status)}>{file.status}</Badge>
+                    <Badge variant="outline">{file.type}</Badge>
+                    <Button variant="ghost" size="sm" onClick={() => handlePreviewFile(file)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDownloadFile(file)}>
+                      <Download className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => handleDeleteFile(file.id, file.name)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -501,7 +627,7 @@ export default function Curriculum() {
               <div>
                 <p className="text-sm text-muted-foreground">Active Files</p>
                 <p className="text-2xl font-bold text-card-foreground">
-                  {curriculumFiles.filter((f) => f.status === "Active").length}
+                  {curriculumFiles.filter((f) => f.status === "Approved").length}
                 </p>
               </div>
             </div>
@@ -514,7 +640,7 @@ export default function Curriculum() {
               <FileText className="h-5 w-5 text-orange-600" />
               <div>
                 <p className="text-sm text-muted-foreground">Storage Used</p>
-                <p className="text-2xl font-bold text-card-foreground">23.6 MB</p>
+                <p className="text-2xl font-bold text-card-foreground">23.6 MB</p> {/* This is mocked */}
               </div>
             </div>
           </CardContent>
@@ -522,4 +648,4 @@ export default function Curriculum() {
       </div>
     </div>
   )
-} 
+}

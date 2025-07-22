@@ -5,29 +5,36 @@ import { useAuth } from "@/lib/contexts/RoleContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-// FIX: Import the missing Clock icon
-import { Mail, Briefcase, Calendar, Clock } from "lucide-react"; 
+import { Mail, Briefcase, Calendar, Clock, Loader2 } from "lucide-react"; // Added Loader2
 import { getRoleDisplayName } from "@/lib/roles";
-import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 
 export default function ProfilePage() {
-    const { user, loading } = useAuth();
+    const { user, loading: authLoading } = useAuth(); // Renamed loading to authLoading
     const router = useRouter();
 
-    if (loading) {
+    // Show loading spinner if authentication is still in progress
+    if (authLoading) {
         return (
-            <div className="flex h-full w-full items-center justify-center">
+            <div className="flex h-full w-full items-center justify-center min-h-[50vh]">
                 <Loader2 className="h-8 w-8 animate-spin" />
             </div>
         );
     }
 
+    // Access control: If user is not authenticated after loading, redirect or deny access
     if (!user) {
-        return <div>User not found. Please log in again.</div>;
+        // This scenario should ideally be handled by the layout itself, but good to have a fallback
+        return (
+            <Card>
+                <CardHeader><CardTitle>Access Denied</CardTitle></CardHeader>
+                <CardContent><p className="text-muted-foreground">User not found. Please log in again.</p></CardContent>
+            </Card>
+        );
     }
     
+    // UI Helper
     const getInitials = (name: string = "") => {
         return name.split(' ').map(n => n[0]).join('').toUpperCase();
     }
@@ -48,12 +55,14 @@ export default function ProfilePage() {
                 <CardHeader>
                     <div className="flex flex-col sm:flex-row items-center gap-6">
                         <Avatar className="h-24 w-24 border-2 border-primary">
+                            {/* Using DiceBear API for avatar based on user's name */}
                             <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${user.name}`} alt={user.name} />
                             <AvatarFallback className="text-3xl">{getInitials(user.name)}</AvatarFallback>
                         </Avatar>
                         <div className="text-center sm:text-left">
                             <CardTitle className="text-2xl">{user.name}</CardTitle>
                             <CardDescription className="text-lg">
+                                {/* Display role name using helper function */}
                                 <Badge className="mt-2 text-base">{getRoleDisplayName(user.role)}</Badge>
                             </CardDescription>
                         </div>
@@ -77,7 +86,7 @@ export default function ProfilePage() {
                             <Briefcase className="h-4 w-4 text-muted-foreground" />
                             <span>Status: <Badge variant={user.isActive ? "default" : "secondary"} className={user.isActive ? "bg-green-100 text-green-800" : ""}>{user.status}</Badge></span>
                         </div>
-                         {user.lastLogin && (
+                         {user.lastLogin && ( // Only display last login if available
                              <div className="flex items-center gap-3 text-sm">
                                 <Clock className="h-4 w-4 text-muted-foreground" />
                                 <span>Last login: {new Date(user.lastLogin).toLocaleString()}</span>
