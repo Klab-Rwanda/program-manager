@@ -1,168 +1,186 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import TicketStatsCard from "@/components/tickets/ticketStats";
-import FilterBar from "@/components/tickets/filtersBar";
-import TicketTabs from "@/components/tickets/ticketTabs";
-import TicketCard from "@/components/tickets/ticketCards";
-import ViewTicketModal from "@/components/tickets/viewTicketModal";
-import { Ticket } from "@/types/index";
+import { useState } from "react";
+import { Paperclip, Send, Loader2 } from "lucide-react";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
-export default function SubmitTicketPage() {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [activeTab, setActiveTab] = useState("open");
-
-  // For modal inputs
-  const [newComment, setNewComment] = useState("");
-  const [resolutionText, setResolutionText] = useState("");
-
-  useEffect(() => {
-    async function fetchTickets() {
-      try {
-        const res = await fetch("http://localhost:8000/api/v1/tickets");
-        const data = await res.json();
-        const cleanedTickets = (data.tickets || []).map((t: Ticket) => ({
-  ...t,
-  title: t.title || "",
-  description: t.description || "",
-  priority: t.priority || "unknown",
-  category: t.category || "unknown",
-  status: t.status || "unknown",
-}));
-
-      setTickets(cleanedTickets);
-         console.log("Fetched tickets:", data.tickets);
-        
-      } catch (error) {
-        console.error("Failed to fetch tickets:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchTickets();
-  }, []);
-
-  const filtered = tickets.filter((ticket) => {
-    const matchSearch =
-      ticket.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.description?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchStatus = statusFilter === "all" || ticket.status === statusFilter;
-    const matchPriority = priorityFilter === "all" || ticket.priority === priorityFilter;
-    const matchCategory = categoryFilter === "all" || ticket.category === categoryFilter;
-
-    return matchSearch && matchStatus && matchPriority && matchCategory;
+export default function SubmitTicket() {
+  const [formData, setFormData] = useState({
+    subject: "",
+    category: "",
+    description: "",
+    priority: "Medium",
+    program: "",
+    file: null as File | null,
   });
 
-  const stats = {
-    total: tickets.length,
-    open: tickets.filter((t) => t.status === "open").length,
-    inProgress: tickets.filter((t) => t.status === "in_progress").length,
-    resolved: tickets.filter((t) => t.status === "resolved").length,
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleAddComment = async () => {
-    if (!newComment.trim() || !selectedTicket) return;
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData((prev) => ({ ...prev, file: e.target.files?.[0] || null }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
 
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/tickets/${selectedTicket._id}/comment`, {
+      const formPayload = new FormData();
+
+      formPayload.append("subject", formData.subject);
+      formPayload.append("category", formData.category);
+      formPayload.append("priority", formData.priority);
+      formPayload.append("description", formData.description);
+      if (formData.program) {
+        formPayload.append("program", formData.program);
+      }
+      if (formData.file) {
+        formPayload.append("file", formData.file);
+      }
+
+      const response = await fetch("http://localhost:8000/api/v1/tickets", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}` || "",
-        },
-        body: JSON.stringify({ message: newComment.trim() }),
+        body: formPayload,
       });
 
-      if (!res.ok) throw new Error("Failed to add comment");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to submit ticket");
+      }
 
-      const updatedTicket = await res.json();
+      await response.json();
 
-      setSelectedTicket(updatedTicket);
-      setTickets((prev) =>
-        prev.map((t) => (t._id === updatedTicket._id ? updatedTicket : t))
-      );
-      setNewComment("");
-    } catch (error) {
-      console.error("Error adding comment:", error);
-    }
-  };
+      toast.success("Ticket submitted successfully!");
 
-  const handleResolveTicket = async () => {
-    if (!resolutionText.trim() || !selectedTicket) return;
-
-    try {
-      const res = await fetch(`http://localhost:8000/api/v1/tickets/${selectedTicket._id}/resolve`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}` || "",
-        },
-        body: JSON.stringify({ resolution: resolutionText.trim() }),
+      setFormData({
+        subject: "",
+        category: "",
+        description: "",
+        priority: "Medium",
+        program: "",
+        file: null,
       });
-
-      if (!res.ok) throw new Error("Failed to resolve ticket");
-
-      const updated = await res.json();
-
-      setSelectedTicket(updated);
-      setTickets((prev) =>
-        prev.map((t) => (t._id === updated._id ? updated : t))
-      );
-      setResolutionText("");
-    } catch (error) {
-      console.error("Resolve error:", error);
+    } catch (error: any) {
+      toast.error(Error submitting ticket: ${error.message});
+    } finally {
+      setIsSubmitting(false);
     }
   };
-
-  if (loading) return <p>Loading tickets...</p>;
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Submit Ticket</h1>
+    <div className="max-w-3xl mx-auto p-6 rounded-2xl shadow-lg bg-white dark:bg-gray-900">
+      <h2 className="text-2xl font-semibold mb-4">Submit a Support Ticket</h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Subject */}
+        <div>
+          <label className="block font-medium mb-1">Subject</label>
+          <input
+            type="text"
+            name="subject"
+            value={formData.subject}
+            onChange={handleChange}
+            required
+            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
 
-      <TicketStatsCard stats={stats} />
+        {/* Category & Priority */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block font-medium mb-1">Category</label>
+            <select
+              name="category"
+              value={formData.category}
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select Category</option>
+              <option value="bug">Bug Report</option>
+              <option value="question">Question</option>
+              <option value="feature">Feature Request</option>
+              <option value="technical">Technical Issue</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
 
-      <FilterBar
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        filterStatus={statusFilter}
-        onStatusChange={setStatusFilter}
-        filterPriority={priorityFilter}
-        onPriorityChange={setPriorityFilter}
-        filterCategory={categoryFilter}
-        onCategoryChange={setCategoryFilter}
-      />
+          <div>
+            <label className="block font-medium mb-1">Priority</label>
+            <select
+              name="priority"
+              value={formData.priority}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Critical">Critical</option>
+            </select>
+          </div>
+        </div>
 
-      <TicketTabs activeTab={activeTab} setActiveTab={setActiveTab} ticketStats={stats}>
-        {filtered
-          .filter((t) => activeTab === "all" || t.status === activeTab)
-          .map((ticket) => (
-            <TicketCard key={ticket._id} ticket={ticket} onView={() => setSelectedTicket(ticket)} />
-          ))}
-      </TicketTabs>
+        {/* Related Program */}
+        <div>
+          <label className="block font-medium mb-1">Related Program (optional)</label>
+          <input
+            type="text"
+            name="program"
+            value={formData.program}
+            onChange={handleChange}
+            placeholder="e.g. UI/UX Design Bootcamp"
+            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
 
-      {selectedTicket && (
-        <ViewTicketModal
-          open={!!selectedTicket}
-          ticket={selectedTicket}
-          onClose={() => setSelectedTicket(null)}
-          newComment={newComment}
-          onCommentChange={setNewComment}
-          onCommentSubmit={handleAddComment}
-          resolutionText={resolutionText}
-          onResolutionChange={setResolutionText}
-          onResolve={handleResolveTicket}
-        />
-      )}
+        {/* Description */}
+        <div>
+          <label className="block font-medium mb-1">Description</label>
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            required
+            rows={5}
+            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Please describe your issue or request in detail..."
+          />
+        </div>
+
+        {/* File Upload */}
+        <div className="flex items-center gap-3">
+          <label className="block font-medium">Attach File:</label>
+          <input
+            type="file"
+            onChange={handleFileChange}
+            className="file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+          {formData.file && <span className="text-sm">{formData.file.name}</span>}
+        </div>
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-white 
+            ${isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-[#1f497d] hover:bg-blue-700"}`}
+        >
+          {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
+          Submit Ticket
+        </button>
+      </form>
+
+      <ToastContainer position="top-right" autoClose={3000} />
     </div>
   );
-
 }

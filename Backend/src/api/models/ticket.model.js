@@ -1,23 +1,37 @@
-import Ticket from './ticketModel.js';
+import mongoose from 'mongoose';
+import mongoosePaginate from 'mongoose-paginate-v2';
 
-export const addTicket = async (ticketData) => {
-  const ticket = new Ticket(ticketData);
-  return await ticket.save();
-};
+const commentSchema = new mongoose.Schema({
+  author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  message: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
 
-export const getAllTickets = async () => {
-  return await Ticket.find();
-};
+const ticketSchema = new mongoose.Schema({
+  title: { type: String, required: true, trim: true },
+  description: { type: String, required: true },
+  category: {
+    type: String,
+    enum: ['Hardware', 'Software', 'Network', 'Account', 'Other'],
+    required: true
+  },
+  priority: {
+    type: String,
+    enum: ['Low', 'Medium', 'High', 'Critical'],
+    default: 'Medium'
+  },
+  status: {
+    type: String,
+    enum: ['Open', 'In Progress', 'Resolved', 'Closed'],
+    default: 'Open'
+  },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // IT Support user
+  resolution: { type: String },
+  comments: [commentSchema]
+}, { timestamps: true });
 
-export const getTicketById = async (id) => {
-  return await Ticket.findById(id);
-};
+ticketSchema.plugin(mongoosePaginate);
 
-export const updateTicketById = async (id, updates) => {
-  return await Ticket.findByIdAndUpdate(id, updates, { new: true });
-};
-
-export const deleteTicketById = async (id) => {
-  const result = await Ticket.findByIdAndDelete(id);
-  return result != null;
-};
+const Ticket = mongoose.model('Ticket', ticketSchema);
+export default Ticket;

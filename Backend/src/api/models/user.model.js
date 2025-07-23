@@ -9,7 +9,9 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true },
     role: {
         type: String,
-        enum: ['Trainee', 'Facilitator', 'Program Manager', 'SuperAdmin', 'ItSupport'],
+
+        enum: ['Trainee', 'Facilitator', 'Program Manager', 'SuperAdmin','IT-Support'],
+
         required: true,
     },
      status: {
@@ -18,6 +20,7 @@ const userSchema = new mongoose.Schema({
         default: 'Pending' 
     },
     isActive: { type: Boolean, default: true },
+     isDeleted: { type: Boolean, default: false },
     firstLogin: { type: Date }, // Will be set once on the very first login
     lastLogin: { type: Date },
     // Fields for password reset
@@ -29,6 +32,15 @@ userSchema.pre('save', async function (next) {
     if (!this.isModified('password')) return next();
     this.password = await bcrypt.hash(this.password, 10);
     next();
+});
+userSchema.pre(/^find/, function (next) {
+  if (this.op === 'findOne' || this.op === 'find') {
+    const query = this.getQuery();
+    if (query.isDeleted !== true) {
+      this.where({ isDeleted: { $ne: true } });
+    }
+  }
+  next();
 });
 
 userSchema.methods.isPasswordCorrect = async function (password) {

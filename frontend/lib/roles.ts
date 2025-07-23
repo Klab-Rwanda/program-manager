@@ -5,7 +5,7 @@ export const ROLES: Record<UserRole, string> = {
   program_manager: 'Program Manager',
   facilitator: 'Facilitator',
   trainee: 'Trainee',
-  it_support: 'IT Support'
+  it_support: 'IT-Support'
 }
 
 export const PERMISSIONS: Record<Permission, string> = {

@@ -24,7 +24,7 @@ const menuItems = [
     { title: "User Management", url: "/dashboard/SuperAdmin/user-management", icon: Users, roles: ['super_admin'] },
     { title: "Master Log", url: "/dashboard/SuperAdmin/master-log", icon: Activity, roles: ['super_admin'] },
     { title: "Reports & Export", url: "/dashboard/SuperAdmin/reports-export", icon: BarChart3, roles: ['super_admin'] },
-    { title: "System Monitoring", url: "/dashboard/SuperAdmin/system-monitoring", icon: Activity, roles: ['super_admin', 'it_support'] },
+    { title: "System Monitoring", url: "/dashboard/SuperAdmin/system-monitoring", icon: Activity, roles: [ 'it_support'] },
     // Program Manager
     { title: "Programs", url: "/dashboard/Manager/programs", icon: BookOpen, roles: ['program_manager'], countKey: 'programs' },
     { title: "Facilitators", url: "/dashboard/Manager/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },
@@ -47,8 +47,10 @@ const menuItems = [
     // IT Support
     { title: "Support Tickets", url: "/dashboard/It-support/support-tickets", icon: MessageSquare, roles: ['it_support'] },
     { title: "Maintenance", url: "/dashboard/It-support/maintenance", icon: Wrench, roles: ['it_support'] },
+
     //Submit Ticket
      { title: "submit-tickets", url: "/dashboard/submit-tickets", icon: MessageSquare, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee']},
+
     // Shared
    
 ];
