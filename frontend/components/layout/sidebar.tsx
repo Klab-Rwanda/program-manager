@@ -8,6 +8,7 @@ import {
   Calendar1,
   ChevronLeft, ChevronRight, ClipboardCheck, FileText, FolderOpen,
   GraduationCap, Home, LogOut, Mail, Menu, MessageSquare, Moon, Settings, Sun, Ticket,
+  TicketCheck,
   TrendingUp, Upload, User, UserCheck, Users, Wrench
 } from "lucide-react";
 
@@ -22,9 +23,11 @@ const menuItems = [
    
     // Super Admin
     { title: "User Management", url: "/dashboard/SuperAdmin/user-management", icon: Users, roles: ['super_admin'] },
+    { title: "Program Approval", url: "/dashboard/SuperAdmin/program-approval", icon: TicketCheck, roles: ['super_admin'] },
     { title: "Master Log", url: "/dashboard/SuperAdmin/master-log", icon: Activity, roles: ['super_admin'] },
     { title: "Reports & Export", url: "/dashboard/SuperAdmin/reports-export", icon: BarChart3, roles: ['super_admin'] },
     { title: "System Monitoring", url: "/dashboard/SuperAdmin/system-monitoring", icon: Activity, roles: [ 'it_support'] },
+   
     // Program Manager
     { title: "Programs", url: "/dashboard/Manager/programs", icon: BookOpen, roles: ['program_manager'], countKey: 'programs' },
     { title: "Facilitators", url: "/dashboard/Manager/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },

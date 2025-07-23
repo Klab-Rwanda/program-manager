@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { Download, Loader2, FileText, BarChart3, Users, Calendar } from "lucide-react"
-import { UserRole } from "@/lib/contexts/RoleContext"
+
+import { useAuth } from "@/lib/contexts/RoleContext"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,27 +13,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface Program {
-  id: string
-  name: string
+  id: string;
+  name: string;
 }
 
 interface ReportConfig {
-  programId: string
-  startDate: string
-  endDate: string
-  format: string
+  programId: string;
+  startDate: string;
+  endDate: string;
+  format: string;
 }
 
-// Mock data for demonstration
-const mockPrograms: Program[] = [
-  { id: "1", name: "Web Development Bootcamp" },
-  { id: "2", name: "Data Science Fundamentals" },
-  { id: "3", name: "Mobile App Development" },
-  { id: "4", name: "Cybersecurity Essentials" }
-]
-
 export default function ReportsExportPage() {
-  const { user } = useRole()
+  const { user } = useAuth()
   const [programs, setPrograms] = useState<Program[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -48,19 +41,33 @@ export default function ReportsExportPage() {
   useEffect(() => {
     const fetchPrograms = async () => {
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        setPrograms(mockPrograms)
-        if (mockPrograms.length > 0) {
-          setAttendanceReport(prev => ({ ...prev, programId: mockPrograms[0].id }))
+        // Get token from user context or authentication provider
+        const token = localStorage.getItem('accessToken')
+
+        const response = await fetch("http://localhost:8000/api/v1/programs", {
+          method: "GET",
+          credentials: "include",
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          }
+        });
+        if (!response.ok) throw new Error("Failed to fetch programs");
+        const json = await response.json();
+        // Assuming backend returns { statusCode, data: [...] }
+        const programList = Array.isArray(json.data) ? json.data : [];
+        setPrograms(programList);
+        if (programList.length > 0) {
+          setAttendanceReport(prev => ({ ...prev, programId: programList[0].id || programList[0]._id }));
         }
       } catch (err) {
-        console.error("Failed to fetch programs", err)
+        console.error("Failed to fetch programs", err);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
-    fetchPrograms()
+    };
+    fetchPrograms();
   }, [])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -304,8 +311,8 @@ export default function ReportsExportPage() {
       </Card>
     </div>
   )
+}
+
 } 
 
-function useRole(): { user: any } {
-  throw new Error("Function not implemented.")
-}
+

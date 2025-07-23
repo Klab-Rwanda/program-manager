@@ -95,3 +95,5 @@ export const generateProgramReport = async (id: string): Promise<Blob> => {
   });
   return response.data;
 }; 
+
+export type { Program };
