@@ -451,6 +451,7 @@ export default function SupportTicketsPage() {
                             </CardContent>
                         </Card>
                     ))}
+                </div>
           </div>
         </TabsContent>
       </Tabs>
@@ -522,7 +523,7 @@ export default function SupportTicketsPage() {
             <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
               Cancel
             </Button>
-            <Button type="submit" onClick={handleCreateTicket} disabled={isProcessing}>
+            <Button onClick={handleCreateTicket} disabled={isProcessing}>
                 {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Create Ticket"}
             </Button>
           </DialogFooter>
@@ -611,7 +612,7 @@ export default function SupportTicketsPage() {
               <Button type="button" variant="outline" onClick={() => setShowEditModal(false)}>
                 Cancel
               </Button>
-              <Button type="submit" onClick={handleUpdateTicket} disabled={isProcessing}>
+              <Button onClick={handleUpdateTicket} disabled={isProcessing}>
                 {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Update Ticket"}
               </Button>
             </DialogFooter>

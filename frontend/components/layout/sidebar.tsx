@@ -33,7 +33,7 @@ const menuItems = [
     // Facilitator
     { title: "My Programs", url: "/dashboard/Facilitator/fac-programs", icon: BookOpen, roles: ['facilitator'] },
     { title: "Attendance Tracking", url: "/dashboard/Facilitator/Fac-attendance", icon: Calendar, roles: ['facilitator'] },
-    { title: "Curriculum Upload", url: "/dashboard/Facilitator/fac-curriculum", icon: Upload, roles: ['facilitator'] },
+    { title: "Curriculum Upload", url: "/facilitator/curriculum", icon: Upload, roles: ['facilitator'] },
     { title: "Project Reviews", url: "/dashboard/Facilitator/fac-reviews", icon: ClipboardCheck, roles: ['facilitator'] },
     { title: "Weekly Roadmap", url: "/dashboard/Facilitator/fac-roadmap", icon: Calendar, roles: ['facilitator'] },
     // Trainee

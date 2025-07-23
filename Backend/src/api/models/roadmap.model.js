@@ -14,7 +14,15 @@ const roadmapSchema = new mongoose.Schema({
     title: { type: String, required: true },
     startDate: { type: Date, required: true },
     objectives: [{ type: String }],
-    topics: [dailyTopicSchema]
+    topics: [dailyTopicSchema],
+    status: { 
+        type: String, 
+        enum: ['draft', 'pending_approval', 'approved', 'rejected'], 
+        default: 'draft' 
+    },
+    feedback: { type: String },
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    approvedAt: { type: Date }
 }, { timestamps: true });
 
 // Ensure a program can only have one plan per week number

@@ -90,7 +90,7 @@ const LogFiltersComponent = ({ onFilterChange, filters }: { onFilterChange: (fil
                 <SelectValue placeholder="All Actions" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Actions</SelectItem>
+                <SelectItem value="all">All Actions</SelectItem>
                 {ALL_LOG_ACTIONS.map(action => (
                   <SelectItem key={action} value={action}>
                     {action.replace(/_/g, ' ')}

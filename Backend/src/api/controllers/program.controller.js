@@ -265,7 +265,7 @@ const unarchiveProgram = asyncHandler(async (req, res) => {
     }
     
     // Create log entry
-    await createLog({
+     await createLog({
         user: req.user._id,
         action: 'PROGRAM_UNARCHIVED',
         details: `${req.user.role} ${req.user.name} unarchived program '${program.name}'.`,
