@@ -886,7 +886,11 @@ export default function MaintenancePage() {
             </div>
           )}
           <DialogFooter>
+
+            <Button onClick={() => setShowViewModal(true)}>Close</Button>
+
             <Button type="button" onClick={() => setShowViewModal(false)}>Close</Button>
+
           </DialogFooter>
         </DialogContent>
       </Dialog>

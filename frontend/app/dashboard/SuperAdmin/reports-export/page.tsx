@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Download, Loader2, FileText, BarChart3, Users, Calendar } from "lucide-react"
-import { useRole } from "@/lib/contexts/RoleContext"
+import { UserRole } from "@/lib/contexts/RoleContext"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -305,3 +305,7 @@ export default function ReportsExportPage() {
     </div>
   )
 } 
+
+function useRole(): { user: any } {
+  throw new Error("Function not implemented.")
+}

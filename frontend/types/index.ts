@@ -167,3 +167,28 @@ export interface Student extends Trainee {
   completionDate: string
   isEligible: boolean
 }
+
+// types/ticket.ts
+
+export interface Comment {
+  _id: string;
+  author: string;
+  message: string;
+  timestamp: string;
+}
+
+export interface Ticket {
+  _id: string;
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+  status: string;
+  assignedTo?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  dueDate?: string;
+  resolution?: string;
+  comments: Comment[];
+}
