@@ -39,13 +39,19 @@ import authRoutes from './src/api/routes/v1/auth.route.js';
 import dashboardRoutes from './src/api/routes/v1/dashboard.route.js';
 import attendanceRoutes from './src/api/routes/v1/attendance.route.js';
 import certificateRoutes from './src/api/routes/v1/certificate.route.js'
+import ticketRoutes from './src/api/routes/v1/tickets.route.js'; 
+//                             ✅ now it matches the actual file name
+
+
 
 app.use('/api/v1/programs', programRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/attendance', attendanceRoutes);
-app.use('/api/v1/certificates', certificateRoutes)
+app.use('/api/v1/certificates', certificateRoutes);
+app.use('/api/v1/tickets', ticketRoutes);
+
 
 // Basic route for testing
 app.get('/', (req, res) => {
