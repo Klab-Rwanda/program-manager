@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 
 export default function SettingsPage() {
-  const { user, setUser } = useAuth(); // We need setUser to update the context after a name change
+  const { user, setUser } = useAuth(); 
   
   // State for forms
   const [name, setName] = useState(user?.name || "");
