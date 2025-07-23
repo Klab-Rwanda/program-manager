@@ -73,7 +73,7 @@ export default function SubmitTicketPage() {
 
     try {
       const res = await fetch(`http://localhost:8000/api/v1/tickets/${selectedTicket._id}/comment`, {
-        method: "PATCH",
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("token")}` || "",
