@@ -5,6 +5,8 @@ import {
   updateTicketById,
   deleteTicketById,
 } from '../models/ticket.model.js';
+import Ticket from '../models/ticketModel.js'; 
+
 
 
 
@@ -97,20 +99,25 @@ export const addCommentToTicket = async (req, res) => {
     return res.status(400).json({ error: "Message and author are required." });
   }
 
-  const ticket = await ticket.findById(id); // ✅ This will now work
-  if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+  try {
+    const ticket = await Ticket.findById(id);
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
 
-  ticket.comments.push({
-    message,
-    author,
-    timestamp: new Date(),
-  });
+    ticket.comments.push({
+      message,
+      author,
+      timestamp: new Date(),
+    });
 
-  await ticket.save();
-  res.status(200).json({ message: "Comment added", ticket });
+    await ticket.save();
+    res.status(200).json(ticket); // send the full updated ticket
+  } catch (error) {
+    console.error("Error adding comment:", error);
+    res.status(500).json({ error: "Server error" });
+  }
 };
-
-
 
 
 // controllers/ticketController.ts
@@ -125,7 +132,7 @@ export const resolveTicket = async (req, res) => {
   }
 
   try {
-    const ticket = await Ticket.findById(ticketId);
+    const ticket = await ticket.findById(ticketId);
     if (!ticket) return res.status(404).json({ message: "Ticket not found" });
 
     ticket.status = "resolved";
