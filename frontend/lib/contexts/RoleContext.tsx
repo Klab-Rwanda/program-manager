@@ -15,6 +15,7 @@ export interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+   setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,6 +25,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true); // Add loading state
 
+   const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+      setHasMounted(true);
+  }, []);
   const normalizeRole = (role: string): UserRole => {
       // Convert backend role names to frontend format
       const roleMap: Record<string, UserRole> = {
@@ -31,7 +37,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         'Program Manager': 'program_manager',
         'Facilitator': 'facilitator',
         'Trainee': 'trainee',
-        'ItSupport': 'it_support',
+
+        'IT-Support': 'it_support',
+        'it_support': 'it_support'
+
       };
       return roleMap[role] || role as UserRole;
   };
@@ -83,6 +92,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     loading,
     login,
     logout,
+      setUser,
   };
 
   return (

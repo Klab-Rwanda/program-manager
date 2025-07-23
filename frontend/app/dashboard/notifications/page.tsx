@@ -1,3 +1,4 @@
+// app/dashboard/notifications/page.tsx
 "use client"
 
 import { useState } from "react"
@@ -11,6 +12,7 @@ import {
   Search,
   Trash2,
   Archive,
+  Loader2 // Added Loader2 for auth loading
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,7 +20,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { toast } from "sonner" // Import toast
 
+import { useAuth } from "@/lib/contexts/RoleContext" // Import useAuth for role check
+
+// Interface for mock Notification data
 interface Notification {
   id: number
   title: string
@@ -31,147 +37,108 @@ interface Notification {
 }
 
 export default function NotificationsPage() {
+  const { user, role, loading: authLoading } = useAuth(); // Get user and role from context
+
   const [searchTerm, setSearchTerm] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [filterCategory, setFilterCategory] = useState("all")
 
-  const [notifications] = useState<Notification[]>([
+  // Mock notifications data (managed locally as no backend integration for tickets)
+  const [notifications, setNotifications] = useState<Notification[]>([
     {
-      id: 1,
-      title: "New Program Enrollment",
-      message: "25 new trainees have enrolled in the Data Science Bootcamp program.",
-      type: "success",
-      timestamp: "2024-01-20 10:30 AM",
-      read: false,
-      category: "Enrollment",
-      priority: "medium",
+      id: 1, title: "New Program Enrollment", message: "25 new trainees have enrolled in the Data Science Bootcamp program.", type: "success", timestamp: "2024-01-20 10:30 AM", read: false, category: "Enrollment", priority: "medium",
     },
     {
-      id: 2,
-      title: "System Maintenance",
-      message: "Scheduled maintenance will occur tonight from 2:00 AM to 4:00 AM. Some services may be temporarily unavailable.",
-      type: "warning",
-      timestamp: "2024-01-20 09:15 AM",
-      read: false,
-      category: "System",
-      priority: "high",
+      id: 2, title: "System Maintenance", message: "Scheduled maintenance will occur tonight from 2:00 AM to 4:00 AM. Some services may be temporarily unavailable.", type: "warning", timestamp: "2024-01-20 09:15 AM", read: false, category: "System", priority: "high",
     },
     {
-      id: 3,
-      title: "Project Submission Deadline",
-      message: "Reminder: Web Development project submissions are due tomorrow at 5:00 PM.",
-      type: "info",
-      timestamp: "2024-01-20 08:45 AM",
-      read: true,
-      category: "Academic",
-      priority: "high",
+      id: 3, title: "Project Submission Deadline", message: "Reminder: Web Development project submissions are due tomorrow at 5:00 PM.", type: "info", timestamp: "2024-01-20 08:45 AM", read: true, category: "Academic", priority: "high",
     },
     {
-      id: 4,
-      title: "Certificate Generated",
-      message: "Your UI/UX Design Mastery certificate has been generated and is ready for download.",
-      type: "success",
-      timestamp: "2024-01-19 03:20 PM",
-      read: true,
-      category: "Certificate",
-      priority: "medium",
+      id: 4, title: "Certificate Generated", message: "Your UI/UX Design Mastery certificate has been generated and is ready for download.", type: "success", timestamp: "2024-01-19 03:20 PM", read: true, category: "Certificate", priority: "medium",
     },
     {
-      id: 5,
-      title: "Network Issue Resolved",
-      message: "The WiFi connectivity issues in Building A have been resolved. All services are now functioning normally.",
-      type: "success",
-      timestamp: "2024-01-19 02:45 PM",
-      read: true,
-      category: "System",
-      priority: "medium",
+      id: 5, title: "Network Issue Resolved", message: "The WiFi connectivity issues in Building A have been resolved. All services are now functioning normally.", type: "success", timestamp: "2024-01-19 02:45 PM", read: true, category: "System", priority: "medium",
     },
     {
-      id: 6,
-      title: "New Resource Available",
-      message: "New learning materials have been uploaded for the Machine Learning module.",
-      type: "info",
-      timestamp: "2024-01-19 11:30 AM",
-      read: false,
-      category: "Resources",
-      priority: "low",
+      id: 6, title: "New Resource Available", message: "New learning materials have been uploaded for the Machine Learning module.", type: "info", timestamp: "2024-01-19 11:30 AM", read: false, category: "Resources", priority: "low",
     },
     {
-      id: 7,
-      title: "Attendance Alert",
-      message: "You have missed 3 consecutive sessions. Please contact your facilitator if you need assistance.",
-      type: "warning",
-      timestamp: "2024-01-18 04:15 PM",
-      read: false,
-      category: "Academic",
-      priority: "high",
+      id: 7, title: "Attendance Alert", message: "You have missed 3 consecutive sessions. Please contact your facilitator if you need assistance.", type: "warning", timestamp: "2024-01-18 04:15 PM", read: false, category: "Academic", priority: "high",
     },
     {
-      id: 8,
-      title: "System Update Complete",
-      message: "The latest system update has been successfully installed. New features are now available.",
-      type: "success",
-      timestamp: "2024-01-18 10:00 AM",
-      read: true,
-      category: "System",
-      priority: "low",
+      id: 8, title: "System Update Complete", message: "The latest system update has been successfully installed. New features are now available.", type: "success", timestamp: "2024-01-18 10:00 AM", read: true, category: "System", priority: "low",
     },
-  ])
+  ]);
 
   const filteredNotifications = notifications.filter((notification) => {
-    const matchesSearch = 
+    const matchesSearch =
       notification.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       notification.message.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesType = filterType === "all" || notification.type === filterType
     const matchesCategory = filterCategory === "all" || notification.category === filterCategory
     return matchesSearch && matchesType && matchesCategory
-  })
+  });
 
-  const unreadNotifications = filteredNotifications.filter(n => !n.read)
-  const readNotifications = filteredNotifications.filter(n => n.read)
+  const unreadNotifications = filteredNotifications.filter(n => !n.read);
+  const readNotifications = filteredNotifications.filter(n => n.read);
 
+  // UI Helpers
   const getTypeConfig = (type: string) => {
     switch (type) {
-      case "success":
-        return { icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-50" }
-      case "warning":
-        return { icon: AlertTriangle, color: "text-yellow-600", bgColor: "bg-yellow-50" }
-      case "error":
-        return { icon: AlertTriangle, color: "text-red-600", bgColor: "bg-red-50" }
-      case "info":
-        return { icon: Info, color: "text-blue-600", bgColor: "bg-blue-50" }
-      default:
-        return { icon: Info, color: "text-gray-600", bgColor: "bg-gray-50" }
+      case "success": return { icon: CheckCircle, color: "text-green-600", bgColor: "bg-green-50" }
+      case "warning": return { icon: AlertTriangle, color: "text-yellow-600", bgColor: "bg-yellow-50" }
+      case "error": return { icon: AlertTriangle, color: "text-red-600", bgColor: "bg-red-50" }
+      case "info": return { icon: Info, color: "text-blue-600", bgColor: "bg-blue-50" }
+      default: return { icon: Info, color: "text-gray-600", bgColor: "bg-gray-50" }
     }
   }
 
   const getPriorityConfig = (priority: string) => {
     switch (priority) {
-      case "high":
-        return { label: "High", variant: "destructive" as const }
-      case "medium":
-        return { label: "Medium", variant: "default" as const }
-      case "low":
-        return { label: "Low", variant: "secondary" as const }
-      default:
-        return { label: priority, variant: "outline" as const }
+      case "high": return { label: "High", variant: "destructive" as const }
+      case "medium": return { label: "Medium", variant: "default" as const }
+      case "low": return { label: "Low", variant: "secondary" as const }
+      default: return { label: priority, variant: "outline" as const }
     }
   }
 
+  // Mock Handlers for notifications (as backend doesn't support them yet)
   const markAsRead = (id: number) => {
-    // In a real app, this would update the backend
-    console.log("Marking notification as read:", id)
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    toast.success("Notification marked as read!");
   }
 
   const markAllAsRead = () => {
-    // In a real app, this would update the backend
-    console.log("Marking all notifications as read")
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    toast.success("All notifications marked as read!");
   }
 
   const deleteNotification = (id: number) => {
-    // In a real app, this would delete from the backend
-    console.log("Deleting notification:", id)
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    toast.success("Notification deleted.");
   }
+
+  // Render nothing or a loading spinner if authentication is still loading
+  if (authLoading) {
+    return (
+      <div className="flex justify-center items-center h-full min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Access control: Notifications are generally for all authenticated users
+  // No specific role check applied here, as it's a general feature.
+  if (!user && !authLoading) {
+    return (
+        <Card>
+            <CardHeader><CardTitle>Access Denied</CardTitle></CardHeader>
+            <CardContent><p className="text-muted-foreground">You must be logged in to view notifications.</p></CardContent>
+        </Card>
+    );
+  }
+
 
   return (
     <div className="space-y-6">
@@ -370,4 +337,4 @@ export default function NotificationsPage() {
       </Tabs>
     </div>
   )
-} 
+}

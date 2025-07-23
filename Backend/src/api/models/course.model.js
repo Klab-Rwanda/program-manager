@@ -6,6 +6,7 @@ const courseSchema = new mongoose.Schema({
     program: { type: mongoose.Schema.Types.ObjectId, ref: 'Program', required: true },
     facilitator: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     contentUrl: { type: String, required: true }, // URL to the uploaded document
+    type: { type: String }, // File type (pdf, mp4, etc.)
     status: {
         type: String,
         enum: ['Draft', 'PendingApproval', 'Approved', 'Rejected'], 

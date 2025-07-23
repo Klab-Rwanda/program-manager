@@ -17,7 +17,10 @@ import {
     
     // Legacy endpoints
     markAttendance,
-    getSessionQRCode
+    getSessionQRCode,
+    markManualStudentAttendance,
+    startPhysicalSession,
+    openQrForSession
 } from '../../controllers/attendance.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole as verifyRole } from '../../middlewares/role.middleware.js';
@@ -102,5 +105,19 @@ router.post('/mark', markAttendance);
 
 // Legacy QR code generation
 router.get('/qr/:sessionId', getSessionQRCode);
+router.post('/sessions/:sessionId/manual-attendance',
+    verifyRole(['Facilitator', 'Program Manager']), // Only facilitators or PMs can manually mark
+    markManualStudentAttendance
+);
+
+router.post('/sessions/:sessionId/start-physical', 
+    verifyRole(['Facilitator']), 
+    startPhysicalSession // Add this new route
+);
+
+router.post('/sessions/:sessionId/open-qr', 
+    verifyRole(['Facilitator']), 
+    openQrForSession // Add this new route
+);
 
 export default router;

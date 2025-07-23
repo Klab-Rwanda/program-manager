@@ -11,23 +11,45 @@ import { Submission } from '../models/submission.model.js';
  * @access  Private (SuperAdmin)
  */
 const getAllUsers = asyncHandler(async (req, res) => {
-    // Get the role from the query parameters (e.g., /users/manage?role=ProgramManager)
     const { role } = req.query; 
 
-    // Start with a base query that all requests will have
     let query = { isActive: true };
-
-    // If a role is provided in the query, add it to our database query
     if (role) {
-       
-        const roleRegex = new RegExp(role.replace(' ', ''), 'i');
+        const roleRegex = new RegExp(`^${role.replace(/\s/g, '\\s*')}$`, 'i');
         query.role = { $regex: roleRegex };
     }
 
-    const users = await User.find(query).select('-password');
+    // Use aggregation to populate enrolled programs for trainees
+    const users = await User.aggregate([
+        { $match: query },
+        {
+            $lookup: {
+                from: "programs", // The name of the programs collection in MongoDB
+                localField: "_id",
+                foreignField: "trainees",
+                as: "enrolledPrograms"
+            }
+        },
+        {
+            $project: {
+                password: 0, // Exclude password
+                forgotPasswordToken: 0,
+                forgotPasswordExpiry: 0,
+                // Reshape enrolledPrograms to be an array of names
+                enrolledPrograms: {
+                    $map: {
+                        input: "$enrolledPrograms",
+                        as: "program",
+                        in: "$$program.name"
+                    }
+                }
+            }
+        }
+    ]);
     
     return res.status(200).json(new ApiResponse(200, users, "Users fetched successfully."));
 });
+
 
 
 /**
@@ -275,6 +297,57 @@ export const getArchivedUsers = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, users, "Archived users fetched successfully."));
 });
 
+ const updateUserDetailsByAdmin = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { name, role } = req.body;
+
+    // A SuperAdmin should not be able to change their own role.
+    if (req.user._id.toString() === id && role && req.user.role !== role) {
+        throw new ApiError(400, "You cannot change your own role.");
+    }
+    
+    const userToUpdate = await User.findById(id);
+    if (!userToUpdate) {
+        throw new ApiError(404, "User not found.");
+    }
+
+    if (name) userToUpdate.name = name.trim();
+    if (role) userToUpdate.role = role;
+
+    await userToUpdate.save({ validateBeforeSave: false });
+
+    const updatedUser = await User.findById(id).select('-password');
+    return res.status(200).json(new ApiResponse(200, updatedUser, "User details updated successfully."));
+});
+
+
+/**
+ * @desc    Admin permanently (soft) deletes a user.
+ * @route   DELETE /api/v1/users/manage/:id
+ * @access  Private (SuperAdmin)
+ */
+ const deleteUserByAdmin = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    // A SuperAdmin should not be able to delete themselves.
+    if (req.user._id.toString() === id) {
+        throw new ApiError(400, "You cannot delete your own account.");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        id,
+        { $set: { isActive: false, isDeleted: true } },
+        { new: true }
+    );
+
+    if (!user) {
+        throw new ApiError(404, "User not found.");
+    }
+
+    return res.status(200).json(new ApiResponse(200, {}, "User has been deleted."));
+});
+
+
 
 export {
     getAllUsers, 
@@ -284,5 +357,7 @@ export {
     changeCurrentPassword,
     getOnboardedUsers,
     updateUserStatus,
-    getUserListByRole
+    getUserListByRole,
+    updateUserDetailsByAdmin,
+    deleteUserByAdmin,
 };

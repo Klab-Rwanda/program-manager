@@ -1,201 +1,134 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Calendar, Clock, User, BookOpen, TrendingUp, CheckCircle, Play } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect, useCallback } from "react";
+import { Calendar, User, BookOpen, TrendingUp, CheckCircle, Play, Loader2, AlertCircle } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-interface Program {
-  id: number
-  title: string
-  facilitator: string
-  startDate: string
-  endDate: string
-  status: string
-  progress: number
-  description: string
-  nextSession?: string
-  totalSessions?: number
-  completedSessions?: number
+import { useAuth } from "@/lib/contexts/RoleContext";
+import { getAllPrograms } from "@/lib/services/program.service";
+import { Program as BackendProgram } from "@/types";
+
+interface Program extends BackendProgram {
+  progress: number;
+  completedSessions: number;
+  totalSessions: number;
+  nextSession: string;
 }
 
 export default function MyLearningPage() {
-  const [programs] = useState<Program[]>([
-    {
-      id: 1,
-      title: "Full Stack Web Development",
-      facilitator: "Diane Erica",
-      startDate: "2024-01-15",
-      endDate: "2024-06-15",
-      status: "Ongoing",
-      progress: 65,
-      description: "Comprehensive web development program covering frontend and backend technologies",
-      nextSession: "Today, 2:00 PM",
-      totalSessions: 24,
-      completedSessions: 16,
-    },
-    {
-      id: 2,
-      title: "Mobile App Development",
-      facilitator: "Mike Danny",
-      startDate: "2024-02-01",
-      endDate: "2024-07-01",
-      status: "Ongoing",
-      progress: 45,
-      description: "Learn to build mobile applications using React Native and Flutter",
-      nextSession: "Tomorrow, 10:00 AM",
-      totalSessions: 20,
-      completedSessions: 9,
-    },
-    {
-      id: 3,
-      title: "Data Science Fundamentals",
-      facilitator: "Sarah Prima",
-      startDate: "2023-10-01",
-      endDate: "2024-01-01",
-      status: "Completed",
-      progress: 100,
-      description: "Introduction to data science, analytics, and machine learning",
-      totalSessions: 16,
-      completedSessions: 16,
-    },
-  ])
+  const { user, role, loading: authLoading } = useAuth();
 
+  const [programs, setPrograms] = useState<Program[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchMyPrograms = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // The backend's getAllPrograms automatically filters for the logged-in trainee
+      const backendPrograms: BackendProgram[] = await getAllPrograms();
+
+      // Transform backend data and add mock data for fields not yet in backend
+      const transformedPrograms: Program[] = backendPrograms.map(p => ({
+        ...p,
+        status: new Date(p.endDate) < new Date() ? 'Completed' : 'Active',
+        progress: new Date(p.endDate) < new Date() ? 100 : Math.floor(50 + Math.random() * 40), // Mock progress
+        completedSessions: Math.floor(Math.random() * 20), // Mock data
+        totalSessions: 25, // Mock data
+        nextSession: `Tomorrow, ${Math.floor(9 + Math.random() * 5)}:00 AM`, // Mock data
+      }));
+      setPrograms(transformedPrograms);
+
+    } catch (err: any) {
+      const message = err.response?.data?.message || "Failed to load your enrolled programs.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authLoading && role === 'trainee') {
+      fetchMyPrograms();
+    }
+  }, [authLoading, role, fetchMyPrograms]);
+  
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "Ongoing":
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Ongoing</Badge>
+      case "Active":
+        return <Badge className="bg-blue-100 text-blue-800">Active</Badge>;
       case "Completed":
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Completed</Badge>
-      case "Upcoming":
-        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Upcoming</Badge>
+        return <Badge className="bg-green-100 text-green-800">Completed</Badge>;
       default:
-        return <Badge variant="secondary">{status}</Badge>
+        return <Badge variant="secondary">{status}</Badge>;
     }
-  }
+  };
 
-  const getProgressColor = (progress: number) => {
-    if (progress >= 80) return "bg-green-500"
-    if (progress >= 60) return "bg-blue-500"
-    if (progress >= 40) return "bg-yellow-500"
-    return "bg-red-500"
+  if (authLoading || isLoading) {
+    return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
-
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">My Learning</h1>
-          <p className="text-muted-foreground">
-            Track your progress across all enrolled programs
-          </p>
+          <p className="text-muted-foreground">Track your progress across all enrolled programs</p>
         </div>
-        <div className="flex items-center space-x-2">
-          <Badge variant="secondary">{programs.length} Programs</Badge>
-        </div>
+        <Badge variant="secondary">{programs.length} Active Programs</Badge>
       </div>
 
-      {/* Overview Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Programs</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {programs.filter(p => p.status === "Ongoing").length}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Currently enrolled
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Progress</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {Math.round(programs.reduce((sum, p) => sum + p.progress, 0) / programs.length)}%
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Across all programs
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed Sessions</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {programs.reduce((sum, p) => sum + (p.completedSessions || 0), 0)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Total sessions attended
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Next Session</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">Today</div>
-            <p className="text-xs text-muted-foreground">
-              2:00 PM - Web Development
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      {error && <Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
 
-      {/* Programs Grid */}
+      {!error && programs.length === 0 && (
+          <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                  <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Programs Assigned</h3>
+                  <p className="text-muted-foreground text-center">You are not currently enrolled in any programs.</p>
+              </CardContent>
+          </Card>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {programs.map((program) => (
-          <Card key={program.id} className="relative">
+          <Card key={program._id}>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">{program.title}</CardTitle>
+                <CardTitle className="text-lg">{program.name}</CardTitle>
                 {getStatusBadge(program.status)}
               </div>
               <CardDescription>{program.description}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Facilitator Info */}
               <div className="flex items-center space-x-2">
                 <User className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">{program.facilitator}</span>
+                <span className="text-sm font-medium">{program.programManager?.name || 'N/A'}</span>
               </div>
-
-              {/* Date Range */}
               <div className="flex items-center space-x-2">
                 <Calendar className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">
                   {new Date(program.startDate).toLocaleDateString()} - {new Date(program.endDate).toLocaleDateString()}
                 </span>
               </div>
-
-              {/* Progress Section */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Progress</span>
                   <span className="text-sm font-bold">{program.progress}%</span>
                 </div>
                 <Progress value={program.progress} className="h-2" />
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{program.completedSessions} of {program.totalSessions} sessions</span>
-                  <span>{Math.round((program.completedSessions || 0) / (program.totalSessions || 1) * 100)}% complete</span>
+                <div className="text-xs text-muted-foreground">
+                  {program.completedSessions} of {program.totalSessions} sessions completed
                 </div>
               </div>
-
-              {/* Next Session */}
-              {program.status === "Ongoing" && program.nextSession && (
+              {program.status === "Active" && (
                 <div className="flex items-center space-x-2 p-3 bg-blue-50 rounded-lg">
                   <Play className="h-4 w-4 text-blue-600" />
                   <div>
@@ -204,8 +137,6 @@ export default function MyLearningPage() {
                   </div>
                 </div>
               )}
-
-              {/* Actions */}
               <div className="flex space-x-2 pt-2">
                 <Button variant="outline" size="sm" className="flex-1">
                   <BookOpen className="h-4 w-4 mr-2" />
@@ -219,34 +150,6 @@ export default function MyLearningPage() {
           </Card>
         ))}
       </div>
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Access your learning resources and tools</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Button variant="outline" className="h-20 flex-col space-y-2">
-              <BookOpen className="h-6 w-6" />
-              <span className="text-sm">Continue Learning</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex-col space-y-2">
-              <Calendar className="h-6 w-6" />
-              <span className="text-sm">View Schedule</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex-col space-y-2">
-              <TrendingUp className="h-6 w-6" />
-              <span className="text-sm">Track Progress</span>
-            </Button>
-            <Button variant="outline" className="h-20 flex-col space-y-2">
-              <User className="h-6 w-6" />
-              <span className="text-sm">Contact Facilitator</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
-  )
-} 
+  );
+}

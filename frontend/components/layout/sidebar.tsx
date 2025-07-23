@@ -16,9 +16,11 @@ import { useAuth } from "@/lib/contexts/RoleContext";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useCounts } from "@/lib/contexts/CountsContext";
 import { useTheme } from "next-themes";
+import { title } from "process";
 
 const menuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee', 'it_support'] },
+   
     // Super Admin
     { title: "User Management", url: "/dashboard/SuperAdmin/user-management", icon: Users, roles: ['super_admin'] },
     { title: "Program Approval", url: "/dashboard/SuperAdmin/program-approval", icon: TicketCheck, roles: ['super_admin'] },
@@ -48,6 +50,10 @@ const menuItems = [
     // IT Support
     { title: "Support Tickets", url: "/dashboard/It-support/support-tickets", icon: MessageSquare, roles: ['it_support'] },
     { title: "Maintenance", url: "/dashboard/It-support/maintenance", icon: Wrench, roles: ['it_support'] },
+
+    //Submit Ticket
+     { title: "submit-tickets", url: "/dashboard/submit-tickets", icon: MessageSquare, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee']},
+
     // Shared
    
 ];
@@ -84,7 +90,7 @@ export function AppSidebar() {
   const unreadCount = notifications.filter(n => n.unread).length;
 
   const filteredMenuItems = menuItems.filter(item =>
-    role ? item.roles.includes(role) : false
+    role ? item.roles?.includes(role) : false
   );
 
   const sidebarWidth = isCollapsed ? '80px' : '280px';

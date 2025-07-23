@@ -5,6 +5,15 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import connectDB from './src/config/db.js';
 
+import programRoutes from './src/api/routes/v1/program.route.js';
+import userRoutes from './src/api/routes/v1/user.route.js';
+import authRoutes from './src/api/routes/v1/auth.route.js';
+import dashboardRoutes from './src/api/routes/v1/dashboard.route.js';
+import attendanceRoutes from './src/api/routes/v1/attendance.route.js';
+import certificateRoutes from './src/api/routes/v1/certificate.route.js';
+import ticketRoutes from './src/api/routes/v1/tickets.route.js';
+import reportRoutes from './src/api/routes/v1/report.route.js';
+
 dotenv.config();
 
 const app = express();
@@ -23,23 +32,13 @@ app.use(limiter);
 // CORS configuration
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true,
-   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  credentials: true
 }));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// API Routes
-import programRoutes from './src/api/routes/v1/program.route.js';
-import userRoutes from './src/api/routes/v1/user.route.js';
-import authRoutes from './src/api/routes/v1/auth.route.js';
-import dashboardRoutes from './src/api/routes/v1/dashboard.route.js';
-import attendanceRoutes from './src/api/routes/v1/attendance.route.js';
-import certificateRoutes from './src/api/routes/v1/certificate.route.js';
-import reportRoutes from './src/api/routes/v1/report.route.js';
 
 app.use('/api/v1/programs', programRoutes);
 app.use('/api/v1/users', userRoutes);
@@ -48,6 +47,7 @@ app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/attendance', attendanceRoutes);
 app.use('/api/v1/certificates', certificateRoutes);
 app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/tickets', ticketRoutes);
 
 // Basic route for testing
 app.get('/', (req, res) => {
@@ -70,15 +70,15 @@ app.get('/health', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    error: 'Something went wrong!',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+  res.status(err.statusCode || 500).json({ 
+    error: err.message || 'Something went wrong!',
+    success: false
   });
 });
 
 // 404 handler
 app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+  res.status(404).json({ error: 'Route not found', success: false });
 });
 
 // Connect to database and start server
@@ -97,4 +97,4 @@ const startServer = async () => {
   }
 };
 
-startServer(); 
+startServer();

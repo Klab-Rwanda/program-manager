@@ -1,6 +1,7 @@
+// app/dashboard/analytics/page.tsx
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   TrendingUp,
   TrendingDown,
@@ -18,13 +19,22 @@ import {
   Eye,
   Download,
   Filter,
+  Loader2, // Added Loader2 for mock loading
+  AlertCircle, // For error alerts (though not used in mock error display here)
+  XCircle, // For closing error alerts (though not used)
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { toast } from "sonner" // Import toast for notifications
+// Removed Alert, AlertDescription as error handling is simplified for mock data
 
+import { useAuth } from "@/lib/contexts/RoleContext" // Import useAuth for role check
+// Removed api import as data is mocked
+
+// Define interfaces for mock data
 interface AnalyticsData {
   totalPrograms: number
   activePrograms: number
@@ -59,10 +69,15 @@ interface AnalyticsData {
 }
 
 export default function AnalyticsPage() {
+  const { user, role, loading: authLoading } = useAuth(); // Get user and role from context
+
   const [timeRange, setTimeRange] = useState("30d")
   const [selectedProgram, setSelectedProgram] = useState("all")
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null); // State for analytics data
+  const [isLoading, setIsLoading] = useState(true); // Loading state
 
-  const [analyticsData] = useState<AnalyticsData>({
+  // Mock data as backend doesn't provide these aggregated analytics directly
+  const mockAnalyticsData: AnalyticsData = {
     totalPrograms: 12,
     activePrograms: 8,
     totalTrainees: 234,
@@ -73,109 +88,45 @@ export default function AnalyticsPage() {
     totalRevenue: 125000,
     monthlyGrowth: 15,
     programPerformance: [
-      {
-        name: "Data Science Bootcamp",
-        enrollment: 45,
-        completion: 38,
-        satisfaction: 4.8,
-        revenue: 45000,
-      },
-      {
-        name: "Web Development Mastery",
-        enrollment: 32,
-        completion: 28,
-        satisfaction: 4.6,
-        revenue: 32000,
-      },
-      {
-        name: "UI/UX Design Mastery",
-        enrollment: 28,
-        completion: 25,
-        satisfaction: 4.9,
-        revenue: 28000,
-      },
-      {
-        name: "Mobile App Development",
-        enrollment: 22,
-        completion: 18,
-        satisfaction: 4.4,
-        revenue: 22000,
-      },
+      { name: "Data Science Bootcamp", enrollment: 45, completion: 38, satisfaction: 4.8, revenue: 45000, },
+      { name: "Web Development Mastery", enrollment: 32, completion: 28, satisfaction: 4.6, revenue: 32000, },
+      { name: "UI/UX Design Mastery", enrollment: 28, completion: 25, satisfaction: 4.9, revenue: 28000, },
+      { name: "Mobile App Development", enrollment: 22, completion: 18, satisfaction: 4.4, revenue: 22000, },
     ],
     recentActivities: [
-      {
-        id: 1,
-        type: "enrollment",
-        message: "25 new trainees enrolled in Data Science Program",
-        time: "2 hours ago",
-        impact: "+15%",
-      },
-      {
-        id: 2,
-        type: "completion",
-        message: "Web Development cohort completed successfully",
-        time: "5 hours ago",
-        impact: "+8%",
-      },
-      {
-        id: 3,
-        type: "assignment",
-        message: "New facilitator assigned to AI/ML Program",
-        time: "1 day ago",
-        impact: "+5%",
-      },
-      {
-        id: 4,
-        type: "certificate",
-        message: "89 certificates generated for graduates",
-        time: "2 days ago",
-        impact: "+12%",
-      },
+      { id: 1, type: "enrollment", message: "25 new trainees enrolled in Data Science Program", time: "2 hours ago", impact: "+15%", },
+      { id: 2, type: "completion", message: "Web Development cohort completed successfully", time: "5 hours ago", impact: "+8%", },
+      { id: 3, type: "assignment", message: "New facilitator assigned to AI/ML Program", time: "1 day ago", impact: "+5%", },
+      { id: 4, type: "certificate", message: "89 certificates generated for graduates", time: "2 days ago", impact: "+12%", },
     ],
     topPerformers: [
-      {
-        name: "John Doe",
-        program: "Data Science Bootcamp",
-        progress: 95,
-        attendance: 98,
-        projects: 10,
-      },
-      {
-        name: "Jane Smith",
-        program: "Web Development Mastery",
-        progress: 88,
-        attendance: 95,
-        projects: 8,
-      },
-      {
-        name: "Alice Brown",
-        program: "UI/UX Design Mastery",
-        progress: 92,
-        attendance: 97,
-        projects: 9,
-      },
-      {
-        name: "Bob Wilson",
-        program: "Data Science Bootcamp",
-        progress: 90,
-        attendance: 94,
-        projects: 9,
-      },
+      { name: "John Doe", program: "Data Science Bootcamp", progress: 95, attendance: 98, projects: 10, },
+      { name: "Jane Smith", program: "Web Development Mastery", progress: 88, attendance: 95, projects: 8, },
+      { name: "Alice Brown", program: "UI/UX Design Mastery", progress: 92, attendance: 97, projects: 9, },
+      { name: "Bob Wilson", program: "Data Science Bootcamp", progress: 90, attendance: 94, projects: 9, },
     ],
-  })
+  };
 
+  // Simulate data fetching on component mount
+  useEffect(() => {
+    // Analytics data often takes time to compute, so we'll simulate a load.
+    setIsLoading(true);
+    const timer = setTimeout(() => {
+      setAnalyticsData(mockAnalyticsData);
+      setIsLoading(false);
+    }, 1000); // Simulate 1 second load time
+
+    return () => clearTimeout(timer); // Cleanup timer
+  }, []);
+
+  // UI Helpers
   const getActivityIcon = (type: string) => {
     switch (type) {
-      case "enrollment":
-        return <Users className="h-4 w-4 text-blue-600" />
-      case "completion":
-        return <Award className="h-4 w-4 text-green-600" />
-      case "assignment":
-        return <GraduationCap className="h-4 w-4 text-purple-600" />
-      case "certificate":
-        return <Award className="h-4 w-4 text-yellow-600" />
-      default:
-        return <Activity className="h-4 w-4 text-gray-600" />
+      case "enrollment": return <Users className="h-4 w-4 text-blue-600" />
+      case "completion": return <Award className="h-4 w-4 text-green-600" />
+      case "assignment": return <GraduationCap className="h-4 w-4 text-purple-600" />
+      case "certificate": return <Award className="h-4 w-4 text-yellow-600" />
+      default: return <Activity className="h-4 w-4 text-gray-600" />
     }
   }
 
@@ -184,10 +135,41 @@ export default function AnalyticsPage() {
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount)
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", }).format(amount)
+  }
+
+  // Handle quick action buttons with toasts
+  const handleQuickAction = (action: string) => {
+    toast.info(`Analytics Quick Action: ${action} triggered! (Functionality mocked)`);
+    // Implement actual logic here when backend is ready
+  }
+
+  // Render nothing or a loading spinner if authentication is still loading
+  if (authLoading) {
+    return (
+      <div className="flex justify-center items-center h-full min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Access control: Only Super Admin and Program Manager should see this page
+  if (!user || (role !== 'super_admin' && role !== 'program_manager')) {
+    return (
+        <Card>
+            <CardHeader><CardTitle>Access Denied</CardTitle></CardHeader>
+            <CardContent><p className="text-muted-foreground">You do not have permission to view this page.</p></CardContent>
+        </Card>
+    );
+  }
+
+  // Display content after loading and if role is correct
+  if (isLoading || !analyticsData) { // Check if data is still loading
+    return (
+      <div className="flex justify-center items-center h-full min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -217,13 +199,14 @@ export default function AnalyticsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Programs</SelectItem>
+              {/* These would come from backend programs list */}
               <SelectItem value="data-science">Data Science Bootcamp</SelectItem>
               <SelectItem value="web-dev">Web Development Mastery</SelectItem>
               <SelectItem value="ui-ux">UI/UX Design Mastery</SelectItem>
               <SelectItem value="mobile">Mobile App Development</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => handleQuickAction("Export Report")}>
             <Download className="mr-2 h-4 w-4" />
             Export Report
           </Button>
@@ -304,8 +287,8 @@ export default function AnalyticsPage() {
                 <div className="text-3xl font-bold text-green-600">{analyticsData.attendanceRate}%</div>
                 <p className="text-sm text-muted-foreground">Average across all programs</p>
                 <div className="mt-4 h-2 bg-gray-200 rounded-full">
-                  <div 
-                    className="h-2 bg-green-600 rounded-full" 
+                  <div
+                    className="h-2 bg-green-600 rounded-full"
                     style={{ width: `${analyticsData.attendanceRate}%` }}
                   ></div>
                 </div>
@@ -323,8 +306,8 @@ export default function AnalyticsPage() {
                 <div className="text-3xl font-bold text-blue-600">{analyticsData.averageProgress}%</div>
                 <p className="text-sm text-muted-foreground">Overall trainee progress</p>
                 <div className="mt-4 h-2 bg-gray-200 rounded-full">
-                  <div 
-                    className="h-2 bg-blue-600 rounded-full" 
+                  <div
+                    className="h-2 bg-blue-600 rounded-full"
                     style={{ width: `${analyticsData.averageProgress}%` }}
                   ></div>
                 </div>
@@ -497,4 +480,4 @@ export default function AnalyticsPage() {
       </Card>
     </div>
   )
-} 
+}
