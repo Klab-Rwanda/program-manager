@@ -17,8 +17,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"; // For error di
 
 
 export default function SettingsPage() {
+
   const { user, setUser, loading: authLoading } = useAuth(); // Access setUser to update context after name change
-  
+
   // State for forms
   const [name, setName] = useState(user?.name || "");
   const [passwordData, setPasswordData] = useState({ oldPassword: "", newPassword: "", confirmPassword: "" });
