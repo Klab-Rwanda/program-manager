@@ -1,50 +1,70 @@
 "use client";
-import { QrReader } from 'react-qr-reader';
-import { Loader2 } from 'lucide-react';
-import { useState } from 'react';
+
+import React, { useEffect, useRef } from 'react';
+import { Html5QrcodeScanner, Html5QrcodeScannerState } from 'html5-qrcode';
+import { ScanLine } from 'lucide-react';
 
 interface QrScannerProps {
-  onScanSuccess: (data: string) => void;
-  onScanError: (error: any) => void;
+  onResult: (result: string) => void;
+  onError?: (error: string) => void;
 }
 
-export const QrScanner = ({ onScanSuccess, onScanError }: QrScannerProps) => {
-  const [isLoaded, setIsLoaded] = useState(false);
+const QrScanner: React.FC<QrScannerProps> = ({ onResult, onError }) => {
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const scannerElementId = "qr-reader-container";
+
+  useEffect(() => {
+    if (scannerRef.current) {
+      return;
+    }
+
+    const scanner = new Html5QrcodeScanner(
+      scannerElementId,
+      {
+        fps: 10,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const qrboxSize = Math.floor(minEdge * 0.7);
+          return { width: qrboxSize, height: qrboxSize };
+        },
+        rememberLastUsedCamera: true,
+        supportedScanTypes: [],
+      },
+      false
+    );
+
+    const successCallback = (decodedText: string) => {
+      if (scanner.getState() === Html5QrcodeScannerState.SCANNING) {
+        onResult(decodedText);
+        scanner.pause(true);
+      }
+    };
+
+    const errorCallback = (errorMessage: string) => {
+      // Intentionally empty to avoid console spam for "QR code not found"
+    };
+
+    scanner.render(successCallback, errorCallback);
+    scannerRef.current = scanner;
+
+    return () => {
+      if (scannerRef.current && scannerRef.current.getState() !== Html5QrcodeScannerState.NOT_STARTED) {
+        scannerRef.current.clear().catch(error => {
+          console.error("Failed to clear html5-qrcode-scanner.", error);
+        });
+        scannerRef.current = null;
+      }
+    };
+  }, [onResult]);
 
   return (
-    <div className="relative w-full max-w-sm mx-auto aspect-square overflow-hidden rounded-lg border">
-      {!isLoaded && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="mt-2 text-sm text-muted-foreground">Starting camera...</p>
-        </div>
-      )}
-      <QrReader
-        onResult={(result, error) => {
-          if (!!result) {
-            onScanSuccess(result?.getText());
-          }
-          if (!!error) {
-            // We can ignore 'No QR code found' errors which fire continuously
-            if (error.name !== "NotFoundException") {
-              onScanError(error);
-            }
-          }
-        }}
-        onLoad={() => setIsLoaded(true)}
-        constraints={{ facingMode: 'environment' }}
-        containerStyle={{ width: '100%', height: '100%' }}
-        videoContainerStyle={{ width: '100%', height: '100%', paddingTop: 0 }}
-        videoStyle={{ objectFit: 'cover' }}
-      />
-      {isLoaded && (
-         <div className="absolute inset-0 pointer-events-none border-[30px] border-black/30 rounded-lg">
-           <div className="absolute top-0 left-0 w-12 h-12 border-t-4 border-l-4 border-white rounded-tl-lg"></div>
-           <div className="absolute top-0 right-0 w-12 h-12 border-t-4 border-r-4 border-white rounded-tr-lg"></div>
-           <div className="absolute bottom-0 left-0 w-12 h-12 border-b-4 border-l-4 border-white rounded-bl-lg"></div>
-           <div className="absolute bottom-0 right-0 w-12 h-12 border-b-4 border-r-4 border-white rounded-br-lg"></div>
-         </div>
-      )}
+    <div className="relative w-full max-w-sm mx-auto p-2 border-2 border-dashed rounded-lg bg-gray-100">
+      <div id={scannerElementId} />
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <ScanLine className="h-48 w-48 text-white/20 animate-pulse" />
+      </div>
     </div>
   );
 };
+
+export default QrScanner;
