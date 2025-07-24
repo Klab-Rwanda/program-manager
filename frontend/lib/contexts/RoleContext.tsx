@@ -37,29 +37,33 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         'Program Manager': 'program_manager',
         'Facilitator': 'facilitator',
         'Trainee': 'trainee',
-
-        'IT-Support': 'it_support',
-        'it_support': 'it_support'
+        'ItSupport': 'it_support'
 
       };
       return roleMap[role] || role as UserRole;
   };
 
-  const login = async (email: string, password: string): Promise<void> => {
-    const response = await api.post('/auth/login', { email, password });
-    if (response.data && response.data.success) {
-      const { user: loggedInUser, accessToken } = response.data.data;
-      
-      setUser(loggedInUser);
-      setIsAuthenticated(true);
-      
-      // Store token and user data
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('user', JSON.stringify(loggedInUser));
-    } else {
-      throw new Error(response.data.message || 'Login failed');
-    }
-  };
+const login = async (email: string, password: string) => {
+  const res = await fetch("http://localhost:8000/api/v1/auth/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.message || "Login failed");
+  }
+
+  // ✅ Save token + user to localStorage
+  localStorage.setItem("accessToken", data.data.accessToken);
+  localStorage.setItem("user", JSON.stringify(data.data.user));
+  setUser(data.data.user); // Optional: update global user state
+};
+
 
   const logout = (): void => {
     setUser(null);

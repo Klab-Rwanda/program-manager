@@ -178,6 +178,7 @@ export interface Comment {
 }
 
 export interface Ticket {
+  subject: string;
   _id: string;
   title: string;
   description: string;
