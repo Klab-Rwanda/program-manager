@@ -1,14 +1,12 @@
-// app/dashboard/Facilitator/fac-roadmap/page.tsx
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Calendar, Clock, BookOpen, Users, CheckCircle, AlertCircle, Plus, Loader2 } from "lucide-react" // Added Loader2
-
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useState, useEffect } from "react";
+import { Calendar, Clock, BookOpen, Users, CheckCircle, AlertCircle, Plus, Loader2, Edit, Trash2, MessageSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -16,29 +14,30 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter // Added DialogFooter for submit/cancel buttons
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { toast } from "sonner" // Import toast
+  DialogFooter
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
+import { toast } from "sonner";
+import { useAuth } from "@/lib/contexts/RoleContext";
+import api from "@/lib/api";
 
-import { useAuth } from "@/lib/contexts/RoleContext" // Import useAuth for role check
-
-// Interface for mock Program data (specific to roadmap context)
 interface ProgramForRoadmap {
-  id: string;
+  _id: string;
   name: string;
 }
 
-// Interface for mock WeeklyRoadmap data
 interface WeeklyRoadmapItem {
-  program: string; // Program name
-  week: number;
+  _id: string;
+  program: string;
+  weekNumber: number;
   title: string;
-  startDate: string; // YYYY-MM-DD
-  endDate: string; // YYYY-MM-DD
-  status: "current" | "completed" | "upcoming";
+  startDate: string;
+  endDate?: string;
+  status?: "current" | "completed" | "upcoming";
+  approvalStatus?: "draft" | "pending_approval" | "approved" | "rejected";
   topics: Array<{
     day: string;
     topic: string;
@@ -47,152 +46,316 @@ interface WeeklyRoadmapItem {
     completed: boolean;
   }>;
   objectives: string[];
-  resources: number;
-  assignments: number;
-  students: number;
+  resources?: number;
+  assignments?: number;
+  students?: number;
+  feedback?: string;
+  approvedBy?: string;
+  approvedAt?: string;
 }
 
-export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to WeeklyRoadmapPage
-  const { user, role, loading: authLoading } = useAuth(); // Get user and role from context
-
-  const [selectedProgram, setSelectedProgram] = useState("all")
-  const [planWeekOpen, setPlanWeekOpen] = useState(false)
-  const [weekPlan, setWeekPlan] = useState({ // Form state for creating new roadmap week
+export default function WeeklyRoadmapPage() {
+  const { user, role, loading: authLoading } = useAuth();
+  const [selectedProgram, setSelectedProgram] = useState<string>("");
+  const [programs, setPrograms] = useState<ProgramForRoadmap[]>([]);
+  const [weeklyRoadmap, setWeeklyRoadmap] = useState<WeeklyRoadmapItem[]>([]);
+  const [planWeekOpen, setPlanWeekOpen] = useState(false);
+  const [editWeekOpen, setEditWeekOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [selectedWeek, setSelectedWeek] = useState<WeeklyRoadmapItem | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoadingRoadmap, setIsLoadingRoadmap] = useState(false);
+  const [weekPlan, setWeekPlan] = useState({
     program: "",
     weekNumber: "",
     title: "",
     startDate: "",
     objectives: "",
-    topics: ["", "", "", "", ""], // 5 days for topics
-  })
-
-  // Mock programs data for the dropdown (in a real app, this would come from backend)
-  const programs: ProgramForRoadmap[] = [
-    { id: "all", name: "All Programs" }, // Filter option
-    { id: "software", name: "Software Engineering Bootcamp" },
-    { id: "web", name: "Web Development Course" },
-    { id: "mobile", name: "Mobile App Development" },
-  ];
-
-  // Mock weekly roadmap data (managed locally)
-  const [weeklyRoadmap, setWeeklyRoadmap] = useState<WeeklyRoadmapItem[]>([
-    {
-      program: "Software Engineering Bootcamp", week: 3, title: "JavaScript Fundamentals", startDate: "2024-01-22", endDate: "2024-01-26", status: "current",
-      topics: [
-        { day: "Monday", topic: "Variables and Data Types", duration: "3 hours", type: "in-person", completed: true, },
-        { day: "Tuesday", topic: "Functions and Scope", duration: "3 hours", type: "in-person", completed: true, },
-        { day: "Wednesday", topic: "DOM Manipulation", duration: "3 hours", type: "in-person", completed: false, },
-        { day: "Thursday", topic: "Event Handling", duration: "3 hours", type: "online", completed: false, },
-        { day: "Friday", topic: "Project: Interactive Web Page", duration: "4 hours", type: "in-person", completed: false, },
-      ],
-      objectives: ["Understand JavaScript data types and variables", "Master function declaration and expressions", "Learn DOM manipulation techniques", "Implement event-driven programming", "Build an interactive web application",],
-      resources: 12, assignments: 3, students: 20,
-    },
-    {
-      program: "Web Development Course", week: 5, title: "React Components", startDate: "2024-01-22", endDate: "2024-01-26", status: "current",
-      topics: [
-        { day: "Monday", topic: "Component Basics", duration: "2 hours", type: "online", completed: true, },
-        { day: "Tuesday", topic: "Props and State", duration: "2 hours", type: "in-person", completed: true, },
-        { day: "Wednesday", topic: "Event Handling in React", duration: "2 hours", type: "in-person", completed: false, },
-        { day: "Thursday", topic: "Component Lifecycle", duration: "2 hours", type: "online", completed: false, },
-        { day: "Friday", topic: "Project: Todo App", duration: "3 hours", type: "in-person", completed: false, },
-      ],
-      objectives: ["Create functional and class components", "Manage component state effectively", "Handle user interactions", "Understand component lifecycle", "Build a complete React application",],
-      resources: 8, assignments: 2, students: 15,
-    },
-  ]);
-
-  // Mock upcoming weeks data
-  const [upcomingWeeks, setUpcomingWeeks] = useState<WeeklyRoadmapItem[]>([
-    {
-      program: "Software Engineering Bootcamp", week: 4, title: "Advanced JavaScript", startDate: "2024-01-29", endDate: "2024-02-02", status: "upcoming", // Added endDate for consistency
-      topics: [{ day: "Monday", topic: "Async Programming", duration: "3 hours", type: "in-person", completed: false }, { day: "Tuesday", topic: "Promises & Async/Await", duration: "3 hours", type: "in-person", completed: false }, { day: "Wednesday", topic: "API Integration", duration: "3 hours", type: "online", completed: false }, { day: "Thursday", topic: "Error Handling", duration: "3 hours", type: "in-person", completed: false }, { day: "Friday", topic: "Project: Data Fetching", duration: "4 hours", type: "in-person", completed: false }],
-      objectives: ["Master asynchronous patterns", "Integrate with external APIs", "Implement robust error handling"], // More detailed objectives
-      resources: 10, assignments: 2, students: 20,
-    },
-    {
-      program: "Web Development Course", week: 6, title: "React Hooks", startDate: "2024-01-29", endDate: "2024-02-02", status: "upcoming", // Added endDate
-      topics: [{ day: "Monday", topic: "useState Hook", duration: "2 hours", type: "online", completed: false }, { day: "Tuesday", topic: "useEffect Hook", duration: "2 hours", type: "in-person", completed: false }, { day: "Wednesday", topic: "Custom Hooks", duration: "2 hours", type: "in-person", completed: false }, { day: "Thursday", topic: "Context API", duration: "2 hours", type: "online", completed: false }, { day: "Friday", topic: "Project: Global State", duration: "3 hours", type: "in-person", completed: false }],
-      objectives: ["Understand core React Hooks", "Create custom reusable Hooks", "Manage global state with Context API"],
-      resources: 7, assignments: 1, students: 15,
-    },
-  ]);
-
-
-  // UI Helpers
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "current": return "bg-blue-500"
-      case "completed": return "bg-green-500"
-      case "upcoming": return "bg-yellow-500"
-      default: return "bg-gray-500"
-    }
-  }
-
-  const getTypeColor = (type: string) => {
-    return type === "in-person" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-  }
-
-  // Filter roadmap items based on selected program
-  const filteredRoadmap = weeklyRoadmap.filter(item => {
-    // If "All Programs" is selected, show all. Otherwise, filter by program name.
-    const matchesProgram = selectedProgram === "all" || item.program === programs.find(p => p.id === selectedProgram)?.name;
-    return matchesProgram;
+    topics: ["", "", "", "", ""]
   });
+  const [feedback, setFeedback] = useState("");
 
-  // Mock handler for planning a new week
-  const handlePlanWeek = () => {
+  // Fetch programs on component mount
+  useEffect(() => {
+    const fetchPrograms = async () => {
+      try {
+        const response = await api.get("/programs");
+        const programsData = response.data.data || [];
+        setPrograms(programsData);
+        if (programsData.length > 0) {
+          setSelectedProgram(programsData[0]._id);
+        }
+      } catch (error) {
+        console.error("Failed to fetch programs:", error);
+        toast.error("Failed to load programs");
+      }
+    };
+
+    fetchPrograms();
+  }, []);
+
+  // Fetch roadmap when program changes
+  useEffect(() => {
+    if (!selectedProgram) return;
+
+    const fetchRoadmap = async () => {
+      setIsLoadingRoadmap(true);
+      try {
+        const response = await api.get(`/roadmap/${selectedProgram}`);
+        const roadmapData = response.data.data || [];
+        setWeeklyRoadmap(roadmapData);
+      } catch (error) {
+        console.error("Failed to fetch roadmap:", error);
+        setWeeklyRoadmap([]);
+      } finally {
+        setIsLoadingRoadmap(false);
+      }
+    };
+
+    fetchRoadmap();
+  }, [selectedProgram]);
+
+  const handlePlanWeek = async () => {
     if (!weekPlan.program || !weekPlan.weekNumber || !weekPlan.title || !weekPlan.startDate) {
       toast.error("Please fill in all required fields to plan a week.");
       return;
     }
-    if (weekPlan.topics.every(topic => topic.trim() === '') && weekPlan.objectives.trim() === '') {
-        toast.error("Please add at least one daily topic or learning objective.");
-        return;
-    }
 
-    setIsProcessing(true); // Simulate processing
-    setTimeout(() => {
-      const newWeek: WeeklyRoadmapItem = {
-        program: programs.find((p) => p.id === weekPlan.program)?.name || weekPlan.program,
-        week: Number.parseInt(weekPlan.weekNumber),
+    setIsProcessing(true);
+    try {
+      await api.post("/roadmap", {
+        program: weekPlan.program,
+        weekNumber: parseInt(weekPlan.weekNumber),
         title: weekPlan.title,
         startDate: weekPlan.startDate,
-        endDate: new Date(new Date(weekPlan.startDate).getTime() + 4 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], // Mock end date
-        status: "upcoming", // Newly planned weeks are upcoming
-        topics: weekPlan.topics
-          .filter((topic) => topic.trim())
-          .map((topic, index) => ({
-            day: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][index],
-            topic: topic,
-            duration: "3 hours", // Mock duration
-            type: (index % 2 === 0 ? "in-person" : "online"), // Alternate mock type
-            completed: false,
-          })),
-        objectives: weekPlan.objectives.split("\n").filter((obj) => obj.trim()),
-        resources: Math.floor(Math.random() * 5) + 5, // Mock resources
-        assignments: Math.floor(Math.random() * 2) + 1, // Mock assignments
-        students: 20, // Mock students
-      };
-
-      setWeeklyRoadmap((prev) => [...prev, newWeek]); // Add to existing roadmap
-      setPlanWeekOpen(false); // Close modal
-      // Reset form fields
-      setWeekPlan({
-        program: "", weekNumber: "", title: "", startDate: "", objectives: "", topics: ["", "", "", "", ""],
+        objectives: weekPlan.objectives.split("\n").filter(obj => obj.trim()),
+        topics: weekPlan.topics.map((topic, index) => ({
+          day: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][index],
+          topic,
+          duration: "3 hours",
+          type: (index % 2 === 0 ? "in-person" : "online") as "in-person" | "online",
+          completed: false
+        }))
       });
-      setIsProcessing(false); // End processing
-      toast.success(`Week ${weekPlan.weekNumber} planned successfully for ${newWeek.program}!`);
-    }, 1000); // Simulate API call delay
+
+      setPlanWeekOpen(false);
+      setWeekPlan({
+        program: "",
+        weekNumber: "",
+        title: "",
+        startDate: "",
+        objectives: "",
+        topics: ["", "", "", "", ""]
+      });
+
+      // Refresh roadmap data
+      const response = await api.get(`/roadmap/${selectedProgram}`);
+      setWeeklyRoadmap(response.data.data || []);
+      
+      toast.success("Week plan created successfully!");
+    } catch (error: any) {
+      console.error("Failed to create week plan:", error);
+      toast.error(error.response?.data?.message || "Failed to create week plan.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleTopicChange = (index: number, value: string) => {
-    const newTopics = [...weekPlan.topics]
-    newTopics[index] = value
-    setWeekPlan({ ...weekPlan, topics: newTopics })
-  }
+    const newTopics = [...weekPlan.topics];
+    newTopics[index] = value;
+    setWeekPlan({ ...weekPlan, topics: newTopics });
+  };
 
-  // Render nothing or a loading spinner if authentication is still loading
+  const handleEditWeek = (week: WeeklyRoadmapItem) => {
+    setSelectedWeek(week);
+    setWeekPlan({
+      program: week.program,
+      weekNumber: week.weekNumber.toString(),
+      title: week.title,
+      startDate: week.startDate.split('T')[0],
+      objectives: week.objectives.join('\n'),
+      topics: week.topics.map(t => t.topic)
+    });
+    setEditWeekOpen(true);
+  };
+
+  const handleUpdateWeek = async () => {
+    if (!selectedWeek || !weekPlan.title || !weekPlan.startDate) {
+      toast.error("Please fill in all required fields.");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await api.put(`/roadmap/week/${selectedWeek._id}`, {
+        title: weekPlan.title,
+        startDate: weekPlan.startDate,
+        objectives: weekPlan.objectives.split("\n").filter(obj => obj.trim()),
+        topics: weekPlan.topics.map((topic, index) => ({
+          day: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][index],
+          topic,
+          duration: "3 hours",
+          type: (index % 2 === 0 ? "in-person" : "online") as "in-person" | "online",
+          completed: false
+        }))
+      });
+
+      setEditWeekOpen(false);
+      setSelectedWeek(null);
+      setWeekPlan({
+        program: "",
+        weekNumber: "",
+        title: "",
+        startDate: "",
+        objectives: "",
+        topics: ["", "", "", "", ""]
+      });
+
+      // Refresh roadmap data
+      const response = await api.get(`/roadmap/${selectedProgram}`);
+      setWeeklyRoadmap(response.data.data || []);
+      
+      toast.success("Week plan updated successfully!");
+    } catch (error: any) {
+      console.error("Failed to update week plan:", error);
+      toast.error(error.response?.data?.message || "Failed to update week plan.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeleteWeek = async (weekId: string) => {
+    if (!confirm("Are you sure you want to delete this week plan? This action cannot be undone.")) {
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await api.delete(`/roadmap/week/${weekId}`);
+      
+      // Refresh roadmap data
+      const response = await api.get(`/roadmap/${selectedProgram}`);
+      setWeeklyRoadmap(response.data.data || []);
+      
+      toast.success("Week plan deleted successfully!");
+    } catch (error: any) {
+      console.error("Failed to delete week plan:", error);
+      toast.error(error.response?.data?.message || "Failed to delete week plan.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleTopicStatusChange = async (weekId: string, topicIndex: number, completed: boolean) => {
+    try {
+      await api.patch(`/roadmap/week/${weekId}/topic-status`, {
+        topicIndex,
+        completed
+      });
+      
+      // Refresh roadmap data
+      const response = await api.get(`/roadmap/${selectedProgram}`);
+      setWeeklyRoadmap(response.data.data || []);
+      
+      toast.success("Topic status updated successfully!");
+    } catch (error: any) {
+      console.error("Failed to update topic status:", error);
+      toast.error(error.response?.data?.message || "Failed to update topic status.");
+    }
+  };
+
+  const handleFeedback = (week: WeeklyRoadmapItem) => {
+    setSelectedWeek(week);
+    setFeedback("");
+    setFeedbackOpen(true);
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!feedback.trim()) {
+      toast.error("Please enter feedback.");
+      return;
+    }
+
+    toast.success("Feedback submitted successfully!");
+    setFeedbackOpen(false);
+    setSelectedWeek(null);
+    setFeedback("");
+  };
+
+  const handleSubmitForApproval = async (weekId: string) => {
+    try {
+      await api.post(`/roadmap/week/${weekId}/submit`);
+      
+      // Refresh roadmap data
+      const response = await api.get(`/roadmap/${selectedProgram}`);
+      setWeeklyRoadmap(response.data.data || []);
+      
+      toast.success("Week plan submitted for approval!");
+    } catch (error: any) {
+      console.error("Failed to submit for approval:", error);
+      toast.error(error.response?.data?.message || "Failed to submit for approval.");
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "current": return "bg-blue-500";
+      case "completed": return "bg-green-500";
+      case "upcoming": return "bg-yellow-500";
+      default: return "bg-gray-500";
+    }
+  };
+
+  const getApprovalStatusColor = (status: string) => {
+    switch (status) {
+      case "draft": return "bg-gray-500";
+      case "pending_approval": return "bg-yellow-500";
+      case "approved": return "bg-green-500";
+      case "rejected": return "bg-red-500";
+      default: return "bg-gray-500";
+    }
+  };
+
+  const getApprovalStatusText = (status: string) => {
+    switch (status) {
+      case "draft": return "Draft";
+      case "pending_approval": return "Pending Approval";
+      case "approved": return "Approved";
+      case "rejected": return "Rejected";
+      default: return "Draft";
+    }
+  };
+
+  const getTypeColor = (type: string) => {
+    return type === "in-person" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700";
+  };
+
+  const filteredRoadmap = weeklyRoadmap.filter((item: WeeklyRoadmapItem) => {
+    const matchesProgram = selectedProgram === "all" || item.program === selectedProgram;
+    return matchesProgram;
+  });
+
+  // Helper function to determine if a week is current
+  const isCurrentWeek = (week: WeeklyRoadmapItem) => {
+    const today = new Date();
+    const weekStart = new Date(week.startDate);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    
+    return today >= weekStart && today <= weekEnd;
+  };
+
+  // Helper function to determine if a week is upcoming
+  const isUpcomingWeek = (week: WeeklyRoadmapItem) => {
+    const today = new Date();
+    const weekStart = new Date(week.startDate);
+    return today < weekStart;
+  };
+
+  // Get current week
+  const currentWeek = filteredRoadmap.find(isCurrentWeek);
+
   if (authLoading) {
     return (
       <div className="flex justify-center items-center h-full min-h-[50vh]">
@@ -201,19 +364,21 @@ export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to W
     );
   }
 
-  // Access control: Only facilitators should see this page
   if (!user || role !== 'facilitator') {
     return (
-        <Card>
-            <CardHeader><CardTitle>Access Denied</CardTitle></CardHeader>
-            <CardContent><p className="text-muted-foreground">You do not have permission to view this page.</p></CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Access Denied</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">You do not have permission to view this page.</p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Weekly Roadmap</h2>
@@ -222,11 +387,11 @@ export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to W
         <div className="flex gap-2">
           <Select value={selectedProgram} onValueChange={setSelectedProgram}>
             <SelectTrigger className="w-48">
-              <SelectValue />
+              <SelectValue placeholder="Select a program" />
             </SelectTrigger>
             <SelectContent>
-              {programs.map((program) => (
-                <SelectItem key={program.id} value={program.id}>
+              {programs.map((program: ProgramForRoadmap) => (
+                <SelectItem key={program._id} value={program._id}>
                   {program.name}
                 </SelectItem>
               ))}
@@ -234,7 +399,7 @@ export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to W
           </Select>
           <Dialog open={planWeekOpen} onOpenChange={setPlanWeekOpen}>
             <DialogTrigger asChild>
-              <Button type="button">
+              <Button>
                 <Plus className="mr-2 h-4 w-4" />
                 Plan Week
               </Button>
@@ -255,17 +420,14 @@ export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to W
                       <SelectValue placeholder="Select a program" />
                     </SelectTrigger>
                     <SelectContent>
-                      {programs
-                        .filter((p) => p.id !== "all")
-                        .map((program) => (
-                          <SelectItem key={program.id} value={program.id}>
-                            {program.name}
-                          </SelectItem>
-                        ))}
+                      {programs.map((program: ProgramForRoadmap) => (
+                        <SelectItem key={program._id} value={program._id}>
+                          {program.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="week-number">Week Number *</Label>
@@ -287,7 +449,6 @@ export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to W
                     />
                   </div>
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="title">Week Title *</Label>
                   <Input
@@ -297,7 +458,6 @@ export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to W
                     onChange={(e) => setWeekPlan({ ...weekPlan, title: e.target.value })}
                   />
                 </div>
-
                 <div className="space-y-2">
                   <Label>Daily Topics</Label>
                   {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map((day, index) => (
@@ -311,7 +471,6 @@ export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to W
                     </div>
                   ))}
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="objectives">Learning Objectives</Label>
                   <Textarea
@@ -322,10 +481,8 @@ export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to W
                     rows={4}
                   />
                 </div>
-
                 <DialogFooter>
                   <Button
-                    type="button"
                     variant="outline"
                     onClick={() => setPlanWeekOpen(false)}
                     disabled={isProcessing}
@@ -333,12 +490,17 @@ export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to W
                     Cancel
                   </Button>
                   <Button
-                    type="submit"
-                    className="bg-website-primary hover:bg-website-primary/90"
                     onClick={handlePlanWeek}
                     disabled={isProcessing}
                   >
-                    {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Create Week Plan"}
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      "Create Week Plan"
+                    )}
                   </Button>
                 </DialogFooter>
               </div>
@@ -347,197 +509,433 @@ export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to W
         </div>
       </div>
 
-      {/* Current Week Overview */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-card border-border">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Current Week</CardTitle>
+            <CardTitle className="text-sm font-medium">Current Week</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">Week 3 & 5</div>
-            <p className="text-xs text-muted-foreground">Jan 22 - Jan 26</p>
+            <div className="text-2xl font-bold">Week {currentWeek?.weekNumber || "N/A"}</div>
+            <p className="text-xs text-muted-foreground">
+              {currentWeek?.startDate 
+                ? new Date(currentWeek.startDate).toLocaleDateString()
+                : "No current week"
+              }
+            </p>
           </CardContent>
         </Card>
-
-        <Card className="bg-card border-border">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Sessions This Week</CardTitle>
+            <CardTitle className="text-sm font-medium">Sessions This Week</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">10</div>
-            <p className="text-xs text-muted-foreground">6 in-person, 4 online</p>
+            <div className="text-2xl font-bold">
+              {currentWeek?.topics.length || 0}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {currentWeek?.topics.filter(t => t.type === "in-person").length || 0} in-person,{" "}
+              {currentWeek?.topics.filter(t => t.type === "online").length || 0} online
+            </p>
           </CardContent>
         </Card>
-
-        <Card className="bg-card border-border">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Completion Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">40%</div>
-            <p className="text-xs text-muted-foreground">4 of 10 sessions done</p>
+            <div className="text-2xl font-bold">
+              {(() => {
+                if (!currentWeek || currentWeek.topics.length === 0) return "0%";
+                const completed = currentWeek.topics.filter(t => t.completed).length;
+                return `${Math.round((completed / currentWeek.topics.length) * 100)}%`;
+              })()}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {(() => {
+                if (!currentWeek) return "No current week";
+                const completed = currentWeek.topics.filter(t => t.completed).length;
+                return `${completed} of ${currentWeek.topics.length} sessions done`;
+              })()}
+            </p>
           </CardContent>
         </Card>
-
-        <Card className="bg-card border-border">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Students</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Students</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground">35</div>
+            <div className="text-2xl font-bold">35</div>
             <p className="text-xs text-muted-foreground">Across all programs</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Weekly Roadmap Content */}
       <Tabs defaultValue="current" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="current">Current Week</TabsTrigger>
           <TabsTrigger value="upcoming">Upcoming Weeks</TabsTrigger>
           <TabsTrigger value="overview">Program Overview</TabsTrigger>
         </TabsList>
-
+        
         <TabsContent value="current" className="space-y-4 mt-4">
-          {filteredRoadmap.filter(item => item.status === "current").length === 0 ? (
+          {isLoadingRoadmap ? (
             <Card>
-                <CardContent className="py-8 text-center text-muted-foreground">
-                    <BookOpen className="mx-auto h-12 w-12 mb-4" />
-                    No current roadmap found for selected program.
-                </CardContent>
+              <CardContent className="py-8 text-center">
+                <Loader2 className="mx-auto h-8 w-8 animate-spin mb-4" />
+                <p className="text-muted-foreground">Loading roadmap...</p>
+              </CardContent>
+            </Card>
+          ) : !currentWeek ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                <BookOpen className="mx-auto h-12 w-12 mb-4" />
+                No current roadmap found for selected program.
+              </CardContent>
             </Card>
           ) : (
-            filteredRoadmap.filter(item => item.status === "current").map((week, index) => (
-              <Card key={index} className="bg-card border-border">
+            <Card key={currentWeek._id} className="transition-all duration-200 hover:shadow-lg">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <CardTitle>{currentWeek.title}</CardTitle>
+                      <Badge className="bg-blue-500 text-white border-0">
+                        Week {currentWeek.weekNumber}
+                      </Badge>
+                      <Badge className={`${getApprovalStatusColor(currentWeek.approvalStatus || "draft")} text-white border-0`}>
+                        {getApprovalStatusText(currentWeek.approvalStatus || "draft")}
+                      </Badge>
+                    </div>
+                    <CardDescription className="text-lg font-medium">
+                      {programs.find(p => p._id === currentWeek.program)?.name || currentWeek.program}
+                    </CardDescription>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {new Date(currentWeek.startDate).toLocaleDateString()}
+                      {currentWeek.endDate && ` - ${new Date(currentWeek.endDate).toLocaleDateString()}`}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
+                      <span>{currentWeek.resources || 0} resources</span>
+                      <span>{currentWeek.assignments || 0} assignments</span>
+                      <span>{currentWeek.students || 0} students</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {currentWeek.approvalStatus === "draft" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSubmitForApproval(currentWeek._id)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          Submit for Approval
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditWeek(currentWeek)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleFeedback(currentWeek)}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteWeek(currentWeek._id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <h4 className="font-medium mb-2">Learning Objectives</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {currentWeek.objectives.map((objective: string, objIndex: number) => (
+                      <div key={objIndex} className="flex items-start gap-2 text-sm">
+                        <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                        <span className="text-muted-foreground">{objective}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium">Daily Schedule</h4>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>Progress:</span>
+                      <Progress 
+                        value={currentWeek.topics.filter((t: any) => t.completed).length / currentWeek.topics.length * 100} 
+                        className="w-20 h-2"
+                      />
+                      <span>{currentWeek.topics.filter((t: any) => t.completed).length}/{currentWeek.topics.length}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {currentWeek.topics.map((topic, topicIndex) => (
+                      <div
+                        key={topicIndex}
+                        className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                          topic.completed ? "bg-green-50 border-green-200" : "bg-muted border-border"
+                        }`}
+                        onClick={() => handleTopicStatusChange(currentWeek._id, topicIndex, !topic.completed)}
+                      >
+                        <div className="flex items-center gap-3">
+                          {topic.completed ? (
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <AlertCircle className="h-5 w-5 text-yellow-500" />
+                          )}
+                          <div>
+                            <p className="font-medium">{topic.day}</p>
+                            <p className="text-sm text-muted-foreground">{topic.topic}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={getTypeColor(topic.type)}>
+                            {topic.type === "in-person" ? "In-Person" : "Online"}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">{topic.duration}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {currentWeek.approvalStatus === "rejected" && currentWeek.feedback && (
+                  <div className="px-6 pb-6">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                      <h5 className="font-medium text-red-800 mb-1">Feedback from Program Manager:</h5>
+                      <p className="text-sm text-red-700">{currentWeek.feedback}</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+        
+        {/* Edit Week Dialog */}
+        <Dialog open={editWeekOpen} onOpenChange={setEditWeekOpen}>
+          <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Week Plan</DialogTitle>
+              <DialogDescription>Update the weekly roadmap for your program</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Week Title *</Label>
+                <Input
+                  id="edit-title"
+                  placeholder="e.g., Advanced JavaScript Concepts"
+                  value={weekPlan.title}
+                  onChange={(e) => setWeekPlan({ ...weekPlan, title: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-start-date">Start Date *</Label>
+                <Input
+                  id="edit-start-date"
+                  type="date"
+                  value={weekPlan.startDate}
+                  onChange={(e) => setWeekPlan({ ...weekPlan, startDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Daily Topics</Label>
+                {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"].map((day, index) => (
+                  <div key={day} className="space-y-1">
+                    <Label className="text-sm text-muted-foreground">{day}</Label>
+                    <Input
+                      placeholder={`${day} topic...`}
+                      value={weekPlan.topics[index]}
+                      onChange={(e) => handleTopicChange(index, e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-objectives">Learning Objectives</Label>
+                <Textarea
+                  id="edit-objectives"
+                  placeholder="Enter learning objectives (one per line)..."
+                  value={weekPlan.objectives}
+                  onChange={(e) => setWeekPlan({ ...weekPlan, objectives: e.target.value })}
+                  rows={4}
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setEditWeekOpen(false)}
+                  disabled={isProcessing}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleUpdateWeek}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    "Update Week Plan"
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Feedback Dialog */}
+        <Dialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add Feedback</DialogTitle>
+              <DialogDescription>Provide feedback for this week plan</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="feedback">Feedback</Label>
+                <Textarea
+                  id="feedback"
+                  placeholder="Enter your feedback..."
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  rows={4}
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setFeedbackOpen(false)}
+                  disabled={isProcessing}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSubmitFeedback}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    "Submit Feedback"
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
+        
+        <TabsContent value="upcoming" className="space-y-4 mt-4">
+          {isLoadingRoadmap ? (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <Loader2 className="mx-auto h-8 w-8 animate-spin mb-4" />
+                <p className="text-muted-foreground">Loading roadmap...</p>
+              </CardContent>
+            </Card>
+          ) : filteredRoadmap.filter(isUpcomingWeek).length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                <BookOpen className="mx-auto h-12 w-12 mb-4" />
+                No upcoming roadmap found for selected program. Plan a new week!
+              </CardContent>
+            </Card>
+          ) : (
+            filteredRoadmap.filter(isUpcomingWeek).map((week: WeeklyRoadmapItem, index: number) => (
+              <Card key={week._id || index} className="transition-all duration-200 hover:shadow-lg">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2 mb-2">
-                        <CardTitle className="text-foreground">{week.program}</CardTitle>
-                        <Badge className={`${getStatusColor(week.status)} text-white border-0`}>
-                          Week {week.week}
+                        <CardTitle>{week.title}</CardTitle>
+                        <Badge variant="outline">Week {week.weekNumber}</Badge>
+                        <Badge className={`${getApprovalStatusColor(week.approvalStatus || "draft")} text-white border-0`}>
+                          {getApprovalStatusText(week.approvalStatus || "draft")}
                         </Badge>
                       </div>
-                      <CardDescription className="text-lg font-medium">{week.title}</CardDescription>
+                      <CardDescription className="text-lg font-medium">
+                        {programs.find(p => p._id === week.program)?.name || week.program}
+                      </CardDescription>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {new Date(week.startDate).toLocaleDateString()} -{" "}
-                        {new Date(week.endDate).toLocaleDateString()}
+                        Starts: {new Date(week.startDate).toLocaleDateString()}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span>{week.resources} resources</span>
-                        <span>{week.assignments} assignments</span>
-                        <span>{week.students} students</span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      {week.approvalStatus === "draft" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleSubmitForApproval(week._id)}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          Submit for Approval
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" onClick={() => handleEditWeek(week)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => handleFeedback(week)}>
+                        <MessageSquare className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDeleteWeek(week._id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Learning Objectives */}
+                <CardContent>
                   <div>
-                    <h4 className="font-medium text-foreground mb-2">Learning Objectives</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {week.objectives.map((objective, objIndex) => (
-                        <div key={objIndex} className="flex items-start gap-2 text-sm">
-                          <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span className="text-muted-foreground">{objective}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Daily Schedule */}
-                  <div>
-                    <h4 className="font-medium text-foreground mb-3">Daily Schedule</h4>
-                    <div className="space-y-3">
+                    <h4 className="font-medium mb-2">Planned Topics</h4>
+                    <div className="grid grid-cols-2 gap-2">
                       {week.topics.map((topic, topicIndex) => (
-                        <div
-                          key={topicIndex}
-                          className={`flex items-center justify-between p-3 rounded-lg border ${
-                            topic.completed ? "bg-green-50 border-green-200" : "bg-muted border-border"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            {topic.completed ? (
-                              <CheckCircle className="h-5 w-5 text-green-500" />
-                            ) : (
-                              <AlertCircle className="h-5 w-5 text-yellow-500" />
-                            )}
-                            <div>
-                              <p className="font-medium text-foreground">{topic.day}</p>
-                              <p className="text-sm text-muted-foreground">{topic.topic}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={getTypeColor(topic.type)}>
-                              {topic.type === "in-person" ? "In-Person" : "Online"}
-                            </Badge>
-                            <span className="text-sm text-muted-foreground">{topic.duration}</span>
-                          </div>
+                        <div key={topicIndex} className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="h-1 w-1 rounded-full bg-muted-foreground"></div>
+                          {topic.topic}
                         </div>
                       ))}
                     </div>
                   </div>
+                  {week.approvalStatus === "rejected" && week.feedback && (
+                    <div className="px-6 pb-6">
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                        <h5 className="font-medium text-red-800 mb-1">Feedback from Program Manager:</h5>
+                        <p className="text-sm text-red-700">{week.feedback}</p>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            )
+            ))
           )}
         </TabsContent>
-
-        <TabsContent value="upcoming" className="space-y-4 mt-4">
-          <div className="space-y-4">
-            {filteredRoadmap.filter(item => item.status === "upcoming").length === 0 ? (
-                <Card>
-                    <CardContent className="py-8 text-center text-muted-foreground">
-                        <BookOpen className="mx-auto h-12 w-12 mb-4" />
-                        No upcoming roadmap found for selected program. Plan a new week!
-                    </CardContent>
-                </Card>
-            ) : (
-                filteredRoadmap.filter(item => item.status === "upcoming").map((week, index) => (
-                  <Card key={index} className="bg-card border-border">
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <CardTitle className="text-foreground">{week.program}</CardTitle>
-                            <Badge variant="outline">Week {week.week}</Badge>
-                          </div>
-                          <CardDescription className="text-lg font-medium">{week.title}</CardDescription>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Starts: {new Date(week.startDate).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <Button type="button" variant="outline" size="sm" onClick={() => setPlanWeekOpen(true)}>
-                          <Plus className="mr-2 h-4 w-4" />
-                          Plan Week
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div>
-                        <h4 className="font-medium text-foreground mb-2">Planned Topics</h4>
-                        <div className="grid grid-cols-2 gap-2">
-                          {week.topics.map((topic, topicIndex) => (
-                            <div key={topicIndex} className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <div className="h-1 w-1 rounded-full bg-muted-foreground"></div>
-                              {topic.topic} {/* Display topic string */}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-            )}
-          </div>
-        </TabsContent>
-
+        
         <TabsContent value="overview" className="space-y-4 mt-4">
           <div className="text-center py-8">
             <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -546,5 +944,5 @@ export default function WeeklyRoadmapPage() { // Renamed from WeeklyRoadmap to W
         </TabsContent>
       </Tabs>
     </div>
-  )
-}
+  );
+} 

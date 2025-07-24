@@ -69,7 +69,35 @@ app.get('/health', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Error:', err);
+  
+  // Handle JWT token errors
+  if (err.name === 'TokenExpiredError' || err.name === 'JsonWebTokenError') {
+    return res.status(401).json({ 
+      error: 'Token expired or invalid. Please login again.',
+      success: false,
+      message: err.message
+    });
+  }
+  
+  // Handle validation errors
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ 
+      error: 'Validation error',
+      success: false,
+      message: err.message
+    });
+  }
+  
+  // Handle duplicate key errors
+  if (err.code === 11000) {
+    return res.status(409).json({ 
+      error: 'Duplicate entry found',
+      success: false,
+      message: 'This record already exists'
+    });
+  }
+  
   res.status(err.statusCode || 500).json({ 
     error: err.message || 'Something went wrong!',
     success: false

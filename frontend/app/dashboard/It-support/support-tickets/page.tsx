@@ -71,7 +71,7 @@ export default function SubmitTicket() {
         file: null,
       });
     } catch (error: any) {
-      toast.error(Error submitting ticket: ${error.message});
+      toast.error(`Error submitting ticket: ${error.message}`);
     } finally {
       setIsSubmitting(false);
     }

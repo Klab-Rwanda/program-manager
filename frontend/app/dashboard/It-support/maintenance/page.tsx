@@ -659,7 +659,7 @@ export default function MaintenancePage() {
             <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
               Cancel
             </Button>
-            <Button type="submit" onClick={handleCreateTask} disabled={isProcessing}>
+                          <Button onClick={handleCreateTask} disabled={isProcessing}>
                 {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Schedule Task"}
             </Button>
           </DialogFooter>
@@ -793,7 +793,7 @@ export default function MaintenancePage() {
               <Button type="button" variant="outline" onClick={() => setShowEditModal(false)}>
                 Cancel
               </Button>
-              <Button type="submit" onClick={handleUpdateTask} disabled={isProcessing}>
+              <Button onClick={handleUpdateTask} disabled={isProcessing}>
                 {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Update Task"}
               </Button>
             </DialogFooter>
