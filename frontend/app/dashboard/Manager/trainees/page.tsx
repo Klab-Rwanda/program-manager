@@ -135,13 +135,13 @@ export default function TraineesPage() {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                        <div className="flex items-center space-x-3">
-                            <GraduationCap className="h-8 w-8 text-primary"/>
+                            <GraduationCap className="h-8 w-8 text-custom-blue"/>
                             <div>
                                <CardTitle className="text-lg">{trainee.name}</CardTitle>
                                <CardDescription>{trainee.email}</CardDescription>
                             </div>
                        </div>
-                       <Badge variant={trainee.isActive ? "default" : "secondary"}>{trainee.status}</Badge>
+                       <Badge variant={trainee.isActive ? "default" : "outline"}>{trainee.status}</Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
