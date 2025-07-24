@@ -52,7 +52,7 @@ export const verifyFacilitatorAccess = async (courseId, facilitatorId) => {
     const course = await Course.findById(courseId);
     if (!course) throw new ApiError(404, "Course not found.");
     if (course.facilitator.toString() !== facilitatorId.toString()) {
-        throw new ApiError(403, "Forbidden: You are not the facilitator of this course.");
+        throw new ApiError(403, "Forbidden: You do not have permission to modify this course.");
     }
     return course;
 };
@@ -220,53 +220,94 @@ export const downloadCourseFile = asyncHandler(async (req, res) => {
     }
 });
 
+
+
+export const getMyCourses = asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    let programQuery = {};
+
+    // Build query based on user role
+    if (userRole === 'Trainee') {
+        programQuery = { trainees: userId };
+    } else if (userRole === 'Facilitator') {
+        programQuery = { facilitators: userId };
+    } else {
+        // For other roles like Manager/Admin, maybe show all? Or just deny.
+        // For now, we'll just handle trainee/facilitator.
+        return res.status(200).json(new ApiResponse(200, [], "No courses applicable for your role via this endpoint."));
+    }
+
+    // 1. Find all programs the user is part of
+    const userPrograms = await Program.find(programQuery).select('_id');
+    if (userPrograms.length === 0) {
+        return res.status(200).json(new ApiResponse(200, [], "You are not enrolled in any programs."));
+    }
+    const programIds = userPrograms.map(p => p._id);
+
+    // 2. Find all courses associated with those programs
+    // We also only want 'Approved' courses to be visible to trainees
+    const courseQuery = { program: { $in: programIds } };
+    if (userRole === 'Trainee') {
+        courseQuery.status = 'Approved';
+    }
+
+    const courses = await Course.find(courseQuery)
+        .populate('program', 'name')
+        .populate('facilitator', 'name')
+        .sort('title');
+        
+    return res.status(200).json(new ApiResponse(200, courses, "Your courses fetched successfully."));
+});
+
+
+
+
 /**
- * @desc    Update course metadata and/or replace file
- * @route   PUT /api/v1/courses/:courseId
- * @access  Private (Facilitator, only own, not Approved)
+ * @desc    Update a course.
+ * @route   PATCH /api/v1/courses/:id
+ * @access  Private (Facilitator)
  */
 export const updateCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
-    const facilitatorId = req.user._id;
-    const course = await Course.findById(courseId);
-    if (!course) throw new ApiError(404, 'Course not found.');
-    if (course.facilitator.toString() !== facilitatorId.toString()) {
-        throw new ApiError(403, 'Forbidden: You can only edit your own courses.');
-    }
-    if (course.status === 'Approved') {
-        throw new ApiError(400, 'Cannot edit an approved course.');
-    }
-    // Update fields
-    if (req.body.title) course.title = req.body.title;
-    if (req.body.description) course.description = req.body.description;
-    if (req.body.type) course.type = req.body.type;
-    // Replace file if provided
+    const { title, description } = req.body;
+    
+    // Verify the facilitator owns this course before allowing an update
+    const course = await verifyFacilitatorAccess(courseId, req.user._id);
+
+    course.title = title ?? course.title;
+    course.description = description ?? course.description;
+    
+    // If a new file is uploaded, handle it. (Optional for now)
     if (req.file) {
+        // You would have logic here to delete the old file from cloud storage
+        // and save the new file path.
         course.contentUrl = req.file.path;
     }
+    
     await course.save();
-    return res.status(200).json(new ApiResponse(200, course, 'Course updated successfully.'));
+
+    return res.status(200).json(new ApiResponse(200, course, "Course updated successfully."));
 });
 
 /**
- * @desc    Delete a course and its file
- * @route   DELETE /api/v1/courses/:courseId
- * @access  Private (Facilitator, only own, not Approved)
+ * @desc    Delete a course.
+ * @route   DELETE /api/v1/courses/:id
+ * @access  Private (Facilitator)
  */
 export const deleteCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
-    const facilitatorId = req.user._id;
-    const course = await Course.findById(courseId);
-    if (!course) throw new ApiError(404, 'Course not found.');
-    if (course.facilitator.toString() !== facilitatorId.toString()) {
-        throw new ApiError(403, 'Forbidden: You can only delete your own courses.');
-    }
-    if (course.status === 'Approved') {
-        throw new ApiError(400, 'Cannot delete an approved course.');
-    }
-    // Optionally, delete the file from disk here
-    await course.deleteOne();
-    return res.status(200).json(new ApiResponse(200, null, 'Course deleted successfully.'));
+
+    // Verify the facilitator owns this course before allowing deletion
+    await verifyFacilitatorAccess(courseId, req.user._id);
+    
+    // In a real app, you might also want to delete related assignments and submissions.
+    // For now, we'll just delete the course.
+    await Course.findByIdAndDelete(courseId);
+
+    return res.status(200).json(new ApiResponse(200, {}, "Course deleted successfully."));
 });
+
 
 

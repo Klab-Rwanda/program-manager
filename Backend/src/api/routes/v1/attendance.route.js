@@ -20,7 +20,10 @@ import {
     getSessionQRCode,
     markManualStudentAttendance,
     startPhysicalSession,
-    openQrForSession
+    openQrForSession,
+    getProgramAttendanceReport,
+    getMyAttendanceHistory,
+    endSession
 } from '../../controllers/attendance.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole as verifyRole } from '../../middlewares/role.middleware.js';
@@ -119,5 +122,17 @@ router.post('/sessions/:sessionId/open-qr',
     verifyRole(['Facilitator']), 
     openQrForSession // Add this new route
 );
+router.get('/report/program/:programId', 
+    verifyRole(['Program Manager', 'SuperAdmin']), 
+    getProgramAttendanceReport // The function we just created
+);
 
+router.get('/my-history', 
+    verifyRole(['Trainee']), 
+    getMyAttendanceHistory
+);
+router.post('/sessions/:sessionId/end', 
+    verifyRole(['Facilitator']), 
+    endSession
+);
 export default router;
