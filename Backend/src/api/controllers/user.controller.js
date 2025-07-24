@@ -15,7 +15,7 @@ const getAllUsers = asyncHandler(async (req, res) => {
 
     let query = { isActive: true };
     if (role) {
-        const roleRegex = new RegExp(`^${role.replace(/\s/g, '\\s*')}$`, 'i');
+        const roleRegex = new RegExp(`^${role.replace(/\s/g, '\s*')}$`, 'i');
         query.role = { $regex: roleRegex };
     }
 
@@ -32,10 +32,11 @@ const getAllUsers = asyncHandler(async (req, res) => {
         },
         {
             $project: {
-                password: 0, // Exclude password
-                forgotPasswordToken: 0,
-                forgotPasswordExpiry: 0,
-                // Reshape enrolledPrograms to be an array of names
+                name: 1,
+                email: 1,
+                role: 1,
+                status: 1,
+                isActive: 1,
                 enrolledPrograms: {
                     $map: {
                         input: "$enrolledPrograms",
@@ -279,10 +280,14 @@ const getUserListByRole = asyncHandler(async (req, res) => {
     
     // Now, filter them based on our flexible role check.
     const filteredUsers = allUsers.filter(user => {
-        // Remove space from the user's role in the DB for comparison
-        const dbRole = user.role.replace(/\s/g, '');
-        // Compare them case-insensitively
-        return dbRole.toLowerCase() === roleSearchTerm.toLowerCase();
+        try {
+            if (!user.role || typeof user.role !== 'string') return false;
+            const dbRole = user.role.replace(/\s/g, '');
+            return dbRole.toLowerCase() === roleSearchTerm.toLowerCase();
+        } catch (e) {
+            console.error('Error filtering user by role:', user, e);
+            return false;
+        }
     });
     // --- END OF FIX ---
 

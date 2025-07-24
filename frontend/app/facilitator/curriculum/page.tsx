@@ -577,7 +577,7 @@ export default function Curriculum() {
           {/* Files Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredFiles.map((file) => (
-              <Card key={file.id} className="overflow-hidden">
+              <Card key={file._id || file.id} className="overflow-hidden">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
@@ -607,7 +607,9 @@ export default function Curriculum() {
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground">
-                        Uploaded: {file.createdAt ? new Date(file.createdAt).toLocaleDateString() : 'Date not available'}
+                        Uploaded: {file.createdAt ? (
+                          <span suppressHydrationWarning>{new Date(file.createdAt).toLocaleDateString()}</span>
+                        ) : 'Date not available'}
                       </div>
                       <div className="space-y-2">
                         {/* Primary Actions Row */}

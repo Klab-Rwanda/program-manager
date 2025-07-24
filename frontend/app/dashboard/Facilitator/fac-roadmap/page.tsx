@@ -74,6 +74,8 @@ export default function WeeklyRoadmapPage() {
     topics: ["", "", "", "", ""]
   });
   const [feedback, setFeedback] = useState("");
+  const [studentCount, setStudentCount] = useState<number | null>(null);
+  const [loadingStudents, setLoadingStudents] = useState(false);
 
   // Fetch programs on component mount
   useEffect(() => {
@@ -115,9 +117,28 @@ export default function WeeklyRoadmapPage() {
     fetchRoadmap();
   }, [selectedProgram]);
 
+  // Fetch student count when selectedProgram changes
+  useEffect(() => {
+    if (!selectedProgram) return;
+    setLoadingStudents(true);
+    api.get(`/programs/${selectedProgram}/student-count`)
+      .then(res => setStudentCount(res.data.data.count))
+      .catch(() => setStudentCount(null))
+      .finally(() => setLoadingStudents(false));
+  }, [selectedProgram]);
+
   const handlePlanWeek = async () => {
     if (!weekPlan.program || !weekPlan.weekNumber || !weekPlan.title || !weekPlan.startDate) {
       toast.error("Please fill in all required fields to plan a week.");
+      return;
+    }
+
+    // Prevent duplicate week plan
+    const weekExists = weeklyRoadmap.some(
+      w => w.weekNumber === parseInt(weekPlan.weekNumber)
+    );
+    if (weekExists) {
+      toast.error("A week plan for this week already exists.");
       return;
     }
 
@@ -519,7 +540,7 @@ export default function WeeklyRoadmapPage() {
             <div className="text-2xl font-bold">Week {currentWeek?.weekNumber || "N/A"}</div>
             <p className="text-xs text-muted-foreground">
               {currentWeek?.startDate 
-                ? new Date(currentWeek.startDate).toLocaleDateString()
+                ? <span suppressHydrationWarning>{new Date(currentWeek.startDate).toLocaleDateString()}</span>
                 : "No current week"
               }
             </p>
@@ -568,7 +589,9 @@ export default function WeeklyRoadmapPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">35</div>
+            <div className="text-2xl font-bold">
+              {loadingStudents ? <Loader2 className="inline h-5 w-5 animate-spin" /> : (studentCount !== null ? studentCount : "-")}
+            </div>
             <p className="text-xs text-muted-foreground">Across all programs</p>
           </CardContent>
         </Card>

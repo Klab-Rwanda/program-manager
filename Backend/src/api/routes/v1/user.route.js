@@ -90,7 +90,7 @@ manageRouter.use(verifyJWT);
  *     responses:
  *       200: { description: 'A list of users matching the role.' }
  */
-manageRouter.route('/list-by-role').get(checkRole(['SuperAdmin']), userController.getUserListByRole);
+manageRouter.route('/list-by-role').get(checkRole(['SuperAdmin', 'Program Manager']), userController.getUserListByRole);
 
 /**
  * @openapi
