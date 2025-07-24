@@ -5,7 +5,7 @@ import { ApiResponse } from "../../utils/ApiResponse.js";
 import { sendRegistrationEmail, sendPasswordResetEmail, sendPasswordChangeConfirmationEmail } from "../../services/email.service.js";
 import { createLog } from "../../services/log.service.js";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
+import bcrypt from 'bcryptjs';
 
 const registerUser = asyncHandler(async (req, res) => {
   const { name, email, role } = req.body;

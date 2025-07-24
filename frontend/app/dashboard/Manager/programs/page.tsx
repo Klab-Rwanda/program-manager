@@ -22,7 +22,7 @@ import {
   Download,
   FileText,
 } from "lucide-react";
-import { Program, getAllPrograms, createProgram, updateProgram, deleteProgram, requestApproval } from "@/lib/services/program.service";
+import { Program, getAllPrograms, createProgram, updateProgram, deleteProgram, requestApproval, enrollFacilitator, enrollTrainee } from "@/lib/services/program.service";
 import { archiveProgram } from "@/lib/services/archive.service";
 import { exportProgramsPDF, exportProgramsExcel, downloadBlob } from "@/lib/services/export.service";
 import { toast } from "sonner";
@@ -31,6 +31,9 @@ import { useCounts } from "@/lib/contexts/CountsContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getUsersByRole } from '@/lib/services/user.service';
+import { User } from "@/lib/services/user.service";
+import api from '@/lib/api'; // Make sure you have your axios instance
 
 const ProgramsPage: React.FC = () => {
   const { isAuthenticated, user, role } = useAuth();
@@ -46,6 +49,17 @@ const ProgramsPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [assigningProgram, setAssigningProgram] = useState<Program | null>(null);
+  const [previewingProgram, setPreviewingProgram] = useState<Program | null>(null);
+  const [facilitators, setFacilitators] = useState<User[]>([]);
+  const [trainees, setTrainees] = useState<User[]>([]);
+  const [selectedFacilitator, setSelectedFacilitator] = useState<string>("");
+  const [selectedTrainee, setSelectedTrainee] = useState<string>("");
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [selectedFacilitators, setSelectedFacilitators] = useState<string[]>([]);
+  const [selectedTrainees, setSelectedTrainees] = useState<string[]>([]);
 
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
@@ -291,6 +305,65 @@ const ProgramsPage: React.FC = () => {
     }
   };
 
+  const openAssignModal = async (program: Program) => {
+    setAssigningProgram(program);
+    setShowAssignModal(true);
+    setAssignLoading(true);
+    try {
+      const [facilitatorList, traineeList] = await Promise.all([
+        getUsersByRole('Facilitator'),
+        getUsersByRole('Trainee'),
+      ]);
+      setFacilitators(facilitatorList);
+      setTrainees(traineeList);
+      setSelectedFacilitators([]);
+      setSelectedTrainees([]);
+    } catch (err) {
+      toast.error('Failed to load users for assignment.');
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  const handleAssignFacilitators = async () => {
+    if (!assigningProgram || selectedFacilitators.length === 0) return;
+    setAssignLoading(true);
+    try {
+      await Promise.all(selectedFacilitators.map(fid => enrollFacilitator(assigningProgram._id, fid)));
+      toast.success('Facilitators assigned!');
+      fetchPrograms();
+    } catch (err) {
+      toast.error('Failed to assign facilitators.');
+    } finally {
+      setAssignLoading(false);
+      setSelectedFacilitators([]);
+    }
+  };
+  const handleAssignTrainees = async () => {
+    if (!assigningProgram || selectedTrainees.length === 0) return;
+    setAssignLoading(true);
+    try {
+      await Promise.all(selectedTrainees.map(tid => enrollTrainee(assigningProgram._id, tid)));
+      toast.success('Trainees assigned!');
+      fetchPrograms();
+    } catch (err) {
+      toast.error('Failed to assign trainees.');
+    } finally {
+      setAssignLoading(false);
+      setSelectedTrainees([]);
+    }
+  };
+
+  const openPreviewModal = async (program: Program) => {
+    try {
+      const response = await api.get(`/programs/${program._id}`);
+      setPreviewingProgram(response.data.data); // Use the fully populated program
+      setShowPreviewModal(true);
+    } catch (err) {
+      toast.error('Failed to load program details.');
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "active": return "bg-green-100 text-green-800";
@@ -517,8 +590,8 @@ const ProgramsPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          sortedPrograms.map((program) => (
-            <div key={program._id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
+          sortedPrograms.map((program, idx) => (
+            <div key={program._id || idx} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex justify-between items-start mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">{program.name}</h3>
                 <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(program.status)}`}>
@@ -532,7 +605,7 @@ const ProgramsPage: React.FC = () => {
               <div className="space-y-2 mb-4">
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <Calendar className="h-4 w-4" />
-                  <span>{new Date(program.startDate).toLocaleDateString()} - {new Date(program.endDate).toLocaleDateString()}</span>
+                  <span suppressHydrationWarning>{new Date(program.startDate).toLocaleDateString()}</span> - <span suppressHydrationWarning>{new Date(program.endDate).toLocaleDateString()}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <Users className="h-4 w-4" />
@@ -586,6 +659,20 @@ const ProgramsPage: React.FC = () => {
                     <span className="truncate">Submit</span>
                   </button>
                 )}
+                <button
+                  onClick={() => openAssignModal(program)}
+                  className="flex-1 min-w-0 bg-emerald-100 text-emerald-700 px-2 py-2 rounded-lg text-xs hover:bg-emerald-200 flex items-center justify-center gap-1"
+                >
+                  <Users className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">Assign Facilitators & Trainees</span>
+                </button>
+                <button
+                  onClick={() => openPreviewModal(program)}
+                  className="flex-1 min-w-0 bg-gray-100 text-gray-700 px-2 py-2 rounded-lg text-xs hover:bg-gray-200 flex items-center justify-center gap-1 border border-gray-200"
+                >
+                  <Eye className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate">View Details</span>
+                </button>
               </div>
             </div>
           ))
@@ -765,6 +852,227 @@ const ProgramsPage: React.FC = () => {
                 className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAssignModal && assigningProgram && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Assign Users to {assigningProgram?.name}</h2>
+              <button
+                onClick={() => setShowAssignModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Facilitators Section */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Facilitators</h3>
+                
+                {/* Available Facilitators */}
+                <div className="mb-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Available Facilitators:</h4>
+                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-white shadow-sm">
+                    {facilitators.map((f, idx) => (
+                      <label key={f._id || f.email || idx} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={selectedFacilitators.includes(f._id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedFacilitators([...selectedFacilitators, f._id]);
+                            } else {
+                              setSelectedFacilitators(selectedFacilitators.filter(id => id !== f._id));
+                            }
+                          }}
+                          className="accent-[#1f497d] w-4 h-4 rounded border-gray-300"
+                        />
+                        <div>
+                          <div className="font-medium text-sm">{f.name}</div>
+                          <div className="text-xs text-gray-500">{f.email}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Currently Assigned Facilitators */}
+                <div className="mb-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Currently Assigned:</h4>
+                  <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
+                    {assigningProgram?.facilitators?.length > 0 ? (
+                      assigningProgram.facilitators.map((f, idx) => (
+                        <div key={f._id || f.email || idx} className="flex flex-col p-1">
+                          <span className="font-medium text-sm">{f.name}</span>
+                          <span className="text-xs text-gray-500">{f.email}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-500 p-2">No facilitators assigned</div>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleAssignFacilitators}
+                  disabled={selectedFacilitators.length === 0 || assignLoading}
+                  className="w-full bg-[#1f497d] text-white px-4 py-2 rounded-lg hover:bg-[#1a3f6b] transition-colors disabled:opacity-50"
+                >
+                  {assignLoading ? 'Assigning...' : `Assign ${selectedFacilitators.length} Facilitator${selectedFacilitators.length !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+
+              {/* Trainees Section */}
+              <div>
+                <h3 className="text-lg font-semibold mb-3">Trainees</h3>
+                
+                {/* Available Trainees */}
+                <div className="mb-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Available Trainees:</h4>
+                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-white shadow-sm">
+                    {trainees.map((t, idx) => (
+                      <label key={t._id || t.email || idx} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded cursor-pointer transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={selectedTrainees.includes(t._id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedTrainees([...selectedTrainees, t._id]);
+                            } else {
+                              setSelectedTrainees(selectedTrainees.filter(id => id !== t._id));
+                            }
+                          }}
+                          className="accent-[#1f497d] w-4 h-4 rounded border-gray-300"
+                        />
+                        <div>
+                          <div className="font-medium text-sm">{t.name}</div>
+                          <div className="text-xs text-gray-500">{t.email}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Currently Assigned Trainees */}
+                <div className="mb-4">
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">Currently Assigned:</h4>
+                  <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
+                    {assigningProgram?.trainees?.length > 0 ? (
+                      assigningProgram.trainees.map((t, idx) => (
+                        <div key={t._id || t.email || idx} className="flex flex-col p-1">
+                          <span className="font-medium text-sm">{t.name}</span>
+                          <span className="text-xs text-gray-500">{t.email}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-500 p-2">No trainees assigned</div>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleAssignTrainees}
+                  disabled={selectedTrainees.length === 0 || assignLoading}
+                  className="w-full bg-[#1f497d] text-white px-4 py-2 rounded-lg hover:bg-[#1a3f6b] transition-colors disabled:opacity-50"
+                >
+                  {assignLoading ? 'Assigning...' : `Assign ${selectedTrainees.length} Trainee${selectedTrainees.length !== 1 ? 's' : ''}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Program Preview Modal */}
+      {showPreviewModal && previewingProgram && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-xl flex flex-col justify-center items-center">
+            <div className="w-full flex flex-col md:flex-row gap-8">
+              {/* Program Details */}
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold mb-4 text-[#1f497d]">Program Details</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="font-medium">Status:</span>
+                    <span className={`px-2 py-1 rounded text-xs ${previewingProgram.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{previewingProgram.isActive ? 'Active' : 'Inactive'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Start Date:</span>
+                    <span><span suppressHydrationWarning>{new Date(previewingProgram.startDate).toLocaleDateString()}</span></span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">End Date:</span>
+                    <span><span suppressHydrationWarning>{new Date(previewingProgram.endDate).toLocaleDateString()}</span></span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Duration:</span>
+                    <span>{previewingProgram.duration} weeks</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Capacity:</span>
+                    <span>{previewingProgram.capacity} trainees</span>
+                  </div>
+                  {previewingProgram.description && (
+                    <div>
+                      <span className="font-medium">Description:</span>
+                      <p className="text-sm text-gray-600 mt-1">{previewingProgram.description}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Assigned Users */}
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold mb-4 text-[#1f497d]">Assigned Users</h3>
+                {/* Facilitators */}
+                <div className="mb-6">
+                  <h4 className="font-medium mb-2">Facilitators ({previewingProgram.facilitators?.length || 0})</h4>
+                  <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
+                    {previewingProgram.facilitators?.length > 0 ? (
+                      previewingProgram.facilitators.map((f, idx) => (
+                        <div key={f._id || f.email || idx} className="flex flex-col p-1">
+                          <span className="font-medium text-sm">{f.name}</span>
+                          <span className="text-xs text-gray-500">{f.email}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-500 p-2">No facilitators assigned</div>
+                    )}
+                  </div>
+                </div>
+                {/* Trainees */}
+                <div>
+                  <h4 className="font-medium mb-2">Trainees ({previewingProgram.trainees?.length || 0})</h4>
+                  <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
+                    {previewingProgram.trainees?.length > 0 ? (
+                      previewingProgram.trainees.map((t, idx) => (
+                        <div key={t._id || t.email || idx} className="flex flex-col p-1">
+                          <span className="font-medium text-sm">{t.name}</span>
+                          <span className="text-xs text-gray-500">{t.email}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-500 p-2">No trainees assigned</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end w-full">
+              <button
+                onClick={() => {
+                  setShowPreviewModal(false);
+                  openAssignModal(previewingProgram);
+                }}
+                className="bg-[#1f497d] text-white px-6 py-2 rounded-lg hover:bg-[#1a3f6b] transition-colors"
+              >
+                Assign Users
               </button>
             </div>
           </div>

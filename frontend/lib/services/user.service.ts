@@ -41,3 +41,8 @@ export const deleteUser = async (userId: string): Promise<void> => {
 };
 // NOTE: The backend does not currently have a dedicated endpoint for an admin to update a user's name/role.
 // This would typically be a `PATCH /users/manage/:id` endpoint. For now, we'll focus on status changes.
+
+export const getUsersByRole = async (role: string): Promise<User[]> => {
+  const response = await api.get(`/users/manage/list-by-role?role=${encodeURIComponent(role)}`);
+  return response.data.data;
+};

@@ -11,9 +11,8 @@ import programUserRouter from './programUser.route.js';
 import dashboardRouter from './dashboard.route.js';
 import reportRouter from './report.route.js';
 import exportRouter from './export.route.js';
-import assignmentRouter from './assignment.route.js';
+import jitsiRouter from './jitsi.route.js';
 import roadmapRouter from './roadmap.route.js';
-
 const router = Router();
 
 const defaultRoutes = [
@@ -29,9 +28,8 @@ const defaultRoutes = [
     { path: '/reports', route: reportRouter },
     { path: '/dashboard', route: dashboardRouter },
     { path: '/export', route: exportRouter },
-    { path: '/assignments', route: assignmentRouter },
-    { path: '/roadmaps', route: roadmapRouter },
-    
+    { path: '/jitsi', route: jitsiRouter },
+    { path: '/roadmap', route: roadmapRouter },
 ];
 
 defaultRoutes.forEach((route) => {

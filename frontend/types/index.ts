@@ -134,6 +134,7 @@ export interface Course {
   status: 'Draft' | 'PendingApproval' | 'Approved' | 'Rejected';
   facilitatorId: string;
   documentUrl?: string;
+  contentUrl?: string; // <-- Add this line to match backend
   createdAt: string;
   updatedAt: string;
 }

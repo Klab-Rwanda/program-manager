@@ -356,7 +356,7 @@ export default function Curriculum() {
                     </SelectTrigger>
                     <SelectContent>
                       {availablePrograms.length === 0 ? (
-                        <SelectItem value="" disabled>No programs available</SelectItem>
+                        <SelectItem value="no-programs" disabled>No programs available</SelectItem>
                       ) : (
                         availablePrograms.map((program) => (
                           <SelectItem key={program._id} value={program._id}>
@@ -517,7 +517,7 @@ export default function Curriculum() {
           <SelectContent>
             <SelectItem value="all">All Programs</SelectItem>
             {availablePrograms.length === 0 ? (
-                <SelectItem value="" disabled>No programs available</SelectItem>
+                <SelectItem value="no-programs" disabled>No programs available</SelectItem>
             ) : (
                 availablePrograms.map((program) => (
                   <SelectItem key={program._id} value={program._id}>
