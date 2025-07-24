@@ -15,6 +15,7 @@ import {
   FileText,
   X,
 } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -39,6 +40,7 @@ interface User {
   dateAdded: string
   email?: string
   status?: string
+  isActive?: boolean
   avatar?: string
   assignedManager?: { _id: string; name: string }
   programs?: Array<{ name: string }>
@@ -71,111 +73,106 @@ export function SuperAdminDashboard() {
   const [selectedManagerId, setSelectedManagerId] = useState("")
   const [isAssigning, setIsAssigning] = useState(false)
 
-  // Mock data based on the original structure
-  const mockStats: DashboardStats = {
-    totalPrograms: 24,
-    activeTrainees: 248,
-    totalUsers: 1247,
-    pendingApprovals: 8,
-  }
-
-  const mockRecentUsers: User[] = [
-    {
-      id: "1",
-      name: "John Doe",
-      role: "Facilitator",
-      dateAdded: "2024-01-15",
-      email: "john@klab.rw",
-      status: "Active",
-      assignedManager: { _id: "1", name: "Manager One" },
-      programs: [{ name: "Web Development" }],
-      createdAt: "2024-01-15T10:00:00Z",
-      activityFeed: [
-        { id: "1", type: "Attendance", text: "Marked attendance for React session", timestamp: "2024-01-20T14:30:00Z" },
-        { id: "2", type: "Submission", text: "Submitted course materials", timestamp: "2024-01-19T16:00:00Z" },
-      ],
-    },
-    {
-      id: "2",
-      name: "Alice Johnson",
-      role: "Trainee",
-      dateAdded: "2024-01-14",
-      email: "alice@klab.rw",
-      status: "Active",
-      programs: [{ name: "Data Science" }],
-      createdAt: "2024-01-14T09:00:00Z",
-      activityFeed: [
-        { id: "3", type: "Attendance", text: "Attended Python workshop", timestamp: "2024-01-20T10:00:00Z" },
-      ],
-    },
-    {
-      id: "3",
-      name: "Bob Smith",
-      role: "Program Manager",
-      dateAdded: "2024-01-13",
-      email: "bob@klab.rw",
-      status: "Inactive",
-      createdAt: "2024-01-13T11:00:00Z",
-    },
-    {
-      id: "4",
-      name: "Sarah Wilson",
-      role: "Facilitator",
-      dateAdded: "2024-01-12",
-      email: "sarah@klab.rw",
-      status: "Active",
-      assignedManager: { _id: "2", name: "Manager Two" },
-      programs: [{ name: "UI/UX Design" }],
-      createdAt: "2024-01-12T13:00:00Z",
-      activityFeed: [
-        { id: "4", type: "Submission", text: "Updated design portfolio", timestamp: "2024-01-20T15:00:00Z" },
-      ],
-    },
-    {
-      id: "5",
-      name: "Mike Brown",
-      role: "Trainee",
-      dateAdded: "2024-01-11",
-      email: "mike@klab.rw",
-      status: "Active",
-      programs: [{ name: "Mobile Development" }],
-      createdAt: "2024-01-11T08:00:00Z",
-    },
-  ]
-
-  const mockManagers: ProgramManager[] = [
-    { id: "1", name: "Manager One", email: "manager1@klab.rw" },
-    { id: "2", name: "Manager Two", email: "manager2@klab.rw" },
-    { id: "3", name: "Manager Three", email: "manager3@klab.rw" },
-  ]
-
-  // Simulate the original fetchDashboardData function
-  const fetchDashboardData = useCallback(async () => {
-    try {
-      // Simulate API calls
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      setStats(mockStats)
-      setRecentUsers(mockRecentUsers)
-      setAvailableManagers(mockManagers)
-    } catch (err) {
-      setError("Could not load dashboard data. Please try again later.")
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
+  // Fetch dashboard stats from backend
   useEffect(() => {
-    fetchDashboardData()
-  }, [fetchDashboardData])
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem('accessToken');
+        if (!token) throw new Error('No access token found');
+        const headers = {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        };
+        // Fetch dashboard stats, recent trainees, and available managers in parallel
+        const [statsRes, traineesRes, managersRes] = await Promise.all([
+          fetch('http://localhost:8000/api/v1/dashboard/stats', {
+            method: 'GET',
+            headers,
+            credentials: 'include',
+          }),
+          fetch('http://localhost:8000/api/v1/users/manage/onboarded?role=Trainee&limit=10', {
+            method: 'GET',
+            headers,
+            credentials: 'include',
+          }),
+          fetch('http://localhost:8000/api/v1/users/manage/list-by-role?role=Program Manager', {
+            method: 'GET',
+            headers,
+            credentials: 'include',
+          })
+        ]);
+        // Parse dashboard stats
+        const rawStats = await statsRes.text();
+        console.log('Dashboard stats response:', statsRes.status, rawStats);
+        if (statsRes.status !== 200) throw new Error('Failed to fetch dashboard stats');
+        const statsData = JSON.parse(rawStats);
+        setStats(statsData.data);
+        // Parse recent trainees
+        const rawTrainees = await traineesRes.text();
+        console.log('Recent trainees response:', traineesRes.status, rawTrainees);
+        if (traineesRes.status !== 200) throw new Error('Failed to fetch recent trainees');
+        const traineesData = JSON.parse(rawTrainees);
+        // Ensure recentUsers is always an array (handle paginated response)
+        let usersArray = [];
+        // Handle nested structure: { data: { data: [...] } }
+        if (Array.isArray(traineesData.data?.data)) {
+          usersArray = traineesData.data.data;
+        } else if (Array.isArray(traineesData.data)) {
+          usersArray = traineesData.data;
+        } else if (traineesData.data && typeof traineesData.data === 'object') {
+          // Common paginated structure: { results: [...] }
+          if (Array.isArray(traineesData.data.results)) {
+            usersArray = traineesData.data.results;
+          } else if (Array.isArray(traineesData.data.users)) {
+            usersArray = traineesData.data.users;
+          } else if (Array.isArray(traineesData.results)) {
+            usersArray = traineesData.results;
+          } else if (Array.isArray(traineesData.users)) {
+            usersArray = traineesData.users;
+          }
+        }
+        // Fallback: try top-level array
+        if (usersArray.length === 0 && Array.isArray(traineesData)) {
+          usersArray = traineesData;
+        }
+        // Map backend trainee fields to expected User fields for table rendering
+        const mappedUsers = usersArray.map((u: any) => ({
+          id: u.id || u._id || '',
+          name: u.name || u.fullName || u.username || '',
+          role: u.role || 'Trainee',
+          dateAdded: u.dateAdded || (u.createdAt ? new Date(u.createdAt).toLocaleDateString() : ''),
+          email: u.email || '',
+          status: u.status || (typeof u.isActive === 'boolean' ? (u.isActive ? 'Active' : 'Inactive') : ''),
+          isActive: typeof u.isActive === 'boolean' ? u.isActive : (u.status === 'Active'),
+          avatar: u.avatar || '',
+          assignedManager: u.assignedManager || undefined,
+          programs: u.programs || [],
+          createdAt: u.createdAt || '',
+          activityFeed: u.activityFeed || [],
+        }));
+        setRecentUsers(mappedUsers);
+        // Parse available managers
+        const rawManagers = await managersRes.text();
+        console.log('Available managers response:', managersRes.status, rawManagers);
+        if (managersRes.status !== 200) throw new Error('Failed to fetch available managers');
+        const managersData = JSON.parse(rawManagers);
+        setAvailableManagers(managersData.data || []);
+      } catch (err) {
+        setError('Could not load dashboard data. Please try again later.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashboardData();
+  }, []);
 
   const handleUserClick = async (user: User) => {
     setIsDetailOpen(true)
     setIsDetailLoading(true)
     try {
-      // Simulate API call to get detailed user data
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      // TODO: Replace with real API call for user details if needed
       setSelectedUser(user)
       setSelectedManagerId(user.assignedManager?._id || "none")
     } catch (err) {
@@ -196,13 +193,11 @@ export function SuperAdminDashboard() {
 
   const handleAssignManager = async () => {
     if (!selectedUser) return
-
     setIsAssigning(true)
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // TODO: Replace with real API call to assign manager
       alert("Manager assignment updated successfully!")
-      fetchDashboardData() // Refresh data
+      // Optionally refresh data here
     } catch (err) {
       alert("Failed to assign manager.")
     } finally {
@@ -352,48 +347,55 @@ export function SuperAdminDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentUsers.map((user) => (
-                  <TableRow key={user.id}>
+                {recentUsers.map((trainee) => (
+                  <TableRow key={trainee.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
+                          <AvatarImage src={trainee.avatar || "/placeholder.svg"} alt={trainee.name} />
                           <AvatarFallback className="text-xs">
-                            {user.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
+                            {trainee.name.split(" ").map((n) => n[0]).join("")}
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="font-medium text-foreground">{user.name}</p>
-                          <p className="text-xs text-muted-foreground">{user.email}</p>
+                          <p className="font-medium text-foreground">{trainee.name}</p>
+                          <p className="text-xs text-muted-foreground">{trainee.email}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">
-                        {user.role}
+                        {trainee.role}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {user.programs?.map((p) => p.name).join(", ") || "None"}
+                      {/* If you want to show programs, you can add logic here if available */}
+                      None
                     </TableCell>
                     <TableCell>
                       <Badge
                         className={cn(
                           "text-xs",
-                          user.status === "Active"
+                          (typeof trainee.isActive === 'boolean' ? trainee.isActive : trainee.status === 'Active')
                             ? "bg-custom-blue text-white"
                             : "bg-secondary text-secondary-foreground",
                         )}
                       >
-                        {user.status}
+                        {(typeof trainee.isActive === 'boolean' ? trainee.isActive : trainee.status === 'Active')
+                          ? "Active"
+                          : "Inactive"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{user.dateAdded}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {trainee.createdAt
+                        ? (() => {
+                            const d = new Date(trainee.createdAt);
+                            return isNaN(d.getTime()) ? trainee.createdAt : d.toLocaleDateString();
+                          })()
+                        : ""}
+                    </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => handleUserClick(user)}>
+                      <Button variant="ghost" size="sm" onClick={() => handleUserClick(trainee)}>
                         <Eye className="h-3 w-3" />
                       </Button>
                     </TableCell>
@@ -583,3 +585,7 @@ export function SuperAdminDashboard() {
     </div>
   )
 }
+function fetchDashboardData() {
+  throw new Error("Function not implemented.")
+}
+
