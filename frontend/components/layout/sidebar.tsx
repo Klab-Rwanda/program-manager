@@ -4,10 +4,10 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity, Archive, Award, BarChart3, Bell, BookOpen, Calendar,
-  Calendar1,
+  Activity, Archive, Award, BarChart3, Bell, BookOpen, BookText, Calendar,
+  CalendarCheck,
   ChevronLeft, ChevronRight, ClipboardCheck, FileText, FolderOpen,
-  GraduationCap, Home, LogOut, Mail, Menu, MessageSquare, Moon, Settings, Sun, Ticket,
+  GraduationCap, Home, LogOut, Mail, Menu, MessageSquare, Moon, NotebookPen, Settings, Sun, Ticket,
   TicketCheck,
   TrendingUp, Upload, User, UserCheck, Users, Wrench
 } from "lucide-react";
@@ -44,9 +44,11 @@ const menuItems = [
     // Trainee
     { title: "My Learning", url: "/dashboard/Trainee/my-learning", icon: GraduationCap, roles: ['trainee'] },
     { title: "Submit Projects", url: "/dashboard/Trainee/submit-projects", icon: FileText, roles: ['trainee'] },
-    { title: "Attendance", url: "/dashboard/Trainee/Trattendance", icon: Calendar1, roles: ['trainee'] },
+    { title: "Attendance", url: "/dashboard/Trainee/Trattendance", icon: Calendar, roles: ['trainee'] },
+    { title: "My Attendance History", url: "/dashboard/Trainee/my-attendance-history", icon: Calendar, roles: ['trainee'] },
     { title: "My Progress", url: "/dashboard/Trainee/my-progress", icon: TrendingUp, roles: ['trainee'] },
     { title: "Learning Resources", url: "/dashboard/Trainee/resources", icon: FolderOpen, roles: ['trainee'] },
+    { title: "Program Roadmap", url: "/dashboard/Trainee/roadmap", icon: CalendarCheck, roles: ['trainee'] },
     // IT Support
     { title: "Support Tickets", url: "/dashboard/It-support/support-tickets", icon: MessageSquare, roles: ['it_support'] },
     { title: "Maintenance", url: "/dashboard/It-support/maintenance", icon: Wrench, roles: ['it_support'] },

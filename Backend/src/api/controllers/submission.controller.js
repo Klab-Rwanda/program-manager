@@ -52,4 +52,20 @@ const reviewSubmission = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, updatedSubmission, "Submission reviewed successfully."));
 });
 
-export { createSubmission, getSubmissionsForCourse, reviewSubmission };
+const getMySubmissions = asyncHandler(async (req, res) => {
+    const traineeId = req.user._id;
+
+    const submissions = await Submission.find({ trainee: traineeId })
+        .populate('course', 'title') // Populate the course title
+        .populate('program', 'name') // Populate the program name
+        .sort({ submittedAt: -1 });
+
+    if (!submissions) {
+        return res.status(200).json(new ApiResponse(200, [], "No submissions found."));
+    }
+
+    return res.status(200).json(new ApiResponse(200, submissions, "Your submissions fetched successfully."));
+});
+
+
+export { createSubmission, getSubmissionsForCourse, reviewSubmission, getMySubmissions };

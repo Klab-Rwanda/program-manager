@@ -1,39 +1,24 @@
 import api from '../api';
+import { Roadmap } from '@/types';
 
-export interface DailyTopic {
-    day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday';
-    topic: string;
-    completed: boolean;
-    type: 'in-person' | 'online';
-    duration?: string;
-}
+export const getMyRoadmaps = async (): Promise<Roadmap[]> => {
+    const response = await api.get('/roadmaps/my-roadmaps');
+    return response.data.data;
+};
 
-export interface RoadmapWeek {
-    _id: string;
-    program: string; // Program ID
-    weekNumber: number;
-    title: string;
-    startDate: string;
-    objectives: string[];
-    topics: DailyTopic[];
-}
-
-// Type for creating a new plan
-export interface CreateRoadmapData {
-    program: string;
-    weekNumber: number;
-    title: string;
-    startDate: string;
-    objectives: string[];
-    topics: Omit<DailyTopic, 'completed'>[];
-}
-
-export const createWeekPlan = async (data: CreateRoadmapData): Promise<RoadmapWeek> => {
+// Creates OR updates a roadmap. The backend handles the logic.
+export const saveRoadmap = async (data: any): Promise<Roadmap> => {
+    // The same endpoint handles create and update
     const response = await api.post('/roadmaps', data);
     return response.data.data;
 };
 
-export const getProgramRoadmap = async (programId: string): Promise<RoadmapWeek[]> => {
-    const response = await api.get(`/roadmaps/program/${programId}`);
+// Deletes an entire roadmap and its topics
+export const deleteRoadmap = async (id: string): Promise<void> => {
+    await api.delete(`/roadmaps/${id}`);
+};
+
+export const createRoadmap = async (data: any): Promise<Roadmap> => {
+    const response = await api.post('/roadmaps', data);
     return response.data.data;
 };

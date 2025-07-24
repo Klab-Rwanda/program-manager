@@ -86,5 +86,9 @@ router.route('/:submissionId/review').patch(
     checkRole(['Facilitator']), 
     submissionController.reviewSubmission
 );
+router.route('/my-submissions').get(
+    checkRole(['Trainee']), 
+    submissionController.getMySubmissions
+);
 
 export default router;

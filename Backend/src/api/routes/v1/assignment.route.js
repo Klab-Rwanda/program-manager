@@ -1,0 +1,27 @@
+import { Router } from 'express';
+import * as assignmentController from '../../controllers/assignment.controller.js';
+import { verifyJWT } from '../../middlewares/auth.middleware.js';
+import { checkRole } from '../../middlewares/role.middleware.js';
+
+const router = Router();
+router.use(verifyJWT);
+
+// Facilitator routes
+router.route('/')
+    .post(checkRole(['Facilitator']), assignmentController.createAssignment);
+
+router.route('/my-assignments')
+    .get(checkRole(['Facilitator']), assignmentController.getMyCreatedAssignments);
+
+router.route('/:id')
+    .patch(checkRole(['Facilitator']), assignmentController.updateAssignment)
+    .delete(checkRole(['Facilitator']), assignmentController.deleteAssignment);
+
+// Shared route for Trainees and Facilitators
+router.route('/course/:courseId')
+    .get(checkRole(['Facilitator', 'Trainee']), assignmentController.getAssignmentsForCourse);
+
+    router.route('/my-available')
+    .get(checkRole(['Trainee']), assignmentController.getMyAvailableAssignments);
+
+export default router;
