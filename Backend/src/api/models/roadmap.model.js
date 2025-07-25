@@ -6,7 +6,6 @@ const roadmapSchema = new mongoose.Schema({
     title: { type: String, required: true },
     startDate: { type: Date, required: true },
     objectives: [{ type: String }],
-    topics: [dailyTopicSchema],
     status: { 
         type: String, 
         enum: ['draft', 'pending_approval', 'approved', 'rejected'], 

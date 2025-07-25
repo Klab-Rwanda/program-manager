@@ -25,6 +25,7 @@ import exportRoutes from './src/api/routes/v1/export.route.js';
 import notificationRoutes from './src/api/routes/v1/notification.route.js';
 import jitsiRoutes from './src/api/routes/v1/jitsi.route.js';
 import programUserRoutes from './src/api/routes/v1/programUser.route.js';
+import initializeSocket from './src/socket/index.js';
 
 dotenv.config();
 
