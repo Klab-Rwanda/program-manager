@@ -130,15 +130,26 @@ export interface Course {
   _id: string;
   title: string;
   description: string;
-  program: string; // Program ID
+  // The backend populates these, so they should be objects, not just strings
+  program: {
+    _id: string;
+    name: string;
+  };
+  facilitator: {
+    _id: string;
+    name: string;
+  };
   status: 'Draft' | 'PendingApproval' | 'Approved' | 'Rejected';
-  facilitatorId: string;
-  documentUrl?: string;
-  contentUrl?: string; // <-- Add this line to match backend
+  
+  // --- ADD THIS REQUIRED PROPERTY ---
+  contentUrl: string; 
+
+  // --- ADD THIS OPTIONAL PROPERTY ---
+  rejectionReason?: string;
+  
   createdAt: string;
   updatedAt: string;
 }
-
 
 export interface CreateProgramData {
   name: string;
@@ -200,7 +211,6 @@ export interface Comment {
 }
 
 export interface Ticket {
-  subject: string;
   _id: string;
   title: string;
   description: string;

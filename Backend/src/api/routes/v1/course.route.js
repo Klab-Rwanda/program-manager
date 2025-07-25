@@ -131,6 +131,15 @@ router.route('/program/:programId').get(
     // If you need strict enrollment-based access, add middleware to verify user is in program.
     courseController.getCoursesForProgram
 );
+
+router.route('/pending').get(
+    checkRole(['Program Manager']),
+    courseController.getPendingCourses
+);
+router.route('/:courseId/reject').patch(
+    checkRole(['Program Manager']),
+    courseController.rejectCourse
+);
 router.route('/:courseId/request-approval').patch(
     checkRole(['Facilitator']),
     courseController.requestCourseApproval
@@ -212,6 +221,6 @@ router.route('/:courseId')
 
 
 router.route('/:courseId')
-    .patch(checkRole(['Facilitator']), upload.single('courseDocument'), courseController.updateCourse)
+    .put(checkRole(['Facilitator']), courseController.updateCourse)
     .delete(checkRole(['Facilitator']), courseController.deleteCourse);
 export default router;

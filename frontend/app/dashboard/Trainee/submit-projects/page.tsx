@@ -1,144 +1,126 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Upload, FileText, CheckCircle, Clock, Loader2 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { createSubmission, getMySubmissions } from "@/lib/services/submission.service";
-import { getMyAvailableAssignments } from "@/lib/services/assignment.service"; // The new service
-import { Assignment, Submission } from "@/types";
+import { FileText, Upload, Clock, CheckCircle, Loader2 } from "lucide-react";
+import { useAuth } from "@/lib/contexts/RoleContext";
+import api from "@/lib/api"; // For direct calls
+import { Program, Course } from "@/types";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Simplified Assignment type for this page
+interface Assignment {
+    _id: string;
+    title: string;
+    dueDate: string;
+    status: 'Pending' | 'Submitted' | 'Graded';
+    grade?: number;
+}
+
+// Service function for assignments
+const getAssignments = async (programId: string): Promise<Assignment[]> => {
+    const response = await api.get(`/assignments/program/${programId}`);
+    return response.data.data;
+};
 
 export default function SubmitProjectsPage() {
+    const { user } = useAuth();
+    const [myPrograms, setMyPrograms] = useState<Program[]>([]);
+    const [selectedProgramId, setSelectedProgramId] = useState<string>("");
     const [assignments, setAssignments] = useState<Assignment[]>([]);
-    const [mySubmissions, setMySubmissions] = useState<Submission[]>([]);
     const [loading, setLoading] = useState(true);
-    
-    const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | undefined>();
-    const [file, setFile] = useState<File | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const fetchTraineeData = useCallback(async () => {
+    const fetchData = useCallback(async () => {
+        if (!user) return;
         setLoading(true);
         try {
-            // Fetch both assignments and past submissions in parallel
-            const [assignmentsData, submissionsData] = await Promise.all([
-                getMyAvailableAssignments(),
-                getMySubmissions()
-            ]);
-            
-            setAssignments(assignmentsData);
-            setMySubmissions(submissionsData);
-
+            const programsData = await api.get('/programs').then(res => res.data.data);
+            setMyPrograms(programsData);
+            if (programsData.length > 0 && !selectedProgramId) {
+                setSelectedProgramId(programsData[0]._id);
+            }
         } catch (err) {
-            toast.error("Failed to load project assignments.");
+            toast.error("Failed to load your programs.");
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [user, selectedProgramId]);
 
-    useEffect(() => { fetchTraineeData() }, [fetchTraineeData]);
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) setFile(e.target.files[0]);
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const selectedAssignment = assignments.find(a => a._id === selectedAssignmentId);
-
-        if (!selectedAssignment || !file) {
-            return toast.error("Please select an assignment and a file to submit.");
-        }
-        setIsSubmitting(true);
+    const fetchAssignments = useCallback(async () => {
+        if (!selectedProgramId) return;
+        setLoading(true);
         try {
-            const programId = typeof selectedAssignment.program === 'string' ? selectedAssignment.program : selectedAssignment.program._id;
-            const courseId = typeof selectedAssignment.course === 'string' ? selectedAssignment.course : selectedAssignment.course._id;
-
-            await createSubmission(courseId, programId, file);
-            toast.success("Project submitted successfully!");
-            fetchTraineeData(); // Refresh list to update status
-            setSelectedAssignmentId(undefined);
-            setFile(null);
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || "Submission failed.");
+            const assignmentData = await getAssignments(selectedProgramId);
+            setAssignments(assignmentData);
+        } catch (err) {
+            toast.error("Failed to load assignments for this program.");
         } finally {
-            setIsSubmitting(false);
+            setLoading(false);
+        }
+    }, [selectedProgramId]);
+    
+    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => { fetchAssignments(); }, [fetchAssignments]);
+    
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'Pending': return <Badge variant="secondary"><Clock className="mr-1 h-3 w-3"/>Pending</Badge>;
+            case 'Submitted': return <Badge className="bg-blue-100 text-blue-800"><CheckCircle className="mr-1 h-3 w-3"/>Submitted</Badge>;
+            case 'Graded': return <Badge className="bg-green-100 text-green-800"><CheckCircle className="mr-1 h-3 w-3"/>Graded</Badge>;
+            default: return <Badge>{status}</Badge>;
         }
     };
-
-    const submittedAssignmentIds = useMemo(() => new Set(mySubmissions.map(s => s.assignment)), [mySubmissions]);
-    const pendingAssignments = useMemo(() => assignments.filter(a => !submittedAssignmentIds.has(a._id)), [assignments, submittedAssignmentIds]);
-
-    if (loading) {
-        return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin"/></div>;
-    }
 
     return (
         <div className="space-y-6">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Project Submissions</h1>
-                <p className="text-muted-foreground">Upload your project files for review.</p>
+                <p className="text-muted-foreground">Submit your assignments for approved courses.</p>
             </div>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>New Submission</CardTitle>
-                    <CardDescription>Select a pending project and upload your file.</CardDescription>
+                    <CardTitle>Select Program</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Project Assignment</Label>
-                            <Select value={selectedAssignmentId} onValueChange={setSelectedAssignmentId} disabled={isSubmitting}>
-                                <SelectTrigger><SelectValue placeholder="Select a pending assignment..." /></SelectTrigger>
-                                <SelectContent>
-                                    {pendingAssignments.length > 0 ? (
-                                        pendingAssignments.map(a => (
-                                            <SelectItem key={a._id} value={a._id}>{a.title}</SelectItem>
-                                        ))
-                                    ) : (
-                                        <div className="p-4 text-center text-sm text-muted-foreground">No pending assignments.</div>
-                                    )}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2"><Label>Project File</Label><Input type="file" onChange={handleFileChange} disabled={isSubmitting} /></div>
-                        <Button type="submit" disabled={isSubmitting || !selectedAssignmentId || !file}>
-                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />}
-                            Submit Project
-                        </Button>
-                    </form>
+                    <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
+                        <SelectTrigger className="max-w-md">
+                            <SelectValue placeholder="Select a program to view assignments..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {myPrograms.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader><CardTitle>Submission History</CardTitle></CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        {assignments.map(assignment => {
-                            const isSubmitted = submittedAssignmentIds.has(assignment._id);
-                            const status = isSubmitted ? "Submitted" : "Pending";
-                            return (
-                                <div key={assignment._id} className="flex items-center justify-between p-4 border rounded-lg">
-                                    <div>
-                                        <h4 className="font-semibold">{assignment.title}</h4>
-                                        <p className="text-sm text-muted-foreground">Due: {new Date(assignment.dueDate).toLocaleDateString()}</p>
-                                    </div>
-                                    <Badge variant={isSubmitted ? 'default' : 'secondary'} className={isSubmitted ? 'bg-green-100 text-green-800' : ''}>
-                                        {isSubmitted ? <CheckCircle className="mr-2 h-4 w-4"/> : <Clock className="mr-2 h-4 w-4" />}
-                                        {status}
-                                    </Badge>
+            {loading ? (
+                <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin"/></div>
+            ) : assignments.length === 0 ? (
+                 <Card className="text-center py-12"><CardContent><p>No assignments found for this program.</p></CardContent></Card>
+            ) : (
+                <div className="space-y-4">
+                    {assignments.map(asg => (
+                        <Card key={asg._id}>
+                            <CardHeader>
+                                <div className="flex justify-between items-start">
+                                    <CardTitle>{asg.title}</CardTitle>
+                                    {getStatusBadge(asg.status)}
                                 </div>
-                            )
-                        })}
-                    </div>
-                </CardContent>
-            </Card>
+                                <CardDescription>Due: {new Date(asg.dueDate).toLocaleDateString()}</CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex justify-between items-center">
+                                {asg.grade && <p className="font-bold text-lg text-green-600">Grade: {asg.grade}%</p>}
+                                {asg.status === 'Pending' && <Button><Upload className="mr-2 h-4 w-4"/>Submit Now</Button>}
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

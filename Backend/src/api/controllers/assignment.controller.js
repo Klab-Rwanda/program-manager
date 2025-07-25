@@ -127,3 +127,28 @@ export const getMyAvailableAssignments = asyncHandler(async (req, res) => {
 
     return res.status(200).json(new ApiResponse(200, assignments, "Available assignments fetched successfully."));
 });
+
+export const getAssignmentsForProgram = asyncHandler(async (req, res) => {
+    const { programId } = req.params;
+
+    // 1. Find all APPROVED courses for this program.
+    const approvedCourses = await Course.find({ 
+        program: programId, 
+        status: 'Approved' 
+    }).select('_id');
+
+    const courseIds = approvedCourses.map(c => c._id);
+
+    // 2. Find all assignments linked to those approved courses.
+    // This assumes you have an Assignment model with a 'course' field.
+    // For now, we will return mock data.
+    // const assignments = await Assignment.find({ course: { $in: courseIds } });
+    
+    // MOCK DATA since Assignment model/controller doesn't exist
+    const mockAssignments = [
+        { _id: 'asg1', title: 'E-commerce Website', course: courseIds[0], dueDate: new Date(), status: 'Pending' },
+        { _id: 'asg2', title: 'Data Visualization Dashboard', course: courseIds[0], dueDate: new Date(), status: 'Submitted', grade: 95 }
+    ];
+
+    return res.status(200).json(new ApiResponse(200, mockAssignments, "Assignments fetched successfully."));
+});

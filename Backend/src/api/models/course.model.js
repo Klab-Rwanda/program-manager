@@ -10,8 +10,10 @@ const courseSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: ['Draft', 'PendingApproval', 'Approved', 'Rejected'], 
-        default: 'Draft' 
+        default: 'Draft' ,
+        rejectionReason: { type: String }
     }
+     
 }, { timestamps: true });
 
 export const Course = mongoose.model('Course', courseSchema);

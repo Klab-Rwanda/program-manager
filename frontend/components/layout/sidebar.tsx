@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity, Archive, Award, BarChart3, Bell, BookOpen, BookText, Calendar,
   CalendarCheck,
+  CheckCircle,
   ChevronLeft, ChevronRight, ClipboardCheck, FileText, FolderOpen,
   GraduationCap, Home, LogOut, Mail, Menu, MessageSquare, Moon, NotebookPen, Settings, Sun, Ticket,
   TicketCheck,
@@ -31,6 +32,7 @@ const menuItems = [
     // Program Manager
     { title: "Programs", url: "/dashboard/Manager/programs", icon: BookOpen, roles: ['program_manager'], countKey: 'programs' },
     { title: "Facilitators", url: "/dashboard/Manager/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },
+    { title: "Approvals", url: "/dashboard/Manager/approvals", icon: CheckCircle, roles: ['program_manager'], countKey: 'pendingApprovals' },
     { title: "Trainees", url: "/dashboard/Manager/trainees", icon: Users, roles: ['program_manager'], countKey: 'trainees' },
     { title: "Attendance", url: "/dashboard/Manager/attendance", icon: Calendar, roles: ['program_manager'] },
     { title: "Certificates", url: "/dashboard/Manager/certificates", icon: Award, roles: ['program_manager'], countKey: 'certificates' },
@@ -38,7 +40,8 @@ const menuItems = [
     // Facilitator
     { title: "My Programs", url: "/dashboard/Facilitator/fac-programs", icon: BookOpen, roles: ['facilitator'] },
     { title: "Attendance Tracking", url: "/dashboard/Facilitator/Fac-attendance", icon: Calendar, roles: ['facilitator'] },
-    { title: "Curriculum Upload", url: "/facilitator/curriculum", icon: Upload, roles: ['facilitator'] },
+    { title: "Course Management", url: "/dashboard/Facilitator/courses", icon: BookText, roles: ['facilitator'] },
+    { title: "Assignment Management", url: "/dashboard/Facilitator/assignments", icon: NotebookPen, roles: ['facilitator'] },
     { title: "Project Reviews", url: "/dashboard/Facilitator/fac-reviews", icon: ClipboardCheck, roles: ['facilitator'] },
     { title: "Weekly Roadmap", url: "/dashboard/Facilitator/fac-roadmap", icon: Calendar, roles: ['facilitator'] },
     // Trainee
@@ -46,8 +49,8 @@ const menuItems = [
     { title: "Submit Projects", url: "/dashboard/Trainee/submit-projects", icon: FileText, roles: ['trainee'] },
     { title: "Attendance", url: "/dashboard/Trainee/Trattendance", icon: Calendar, roles: ['trainee'] },
     { title: "My Attendance History", url: "/dashboard/Trainee/my-attendance-history", icon: Calendar, roles: ['trainee'] },
-    { title: "My Progress", url: "/dashboard/Trainee/my-progress", icon: TrendingUp, roles: ['trainee'] },
-    { title: "Learning Resources", url: "/dashboard/Trainee/resources", icon: FolderOpen, roles: ['trainee'] },
+    // { title: "My Progress", url: "/dashboard/Trainee/my-progress", icon: TrendingUp, roles: ['trainee'] },
+    // { title: "Learning Resources", url: "/dashboard/Trainee/resources", icon: FolderOpen, roles: ['trainee'] },
     { title: "Program Roadmap", url: "/dashboard/Trainee/roadmap", icon: CalendarCheck, roles: ['trainee'] },
     // IT Support
     { title: "Support Tickets", url: "/dashboard/It-support/support-tickets", icon: MessageSquare, roles: ['it_support'] },

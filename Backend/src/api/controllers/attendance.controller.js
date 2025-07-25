@@ -61,6 +61,13 @@ const startOnlineSession = asyncHandler(async (req, res) => {
 
 const startPhysicalSession = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
+    const { latitude, longitude, radius = 50 } = req.body; // Facilitator provides their location
+
+    // --- GEOLOCATION FIX ---
+    if (!latitude || !longitude) {
+        throw new ApiError(400, "Your location (latitude and longitude) is required to start a physical session.");
+    }
+
     const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'physical' });
     const session = await ClassSession.findOne(query);
 
@@ -68,9 +75,18 @@ const startPhysicalSession = asyncHandler(async (req, res) => {
     if (session.status !== 'scheduled') throw new ApiError(400, "Session is already active or completed.");
 
     session.status = 'active';
+    // Save the class location based on where the facilitator started it
+    session.location = {
+        lat: latitude,
+        lng: longitude,
+        radius: radius
+    };
     await session.save();
+    // --- END OF FIX ---
+
     return res.status(200).json(new ApiResponse(200, session, "Physical session started successfully."));
 });
+
 
 const openQrForSession = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;

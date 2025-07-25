@@ -7,28 +7,30 @@ import path from 'path';
 import fs from 'fs';
 
 export const createCourse = asyncHandler(async (req, res) => {
-    const { title, description, programId, type } = req.body;
+    const { title, description, programId } = req.body;
     const facilitatorId = req.user._id;
 
     if (!req.file) {
         throw new ApiError(400, "Course content document is required.");
     }
 
-    
-   
-    const contentUrl = req.file.path;
+    // --- THIS IS THE FIX ---
+    // Instead of using req.file.path, we construct a URL-friendly path.
+    // req.file.path might be "public\\temp\\filename.pdf"
+    // We want to store "temp/filename.pdf" in the database.
+    const contentUrl = `uploads/${req.file.filename}`;
+    // --- END OF FIX ---
 
     const course = await Course.create({
         title,
         description,
         program: programId,
         facilitator: facilitatorId,
-        contentUrl,
-        type,
-        status: 'PendingApproval'
+        contentUrl, // Save the corrected, relative URL path
+        status: 'Draft' // Changed from PendingApproval to Draft as per our workflow
     });
 
-    return res.status(201).json(new ApiResponse(201, course, "Course created and pending approval."));
+    return res.status(201).json(new ApiResponse(201, course, "Course created as Draft successfully."));
 });
 
 export const approveCourse = asyncHandler(async (req, res) => {
@@ -228,35 +230,35 @@ export const getMyCourses = asyncHandler(async (req, res) => {
 
     let programQuery = {};
 
-    // Build query based on user role
     if (userRole === 'Trainee') {
         programQuery = { trainees: userId };
     } else if (userRole === 'Facilitator') {
         programQuery = { facilitators: userId };
     } else {
-        // For other roles like Manager/Admin, maybe show all? Or just deny.
-        // For now, we'll just handle trainee/facilitator.
         return res.status(200).json(new ApiResponse(200, [], "No courses applicable for your role via this endpoint."));
     }
 
-    // 1. Find all programs the user is part of
     const userPrograms = await Program.find(programQuery).select('_id');
     if (userPrograms.length === 0) {
         return res.status(200).json(new ApiResponse(200, [], "You are not enrolled in any programs."));
     }
     const programIds = userPrograms.map(p => p._id);
 
-    // 2. Find all courses associated with those programs
-    // We also only want 'Approved' courses to be visible to trainees
+    // --- THIS IS THE FIX ---
     const courseQuery = { program: { $in: programIds } };
     if (userRole === 'Trainee') {
+        // Trainees ONLY see Approved courses. This is correct.
         courseQuery.status = 'Approved';
+    } else if (userRole === 'Facilitator') {
+        // Facilitators need to see ALL courses they created, regardless of status.
+        courseQuery.facilitator = userId;
     }
+    // --- END OF FIX ---
 
     const courses = await Course.find(courseQuery)
         .populate('program', 'name')
         .populate('facilitator', 'name')
-        .sort('title');
+        .sort({ createdAt: -1 }); // Sort by newest first
         
     return res.status(200).json(new ApiResponse(200, courses, "Your courses fetched successfully."));
 });
@@ -272,42 +274,86 @@ export const getMyCourses = asyncHandler(async (req, res) => {
 export const updateCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     const { title, description } = req.body;
-    
-    // Verify the facilitator owns this course before allowing an update
-    const course = await verifyFacilitatorAccess(courseId, req.user._id);
 
-    course.title = title ?? course.title;
-    course.description = description ?? course.description;
-    
-    // If a new file is uploaded, handle it. (Optional for now)
-    if (req.file) {
-        // You would have logic here to delete the old file from cloud storage
-        // and save the new file path.
-        course.contentUrl = req.file.path;
-    }
-    
-    await course.save();
+    // Verify ownership and ensure the course is in an editable state ('Draft' or 'Rejected')
+    await verifyFacilitatorAccess(courseId, req.user._id);
 
-    return res.status(200).json(new ApiResponse(200, course, "Course updated successfully."));
+    const updatedCourse = await Course.findByIdAndUpdate(
+        courseId,
+        {
+            $set: { title, description },
+            // If a rejected course is edited, it should go back to Draft status
+            $unset: { rejectionReason: "" }, // Remove rejection reason
+            status: 'Draft'
+        },
+        { new: true, runValidators: true }
+    ).populate('program', 'name');
+
+    return res.status(200).json(new ApiResponse(200, updatedCourse, "Course updated successfully."));
 });
 
+
+// --- NEW FUNCTION ---
 /**
- * @desc    Delete a course.
- * @route   DELETE /api/v1/courses/:id
+ * @desc    Facilitator deletes a course they own.
+ * @route   DELETE /api/v1/courses/:courseId
  * @access  Private (Facilitator)
  */
 export const deleteCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
-
-    // Verify the facilitator owns this course before allowing deletion
-    await verifyFacilitatorAccess(courseId, req.user._id);
     
-    // In a real app, you might also want to delete related assignments and submissions.
-    // For now, we'll just delete the course.
+    // For deletion, we can allow it regardless of status for simplicity,
+    // but we MUST verify ownership.
+    const course = await Course.findById(courseId);
+    if (!course) {
+        throw new ApiError(404, "Course not found.");
+    }
+    if (course.facilitator.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "Forbidden: You do not have permission to delete this course.");
+    }
+    
+    // In a real app, you would also delete the associated file from storage (e.g., S3).
+    // For local storage, this is more complex, so we'll skip it for now.
+    
     await Course.findByIdAndDelete(courseId);
 
     return res.status(200).json(new ApiResponse(200, {}, "Course deleted successfully."));
 });
 
+export const rejectCourse = asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    const { reason } = req.body;
+    
+    if (!reason) {
+        throw new ApiError(400, "A reason for rejection is required.");
+    }
+    
+    const course = await Course.findByIdAndUpdate(
+        courseId, 
+        { status: 'Rejected', rejectionReason: reason }, 
+        { new: true }
+    );
+    
+    if (!course) {
+        throw new ApiError(404, "Course not found");
+    }
 
+    return res.status(200).json(new ApiResponse(200, course, "Course has been rejected."));
+});
+
+// --- NEW FUNCTION ---
+/**
+ * @desc    Program Manager gets all courses pending their approval.
+ * @route   GET /api/v1/courses/pending
+ * @access  Private (ProgramManager)
+ */
+export const getPendingCourses = asyncHandler(async (req, res) => {
+    // In a more complex app, you'd filter by programs the manager owns.
+    // For now, any manager can see all pending courses.
+    const courses = await Course.find({ status: 'PendingApproval' })
+        .populate('facilitator', 'name email')
+        .populate('program', 'name');
+        
+    return res.status(200).json(new ApiResponse(200, courses, "Pending courses fetched successfully."));
+});
 

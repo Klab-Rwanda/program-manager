@@ -14,11 +14,11 @@ const classSessionSchema = new mongoose.Schema({
     
     
     // Location for physical classes
-    location: { 
+   location: { 
         lat: { type: Number },
         lng: { type: Number },
         address: { type: String },
-        radius: { type: Number, default: 50 } // Acceptable radius in meters
+        radius: { type: Number, default: 50 } // in meters
     },
     
     // Session timing

@@ -5,7 +5,7 @@ import { checkRole } from '../../middlewares/role.middleware.js';
 
 const router = Router();
 router.use(verifyJWT);
-
+router.route('/program/:programId').get(checkRole(['Trainee']), assignmentController.getAssignmentsForProgram);
 // Facilitator routes
 router.route('/')
     .post(checkRole(['Facilitator']), assignmentController.createAssignment);
