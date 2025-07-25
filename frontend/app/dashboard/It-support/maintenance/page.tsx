@@ -222,6 +222,10 @@ export default function MaintenancePage() {
   }
 
 
+  function handleEditTask(task: MaintenanceTask): void {
+    throw new Error("Function not implemented.")
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -429,7 +433,7 @@ export default function MaintenancePage() {
                               type="button" // Added type="button"
                               variant="outline"
                               size="sm"
-                              onClick={() => handleDeleteTask(task.id)}
+                              onClick={() => handleEditTask(task.id)}
                               disabled={isProcessing}
                           >
                               {isProcessing && selectedTask?.id === task.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -659,7 +663,9 @@ export default function MaintenancePage() {
             <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
               Cancel
             </Button>
-                          <Button onClick={handleCreateTask} disabled={isProcessing}>
+
+            <Button type="submit" onClick={handleEditTask} disabled={isProcessing}>
+
                 {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Schedule Task"}
             </Button>
           </DialogFooter>
@@ -676,13 +682,12 @@ export default function MaintenancePage() {
             </DialogDescription>
           </DialogHeader>
           {editTaskData && (
-            <div className="space-y-4">
+            <><div className="space-y-4">
               <div>
                 <Label htmlFor="edit-title">Title</Label>
                 <Input id="edit-title" placeholder="Maintenance task title"
-                       value={editTaskData.title}
-                       onChange={(e) => setEditTaskData(p => ({ ...p, title: e.target.value }))}
-                />
+                  value={editTaskData.title}
+                  onChange={(e) => setEditTaskData(p => ({ ...p, title: e.target.value }))} />
               </div>
               <div>
                 <Label htmlFor="edit-description">Description</Label>
@@ -691,8 +696,7 @@ export default function MaintenancePage() {
                   placeholder="Detailed description of the maintenance task..."
                   rows={4}
                   value={editTaskData.description}
-                  onChange={(e) => setEditTaskData(p => ({ ...p, description: e.target.value }))}
-                />
+                  onChange={(e) => setEditTaskData(p => ({ ...p, description: e.target.value }))} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -728,31 +732,27 @@ export default function MaintenancePage() {
                 <div>
                   <Label htmlFor="edit-scheduledDate">Scheduled Date</Label>
                   <Input id="edit-scheduledDate" type="datetime-local"
-                         value={editTaskData.scheduledDate}
-                         onChange={(e) => setEditTaskData(p => ({ ...p, scheduledDate: e.target.value }))}
-                  />
+                    value={editTaskData.scheduledDate}
+                    onChange={(e) => setEditTaskData(p => ({ ...p, scheduledDate: e.target.value }))} />
                 </div>
                 <div>
                   <Label htmlFor="edit-estimatedDuration">Estimated Duration</Label>
                   <Input id="edit-estimatedDuration" placeholder="e.g., 2 hours"
-                         value={editTaskData.estimatedDuration}
-                         onChange={(e) => setEditTaskData(p => ({ ...p, estimatedDuration: e.target.value }))}
-                  />
+                    value={editTaskData.estimatedDuration}
+                    onChange={(e) => setEditTaskData(p => ({ ...p, estimatedDuration: e.target.value }))} />
                 </div>
               </div>
               <div>
                 <Label htmlFor="edit-assignedTo">Assigned To</Label>
                 <Input id="edit-assignedTo" placeholder="e.g., John Doe"
-                       value={editTaskData.assignedTo}
-                       onChange={(e) => setEditTaskData(p => ({ ...p, assignedTo: e.target.value }))}
-                />
+                  value={editTaskData.assignedTo}
+                  onChange={(e) => setEditTaskData(p => ({ ...p, assignedTo: e.target.value }))} />
               </div>
               <div>
                 <Label htmlFor="edit-affectedSystems">Affected Systems (comma-separated)</Label>
                 <Input id="edit-affectedSystems" placeholder="e.g., Web01, DB01"
-                       value={editTaskData.affectedSystems.join(', ')}
-                       onChange={(e) => setEditTaskData(p => ({ ...p, affectedSystems: e.target.value.split(',').map(s => s.trim()) }))}
-                />
+                  value={editTaskData.affectedSystems.join(', ')}
+                  onChange={(e) => setEditTaskData(p => ({ ...p, affectedSystems: e.target.value.split(',').map(s => s.trim()) }))} />
               </div>
               <div>
                 <Label htmlFor="edit-impact">Impact</Label>
@@ -770,9 +770,8 @@ export default function MaintenancePage() {
               <div>
                 <Label htmlFor="edit-notes">Notes</Label>
                 <Textarea id="edit-notes" placeholder="Any additional notes..." rows={2}
-                          value={editTaskData.notes}
-                          onChange={(e) => setEditTaskData(p => ({ ...p, notes: e.target.value }))}
-                />
+                  value={editTaskData.notes}
+                  onChange={(e) => setEditTaskData(p => ({ ...p, notes: e.target.value }))} />
               </div>
               <div>
                 <Label htmlFor="edit-status">Status</Label>
@@ -788,15 +787,15 @@ export default function MaintenancePage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowEditModal(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleUpdateTask} disabled={isProcessing}>
-                {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Update Task"}
-              </Button>
-            </DialogFooter>
+            </div><DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setShowEditModal(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" onClick={handleEditTask} disabled={isProcessing}>
+                  {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Update Task"}
+                </Button>
+              </DialogFooter></>
+          
           )}
         </DialogContent>
       </Dialog>
