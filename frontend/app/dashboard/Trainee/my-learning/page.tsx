@@ -99,11 +99,11 @@ export default function MyLearningPage() {
                     <CardDescription>Quick links to your learning tools and progress.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-3">
-                    <Button variant="outline" className="h-20 flex-col space-y-2" onClick={() => router.push('/dashboard/my-progress')}>
+                    <Button variant="outline" className="h-20 flex-col space-y-2" onClick={() => router.push('/dashboard/Trainee/my-progress')}>
                         <TrendingUp className="h-6 w-6" />
                         <span>Track My Progress</span>
                     </Button>
-                     <Button variant="outline" className="h-20 flex-col space-y-2" onClick={() => router.push('/dashboard/resources')}>
+                     <Button variant="outline" className="h-20 flex-col space-y-2" onClick={() => router.push('/dashboard/Trainee/resources')}>
                         <FolderOpen className="h-6 w-6" />
                         <span>View Resources</span>
                     </Button>

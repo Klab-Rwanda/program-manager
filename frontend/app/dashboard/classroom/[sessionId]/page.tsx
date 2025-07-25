@@ -83,7 +83,7 @@ export default function ClassroomHubPage() {
         const handleAttendanceEnded = () => {
             if (role === 'trainee') {
                 setTraineeModalOpen(false);
-                toast.warn("The attendance check has ended.");
+                toast.warning("The attendance check has ended.");
             }
         };
         
