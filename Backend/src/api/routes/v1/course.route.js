@@ -205,4 +205,13 @@ router.route('/:courseId')
         courseController.deleteCourse
     );
 
+    router.route('/my-courses').get(
+    checkRole(['Trainee', 'Facilitator']), 
+    courseController.getMyCourses
+);
+
+
+router.route('/:courseId')
+    .patch(checkRole(['Facilitator']), upload.single('courseDocument'), courseController.updateCourse)
+    .delete(checkRole(['Facilitator']), courseController.deleteCourse);
 export default router;

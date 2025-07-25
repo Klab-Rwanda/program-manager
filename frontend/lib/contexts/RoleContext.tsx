@@ -37,7 +37,9 @@ export function RoleProvider({ children }: { children: ReactNode }) {
         'Program Manager': 'program_manager',
         'Facilitator': 'facilitator',
         'Trainee': 'trainee',
+
         'ItSupport': 'it_support'
+
 
       };
       return roleMap[role] || role as UserRole;

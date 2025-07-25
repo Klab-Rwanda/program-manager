@@ -265,7 +265,7 @@ const unarchiveProgram = asyncHandler(async (req, res) => {
     }
     
     // Create log entry
-    await createLog({
+     await createLog({
         user: req.user._id,
         action: 'PROGRAM_UNARCHIVED',
         details: `${req.user.role} ${req.user.name} unarchived program '${program.name}'.`,
@@ -405,7 +405,13 @@ export const getProgramStats = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, stats, "Program statistics fetched successfully."));
 });
 
-
+const getProgramStudentCount = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const program = await Program.findById(id);
+    if (!program) throw new ApiError(404, "Program not found");
+    const count = program.trainees ? program.trainees.length : 0;
+    return res.status(200).json(new ApiResponse(200, { count }, "Student count fetched successfully."));
+});
 
 export {
     createProgram,
@@ -422,5 +428,6 @@ export {
     generateProgramReport,
     getArchivedPrograms,
     archiveProgram,
-    unarchiveProgram
+    unarchiveProgram,
+    getProgramStudentCount
 };

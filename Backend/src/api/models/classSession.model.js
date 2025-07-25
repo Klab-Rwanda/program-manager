@@ -12,6 +12,7 @@ const classSessionSchema = new mongoose.Schema({
     title: { type: String, required: true },
     description: { type: String },
     
+    
     // Location for physical classes
     location: { 
         lat: { type: Number },
@@ -22,11 +23,14 @@ const classSessionSchema = new mongoose.Schema({
     
     // Session timing
     startTime: { type: Date, required: true },
+    duration: { type: Number, default: 120 },
     endTime: { type: Date },
     expiresAt: { type: Date }, // For QR code expiration
     
     // Access links
-    accessLink: { type: String }, // Class access link for materials/participation
+    accessLink: { type: String }, // For attendance marking by link click
+    videoCallLink: { type: String }, 
+     meetingLink: { type: String },
     qrCodeData: { type: String }, // QR code data for online sessions
     
     // Status
@@ -47,13 +51,13 @@ const classSessionSchema = new mongoose.Schema({
     
     // Metadata
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    notes: { type: String }
+    notes: { type: String },
+   
 }, { timestamps: true });
 
 // Index for efficient queries
 classSessionSchema.index({ programId: 1, startTime: -1 });
 classSessionSchema.index({ sessionId: 1 });
 classSessionSchema.index({ facilitatorId: 1, status: 1 });
-classSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // Auto-delete expired sessions
 
-export const ClassSession = mongoose.model('ClassSession', classSessionSchema); 
+export const ClassSession = mongoose.model('ClassSession', classSessionSchema);

@@ -4,595 +4,329 @@ import { ApiResponse } from '../../utils/ApiResponse.js';
 import { Attendance } from '../models/attendance.model.js';
 import { ClassSession } from '../models/classSession.model.js';
 import { Program } from '../models/program.model.js';
-import { User } from '../models/user.model.js';
 import { generateSessionQRCode, generateSessionId, verifySessionQRCode } from '../../services/qr.service.js';
-import { isWithinRadius, validateLocation } from '../../services/geolocation.service.js';
+import { isWithinRadius } from '../../services/geolocation.service.js';
 import mongoose from 'mongoose';
+
+// A reusable helper function to build robust queries for finding sessions by _id OR sessionId
+const buildSessionQuery = (idFromParams, extraConditions = {}) => {
+    let query = { ...extraConditions };
+    if (mongoose.Types.ObjectId.isValid(idFromParams)) {
+        query.$or = [{ _id: idFromParams }, { sessionId: idFromParams }];
+    } else {
+        query.sessionId = idFromParams;
+    }
+    return query;
+};
 
 // ===================================================================
 //   FACILITATOR ENDPOINTS
 // ===================================================================
 
-/**
- * Create a new class session (Physical or Online)
- */
 const createSession = asyncHandler(async (req, res) => {
-    try {
-        console.log('Creating session with data:', req.body);
-        
-        const { type, programId, title, description, startTime, endTime, allowLateAttendance, lateThreshold } = req.body;
-
-        // Validate required fields
-        if (!type || !programId || !title) {
-            throw new ApiError(400, "Type, program ID, and title are required.");
-        }
-
-        // Validate program exists
-        const program = await Program.findById(programId);
-        if (!program) {
-            throw new ApiError(404, "Program not found.");
-        }
-
-        // Generate unique session ID
-        const sessionId = generateSessionId();
-
-        // Create the session
-        const sessionData = {
-            type,
-            programId,
-            facilitatorId: req.user._id,
-            sessionId,
-            title,
-            description: description || '',
-            startTime: new Date(startTime || Date.now()),
-            endTime: endTime ? new Date(endTime) : null,
-            status: 'scheduled',
-            allowLateAttendance: allowLateAttendance !== undefined ? allowLateAttendance : true,
-            lateThreshold: lateThreshold || 15,
-            createdBy: req.user._id,
-            accessLink: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/classroom?sessionId=${sessionId}`,
-            totalExpected: 0,
-            totalPresent: 0,
-            totalAbsent: 0
-        };
-
-        const session = await ClassSession.create(sessionData);
-
-        // Populate the session with program and facilitator details
-        const populatedSession = await ClassSession.findById(session._id)
-            .populate('programId', 'name')
-            .populate('facilitatorId', 'name email');
-
-        console.log('Session created successfully:', session._id);
-
-        return res.status(201).json(
-            new ApiResponse(201, populatedSession, "Class session created successfully.")
-        );
-    } catch (error) {
-        console.error('Error in createSession:', error);
-        throw error;
+    const { type, programId, title, description } = req.body;
+    if (!type || !programId || !title) {
+        throw new ApiError(400, "Type, Program ID, and Title are required.");
     }
+    const program = await Program.findById(programId);
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
+    }
+
+    const session = await ClassSession.create({
+        type, programId, title, description,
+        facilitatorId: req.user._id,
+        sessionId: generateSessionId(),
+        startTime: new Date(),
+        status: 'scheduled',
+        createdBy: req.user._id,
+    });
+    return res.status(201).json(new ApiResponse(201, session, "Session created successfully."));
 });
 
-/**
- * Start an online session and generate QR code
- */
 const startOnlineSession = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
-    const { expirationMinutes = 15 } = req.body;
-
-    // --- THIS IS THE FIX ---
-    // We will build the query object conditionally to avoid the CastError.
-    
-    const query = {
-        facilitatorId: req.user._id,
-        type: 'online'
-    };
-
-    // Check if the provided ID is a valid MongoDB ObjectId format.
-    if (mongoose.Types.ObjectId.isValid(idFromParams)) {
-        // If it's a valid format, it could be an _id.
-        // We still check both fields in case an old link is used.
-        query.$or = [{ _id: idFromParams }, { sessionId: idFromParams }];
-    } else {
-        // If it's NOT a valid ObjectId format, it can ONLY be a sessionId.
-        // This prevents Mongoose from trying to cast it to an ObjectId.
-        query.sessionId = idFromParams;
-    }
-
+    const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'online' });
     const session = await ClassSession.findOne(query);
-    // --- END OF FIX ---
 
+    if (!session) throw new ApiError(404, "Online session not found.");
+    if (session.status === 'active') return res.status(200).json(new ApiResponse(200, { session }, "Session is already active."));
+    if (session.status !== 'scheduled') throw new ApiError(400, "Session is already completed or cancelled.");
 
-    if (!session) {
-        throw new ApiError(404, "Online session not found or you don't have permission to start it.");
-    }
-
-    if (session.status !== 'scheduled') {
-        throw new ApiError(400, "Session is already active or completed.");
-    }
-
-    // Generate QR code using the correct unique sessionId
-    const qrResult = await generateSessionQRCode(session.sessionId, expirationMinutes);
-    
-    // Update session
     session.status = 'active';
-    session.qrCodeData = qrResult.qrData;
-    session.expiresAt = qrResult.expiresAt;
+    session.accessLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/classroom/${session.sessionId}`;
     await session.save();
-
-    return res.status(200).json(
-        new ApiResponse(200, {
-            session,
-            qrCode: qrResult.qrCodeImage, // This key name is correct based on qr.service.js
-            expiresAt: qrResult.expiresAt,
-            accessLink: session.accessLink
-        }, "Online session started successfully.")
-    );
+    return res.status(200).json(new ApiResponse(200, { session }, "Online session started successfully."));
 });
 
-/**
- * @desc    Manually start a physical session.
- * @route   POST /api/v1/attendance/sessions/:sessionId/start-physical
- * @access  Private (Facilitator)
- */
 const startPhysicalSession = asyncHandler(async (req, res) => {
-    const { sessionId } = req.params;
+    const { sessionId: idFromParams } = req.params;
+    const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'physical' });
+    const session = await ClassSession.findOne(query);
 
-    const session = await ClassSession.findOne({ 
-        sessionId, 
-        facilitatorId: req.user._id,
-        type: 'physical'
-    });
+    if (!session) throw new ApiError(404, "Physical session not found.");
+    if (session.status !== 'scheduled') throw new ApiError(400, "Session is already active or completed.");
 
-    if (!session) {
-        throw new ApiError(404, "Physical session not found.");
-    }
-
-    if (session.status !== 'scheduled') {
-        throw new ApiError(400, "Session is already active or completed.");
-    }
-
-    // Update session status to active
     session.status = 'active';
     await session.save();
-
-    return res.status(200).json(
-        new ApiResponse(200, session, "Physical session started successfully. Trainees can now mark their attendance.")
-    );
+    return res.status(200).json(new ApiResponse(200, session, "Physical session started successfully."));
 });
 
-/**
- * Mark attendance for physical class (facilitator)
- */
+const openQrForSession = asyncHandler(async (req, res) => {
+    const { sessionId: idFromParams } = req.params;
+    const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'online', status: 'active' });
+    const session = await ClassSession.findOne(query);
+
+    if (!session) throw new ApiError(404, "Active online session not found.");
+
+    const qrResult = await generateSessionQRCode(session.sessionId, 5);
+    session.qrCodeData = qrResult.qrData;
+    await session.save();
+    return res.status(200).json(new ApiResponse(200, { qrCodeImage: qrResult.qrCodeImage, expiresAt: qrResult.expiresAt }));
+});
 
 const markPhysicalAttendance = asyncHandler(async (req, res) => {
-    const { sessionId } = req.params;
+    const { sessionId: idFromParams } = req.params;
     const { latitude, longitude } = req.body;
+    const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'physical' });
+    const session = await ClassSession.findOne(query);
 
-    const session = await ClassSession.findOne({ 
-        sessionId, 
-        facilitatorId: req.user._id,
-        type: 'physical'
-    });
+    if (!session) throw new ApiError(404, "Physical session not found for you.");
 
-    if (!session) {
-        throw new ApiError(404, "Physical session not found.");
-    }
-
-    if (session.status === 'completed') {
-        throw new ApiError(400, "Session is already completed.");
-    }
-
-    // Validate location
-    if (!latitude || !longitude) {
-        throw new ApiError(400, "Location coordinates are required.");
-    }
-
-    const userLocation = { lat: latitude, lng: longitude };
-    
-    // Check if facilitator is within class radius
-    if (!isWithinRadius(userLocation, session.location)) {
-        throw new ApiError(400, "You are not within the class location radius.");
-    }
-
-    // Check if attendance already exists
-    const existingAttendance = await Attendance.findOne({
-        userId: req.user._id,
-        sessionId: session._id
-    });
-
-    if (existingAttendance) {
-        throw new ApiError(400, "Attendance already marked for this session.");
-    }
-
-    // Mark attendance
-    const attendance = await Attendance.create({
-        userId: req.user._id,
-        sessionId: session._id,
-        timestamp: new Date(),
-        location: userLocation,
-        method: 'geolocation',
-        markedBy: req.user._id,
-        deviceInfo: req.headers['user-agent'] || '',
-        ipAddress: req.ip || req.connection.remoteAddress
-    });
-
-    // Update session status if this is the first attendance
-    if (session.status === 'scheduled') {
-        session.status = 'active';
-        await session.save();
-    }
-
-    return res.status(201).json(
-        new ApiResponse(201, {
-            attendance,
-            accessLink: session.accessLink
-        }, "Physical attendance marked successfully.")
+    const attendance = await Attendance.findOneAndUpdate(
+        { userId: req.user._id, sessionId: session._id },
+        {
+            $setOnInsert: { userId: req.user._id, sessionId: session._id },
+            $set: { timestamp: new Date(), method: 'geolocation', status: 'Present', location: { lat: latitude, lng: longitude } }
+        }, { upsert: true, new: true }
     );
+    return res.status(201).json(new ApiResponse(201, { attendance }));
 });
+
 
 // ===================================================================
 //   TRAINEE ENDPOINTS
 // ===================================================================
 
-/**
- * Mark attendance using QR code (trainee)
- */
 const markQRAttendance = asyncHandler(async (req, res) => {
     const { qrData } = req.body;
+    if (!qrData) throw new ApiError(400, "QR code data is required.");
 
-    if (!qrData) {
-        throw new ApiError(400, "QR code data is required.");
-    }
-
-    // Verify QR code
     const qrResult = verifySessionQRCode(qrData);
-    if (!qrResult) {
-        throw new ApiError(400, "Invalid or expired QR code.");
-    }
+    if (!qrResult) throw new ApiError(400, "Invalid or expired QR code.");
 
-    // Find the session
-    const session = await ClassSession.findOne({ 
-        sessionId: qrResult.sessionId,
-        status: 'active'
-    });
+    const session = await ClassSession.findOne({ sessionId: qrResult.sessionId, status: 'active' });
+    if (!session) throw new ApiError(404, "Session not found or not active.");
 
-    if (!session) {
-        throw new ApiError(404, "Session not found or not active.");
-    }
-
-    // Check if trainee is enrolled in the program
     const program = await Program.findById(session.programId);
     if (!program || !program.trainees.includes(req.user._id)) {
-        throw new ApiError(403, "You are not enrolled in this program.");
+        throw new ApiError(403, "You are not enrolled in this program's session.");
     }
 
-    // Check if attendance already exists
-    const existingAttendance = await Attendance.findOne({
-        userId: req.user._id,
-        sessionId: session._id
-    });
-
-    if (existingAttendance) {
-        throw new ApiError(400, "Attendance already marked for this session.");
-    }
-
-    // Mark attendance
-    const attendance = await Attendance.create({
-        userId: req.user._id,
-        sessionId: session._id,
-        timestamp: new Date(),
-        method: 'qr_code',
-        markedBy: req.user._id,
-        deviceInfo: req.headers['user-agent'] || '',
-        ipAddress: req.ip || req.connection.remoteAddress
-    });
-
-    return res.status(201).json(
-        new ApiResponse(201, {
-            attendance,
-            accessLink: session.accessLink
-        }, "QR attendance marked successfully.")
+    const todayDateString = new Date().toISOString().split('T')[0];
+    const attendance = await Attendance.findOneAndUpdate(
+        { userId: req.user._id, programId: session.programId, date: todayDateString },
+        { 
+            $set: { checkIn: new Date(), method: 'qr_code', status: 'Present', sessionId: session._id },
+            $setOnInsert: { userId: req.user._id, programId: session.programId, date: todayDateString }
+        },
+        { upsert: true, new: true, runValidators: true }
     );
+
+    return res.status(201).json(new ApiResponse(201, { attendance }, "QR attendance marked successfully."));
 });
 
-/**
- * Mark attendance using geolocation (trainee)
- */
 const markGeolocationAttendance = asyncHandler(async (req, res) => {
     const { sessionId, latitude, longitude } = req.body;
+    if (!sessionId) throw new ApiError(400, "Session ID is required.");
 
-    if (!sessionId || !latitude || !longitude) {
-        throw new ApiError(400, "Session ID and location coordinates are required.");
-    }
+    const session = await ClassSession.findOne({ sessionId, type: 'physical', status: 'active' });
+    if (!session) throw new ApiError(404, "Active physical session not found.");
 
-    // Find the session
-    const session = await ClassSession.findOne({ 
-        sessionId,
-        type: 'physical',
-        status: 'active'
-    });
-
-    if (!session) {
-        throw new ApiError(404, "Physical session not found or not active.");
-    }
-
-    // Check if trainee is enrolled in the program
     const program = await Program.findById(session.programId);
     if (!program || !program.trainees.includes(req.user._id)) {
         throw new ApiError(403, "You are not enrolled in this program.");
     }
-
-    // Validate location
-    const userLocation = { lat: latitude, lng: longitude };
     
-    // Check if trainee is within class radius
-    if (!isWithinRadius(userLocation, session.location)) {
-        throw new ApiError(400, "You are not within the class location radius.");
+    const classLocation = session.location || { lat: -1.9441, lng: 30.0619, radius: 100 };
+    if (!isWithinRadius({ lat: latitude, lng: longitude }, classLocation)) {
+        throw new ApiError(400, "You are not within the required class location radius.");
     }
 
-    // Check if attendance already exists
-    const existingAttendance = await Attendance.findOne({
-        userId: req.user._id,
-        sessionId: session._id
-    });
-
-    if (existingAttendance) {
-        throw new ApiError(400, "Attendance already marked for this session.");
-    }
-
-    // Mark attendance
-    const attendance = await Attendance.create({
-        userId: req.user._id,
-        sessionId: session._id,
-        timestamp: new Date(),
-        location: userLocation,
-        method: 'geolocation',
-        markedBy: req.user._id,
-        deviceInfo: req.headers['user-agent'] || '',
-        ipAddress: req.ip || req.connection.remoteAddress
-    });
-
-    return res.status(201).json(
-        new ApiResponse(201, {
-            attendance,
-            accessLink: session.accessLink
-        }, "Geolocation attendance marked successfully.")
+    const todayDateString = new Date().toISOString().split('T')[0];
+    const attendance = await Attendance.findOneAndUpdate(
+        { userId: req.user._id, programId: session.programId, date: todayDateString },
+        { 
+            $set: { checkIn: new Date(), method: 'geolocation', status: 'Present', locationCheckIn: { lat: latitude, lng: longitude }, sessionId: session._id },
+            $setOnInsert: { userId: req.user._id, programId: session.programId, date: todayDateString }
+        },
+        { upsert: true, new: true, runValidators: true }
     );
+    return res.status(201).json(new ApiResponse(201, { attendance }, "Geolocation attendance marked successfully."));
 });
 
+
 // ===================================================================
-//   GENERAL ENDPOINTS
+//   GENERAL/REPORTING ENDPOINTS
 // ===================================================================
 
-/**
- * Get session details
- */
 const getSessionDetails = asyncHandler(async (req, res) => {
-    const { sessionId } = req.params;
-
-    const session = await ClassSession.findOne({ sessionId })
-        .populate('facilitatorId', 'name email')
-        .populate('programId', 'name description');
-
-    if (!session) {
-        throw new ApiError(404, "Session not found.");
-    }
-
-    // Get attendance count
-    const attendanceCount = await Attendance.countDocuments({ sessionId: session._id });
-
-    return res.status(200).json(
-        new ApiResponse(200, {
-            session,
-            attendanceCount
-        }, "Session details retrieved successfully.")
-    );
+    const { sessionId: idFromParams } = req.params;
+    const query = buildSessionQuery(idFromParams);
+    const session = await ClassSession.findOne(query).populate('facilitatorId', 'name email').populate('programId', 'name');
+    if (!session) throw new ApiError(404, "Session could not be found.");
+    const attendanceCount = await Attendance.countDocuments({ sessionId: session._id, status: 'Present' });
+    return res.status(200).json(new ApiResponse(200, { session, attendanceCount }));
 });
 
-/**
- * Get attendance report for a session
- */
 const getSessionAttendance = asyncHandler(async (req, res) => {
-    const { sessionId } = req.params;
-
-    const session = await ClassSession.findOne({ sessionId });
-    if (!session) {
-        throw new ApiError(404, "Session not found.");
-    }
-
-    // Check permissions
-    if (req.user.role === 'Trainee' && !session.trainees.includes(req.user._id)) {
-        throw new ApiError(403, "Access denied.");
-    }
-
-    const attendance = await Attendance.find({ sessionId: session._id })
-        .populate('userId', 'name email')
-        .populate('markedBy', 'name')
-        .sort({ timestamp: -1 });
-
-    return res.status(200).json(
-        new ApiResponse(200, attendance, "Attendance report retrieved successfully.")
-    );
+    const { sessionId: idFromParams } = req.params;
+    const query = buildSessionQuery(idFromParams);
+    const session = await ClassSession.findOne(query);
+    if (!session) throw new ApiError(404, "Session not found.");
+    const attendance = await Attendance.find({ sessionId: session._id }).populate('userId', 'name email').populate('markedBy', 'name').sort({ timestamp: -1 });
+    return res.status(200).json(new ApiResponse(200, attendance, "Attendance report retrieved successfully."));
 });
 
-/**
- * Get facilitator's sessions
- */
 const getFacilitatorSessions = asyncHandler(async (req, res) => {
-    const { status, type } = req.query;
-    const facilitatorId = req.user._id;
-
-    const query = { facilitatorId };
-    if (status) query.status = status;
-    if (type) query.type = type;
-
-    const sessions = await ClassSession.find(query)
-        .populate('programId', 'name')
-        .sort({ startTime: -1 });
-
-    return res.status(200).json(
-        new ApiResponse(200, sessions, "Sessions retrieved successfully.")
-    );
+    const sessions = await ClassSession.find({ facilitatorId: req.user._id }).sort({ startTime: -1 }).populate('programId', 'name');
+    return res.status(200).json(new ApiResponse(200, sessions, "Sessions retrieved successfully."));
 });
 
-/**
- * Get trainee's sessions
- */
 const getTraineeSessions = asyncHandler(async (req, res) => {
-    const traineeId = req.user._id;
-
-    // Get programs where trainee is enrolled
-    const programs = await Program.find({ trainees: traineeId });
+    const programs = await Program.find({ trainees: req.user._id });
     const programIds = programs.map(p => p._id);
-
-    const sessions = await ClassSession.find({
-        programId: { $in: programIds }
-    })
-    .populate('programId', 'name')
-    .populate('facilitatorId', 'name')
-    .sort({ startTime: -1 });
-
-    return res.status(200).json(
-        new ApiResponse(200, sessions, "Sessions retrieved successfully.")
-    );
+    const sessions = await ClassSession.find({ programId: { $in: programIds } }).sort({ startTime: -1 }).populate('programId', 'name');
+    return res.status(200).json(new ApiResponse(200, sessions, "Your sessions retrieved successfully."));
 });
 
-// Legacy functions for backward compatibility
+
+// ===================================================================
+//   LEGACY / OTHER ENDPOINTS (INCLUDED AND FIXED)
+// ===================================================================
+
+const markManualStudentAttendance = asyncHandler(async (req, res) => {
+    const { sessionId } = req.params;
+    const { userId, status = 'present', reason } = req.body;
+
+    if (!userId) throw new ApiError(400, "User ID is required.");
+    const session = await ClassSession.findOne({ sessionId });
+    if (!session) throw new ApiError(404, "Session not found.");
+
+    const todayDateString = new Date(session.startTime).toISOString().split('T')[0];
+
+    const attendance = await Attendance.findOneAndUpdate(
+        { userId: userId, programId: session.programId, date: todayDateString },
+        { 
+            $set: { status, reason: reason || null, method: 'manual', markedBy: req.user._id, sessionId: session._id },
+            $setOnInsert: { userId: userId, programId: session.programId, date: todayDateString }
+        },
+        { upsert: true, new: true, runValidators: true }
+    );
+
+    const message = `Attendance for user ${userId} has been set to ${status}.`;
+    return res.status(200).json(new ApiResponse(200, attendance, message));
+});
+
 const markAttendance = asyncHandler(async (req, res) => {
-    // Redirect to appropriate method based on request
     const { method } = req.body;
-    
-    if (method === 'qr_code') {
-        return markQRAttendance(req, res);
-    } else if (method === 'geolocation') {
-        return markGeolocationAttendance(req, res);
-    } else {
-        throw new ApiError(400, "Invalid attendance method.");
-    }
+    if (method === 'qr_code') return markQRAttendance(req, res);
+    if (method === 'geolocation') return markGeolocationAttendance(req, res);
+    throw new ApiError(400, "Invalid attendance method.");
 });
 
 const getSessionQRCode = asyncHandler(async (req, res) => {
     const { sessionId } = req.params;
-    
     const qrResult = await generateSessionQRCode(sessionId);
-    return res.status(200).json(
-        new ApiResponse(200, { qrCodeImage: qrResult.qrCodeImage }, "QR Code generated for session.")
-    );
+    return res.status(200).json(new ApiResponse(200, { qrCodeImage: qrResult.qrCodeImage }));
 });
 
-const markManualStudentAttendance = asyncHandler(async (req, res) => {
-    const { sessionId } = req.params;
-    const { userId, status = 'present', reason } = req.body; // status can be 'present', 'absent', 'excused'
+const getProgramAttendanceReport = asyncHandler(async (req, res) => {
+    const { programId } = req.params;
+    const { startDate, endDate } = req.query;
 
-    if (!userId) {
-        throw new ApiError(400, "User ID is required.");
+    if (!programId || !startDate || !endDate) {
+        throw new ApiError(400, "Program ID, start date, and end date are required.");
     }
 
-    const session = await ClassSession.findOne({ sessionId });
-    if (!session) {
-        throw new ApiError(404, "Session not found.");
-    }
+    const attendanceRecords = await Attendance.find({
+        programId: programId,
+        date: { $gte: startDate, $lte: endDate }
+    })
+    .populate('userId', 'name email role')
+    .sort({ date: -1 });
 
-    // Check if the current user (facilitator/manager) has permission over this session
-    // For now, assume any logged-in Facilitator/PM can mark.
-    // In a real app, you'd verify if this session belongs to them.
-
-    // Check if attendance already exists for this user in this session
-    let existingAttendance = await Attendance.findOne({
-        userId: userId,
-        sessionId: session._id
-    });
-
-    let attendance;
-    let message;
-
-    if (existingAttendance) {
-        // If exists, update it
-        existingAttendance.status = status;
-        existingAttendance.reason = reason || null;
-        existingAttendance.timestamp = new Date(); // Update timestamp on modification
-        existingAttendance.method = 'manual';
-        existingAttendance.markedBy = req.user._id;
-        attendance = await existingAttendance.save();
-        message = "Attendance updated successfully.";
-    } else {
-        // If not exists, create new
-        attendance = await Attendance.create({
-            userId: userId,
-            sessionId: session._id,
-            timestamp: new Date(),
-            method: 'manual',
-            status: status,
-            reason: reason,
-            markedBy: req.user._id
-        });
-        message = "Attendance marked successfully.";
-    }
-
-    return res.status(200).json(
-        new ApiResponse(200, attendance, message)
-    );
+    return res.status(200).json(new ApiResponse(200, attendanceRecords, "Program attendance report fetched successfully."));
 });
+const getMyAttendanceHistory = asyncHandler(async (req, res) => {
+    const traineeId = req.user._id;
+    const { programId } = req.query;
 
-/**
- * @desc    Re-opens or generates a new QR code for an already active online session.
- * @route   POST /api/v1/attendance/sessions/:sessionId/open-qr
- * @access  Private (Facilitator)
- */
-const openQrForSession = asyncHandler(async (req, res) => {
-    const { sessionId } = req.params;
-    const { expirationMinutes = 5 } = req.body; // Shorter expiry for in-class checks
-
-    const session = await ClassSession.findOne({ 
-        sessionId, 
-        facilitatorId: req.user._id,
-        type: 'online',
-        status: 'active' // Session must already be active
-    });
-
-    if (!session) {
-        throw new ApiError(404, "Active online session not found.");
+    let query = { userId: traineeId };
+    if (programId) {
+        // This is a valid query condition because 'programId' is in the schema
+        query.programId = programId;
     }
 
-    // Generate a new QR code
-    const qrResult = await generateSessionQRCode(sessionId, expirationMinutes);
+    // --- THIS IS THE FIX ---
+    // The field name in the schema is 'programId', so we must populate 'programId'.
+    const attendanceRecords = await Attendance.find(query)
+        .populate('programId', 'name') // Corrected from 'program'
+        .sort({ date: -1 });
+    // --- END OF FIX ---
     
-    // Update session with new QR data and expiration
-    session.qrCodeData = qrResult.qrData;
-    session.expiresAt = qrResult.expiresAt;
+    return res.status(200).json(new ApiResponse(200, attendanceRecords, "Your attendance history fetched successfully."));
+});
+
+
+const endSession = asyncHandler(async (req, res) => {
+    const { sessionId: idFromParams } = req.params;
+    
+    const query = buildSessionQuery(idFromParams, { 
+        facilitatorId: req.user._id,
+        status: 'active' 
+    });
+    const session = await ClassSession.findOne(query);
+
+    if (!session) {
+        throw new ApiError(404, "Active session not found or you don't have permission to end it.");
+    }
+
+    session.status = 'completed';
+    session.endTime = new Date();
     await session.save();
 
-    return res.status(200).json(
-        new ApiResponse(200, {
-            qrCodeImage: qrResult.qrCodeImage,
-            expiresAt: qrResult.expiresAt
-        }, "Attendance check started. New QR code is ready.")
-    );
+    // Optional: Notify trainees via WebSocket that the session has ended
+    // You would need to get the 'io' instance here if you want to do this.
+    // For now, we'll keep it simple.
+
+    return res.status(200).json(new ApiResponse(200, session, "Session has been ended successfully."));
 });
 
 
 export {
-    // Facilitator endpoints
+    // Facilitator
     createSession,
     startOnlineSession,
     startPhysicalSession,
     markPhysicalAttendance,
     openQrForSession,
     
-    // Trainee endpoints
+    // Trainee
     markQRAttendance,
     markGeolocationAttendance,
     
-    // General endpoints
+    // General
     getSessionDetails,
     getSessionAttendance,
     getFacilitatorSessions,
     getTraineeSessions,
+    endSession,
     
-    // Legacy endpoints
+    // Legacy / Other
     markAttendance,
     getSessionQRCode,
-    markManualStudentAttendance
+    markManualStudentAttendance,
+    getProgramAttendanceReport,
+    getMyAttendanceHistory
 };

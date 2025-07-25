@@ -44,6 +44,7 @@ useEffect(() => {
       setTickets(data.tickets || []);
     } catch (err: any) {
       console.error("Error fetching tickets:", err.message);
+
     }
   };
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as programController from '../../controllers/program.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole } from '../../middlewares/role.middleware.js';
+import { getProgramStudentCount } from '../../controllers/program.controller.js';
 
 const router = Router();
 router.use(verifyJWT);
@@ -327,5 +328,7 @@ router.route('/:id/archive').patch(checkRole(['SuperAdmin', 'Program Manager']),
  *       200: { description: 'Program unarchived successfully.' }
  */
 router.route('/:id/unarchive').patch(checkRole(['SuperAdmin', 'Program Manager']), programController.unarchiveProgram);
+
+router.route('/:id/student-count').get(getProgramStudentCount);
 
 export default router;

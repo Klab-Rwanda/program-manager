@@ -82,3 +82,21 @@ export const getFacilitatorDashboardStats = async (): Promise<FacilitatorStats> 
   const response = await api.get('/dashboard/facilitator-stats');
   return response.data.data;
 };
+
+export interface FacilitatorSession {
+  _id: string;
+  programId: { _id: string; name: string };
+  title: string;
+  description?: string;
+  startTime: string;
+  endTime?: string;
+  status: string;
+  type: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getFacilitatorSessions = async (): Promise<FacilitatorSession[]> => {
+  const response = await api.get('/attendance/facilitator/sessions');
+  return response.data.data;
+};

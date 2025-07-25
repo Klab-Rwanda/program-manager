@@ -663,7 +663,9 @@ export default function MaintenancePage() {
             <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
               Cancel
             </Button>
+
             <Button type="submit" onClick={handleEditTask} disabled={isProcessing}>
+
                 {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Schedule Task"}
             </Button>
           </DialogFooter>
@@ -793,6 +795,7 @@ export default function MaintenancePage() {
                   {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Update Task"}
                 </Button>
               </DialogFooter></>
+          
           )}
         </DialogContent>
       </Dialog>

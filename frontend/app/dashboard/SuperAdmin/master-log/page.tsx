@@ -90,7 +90,7 @@ const LogFiltersComponent = ({ onFilterChange, filters }: { onFilterChange: (fil
                 <SelectValue placeholder="All Actions" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Actions</SelectItem>
+                <SelectItem value="all">All Actions</SelectItem>
                 {ALL_LOG_ACTIONS.map(action => (
                   <SelectItem key={action} value={action}>
                     {action.replace(/_/g, ' ')}
@@ -196,20 +196,24 @@ export default function MasterLogPage() {
         startDate: filters.startDate,
         endDate: filters.endDate,
       });
-      if (filters.action) {
+      if (filters.action && filters.action !== "all") {
         params.append('action', filters.action);
       }
       
-      const response = await api.get(`/reports/master-log?${params.toString()}`);
+      const [response] = await Promise.all([
+        api.get(`http://localhost:8000/api/v1/reports/master-log?${params.toString()}`, {
+          withCredentials: true
+        })
+      ]);
       const responseData = response.data.data;
-      
+
       setLogs(responseData.docs);
       setPagination({
-          page: responseData.page,
-          totalPages: responseData.totalPages,
-          hasPrevPage: responseData.hasPrevPage,
-          hasNextPage: responseData.hasNextPage,
-          totalDocs: responseData.totalDocs,
+        page: responseData.page,
+        totalPages: responseData.totalPages,
+        hasPrevPage: responseData.hasPrevPage,
+        hasNextPage: responseData.hasNextPage,
+        totalDocs: responseData.totalDocs,
       });
 
     } catch (err: any) {

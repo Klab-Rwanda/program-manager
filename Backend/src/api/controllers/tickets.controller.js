@@ -1,14 +1,5 @@
-import {
-  addTicket,
-  getAllTickets,
-  getTicketById,
-  updateTicketById,
-  deleteTicketById,
-} from '../models/ticket.model.js';
+
 import Ticket from '../models/ticketModel.js'; 
-
-
-
 
 // Create ticket
 export const submitTicket = async (req, res) => {

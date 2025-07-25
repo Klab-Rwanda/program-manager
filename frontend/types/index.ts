@@ -37,6 +37,27 @@ export interface Facilitator {
   promotionDate?: string;
 }
 
+// ... other types
+
+export interface Topic {
+    _id: string;
+    day: string;
+    title: string;
+    duration: string;
+    sessionType: 'in-person' | 'online';
+    isCompleted: boolean;
+}
+
+export interface Roadmap {
+    _id: string;
+    program: string | { _id: string; name: string; };
+    weekNumber: number;
+    title: string;
+    startDate: string;
+    objectives: string[];
+    topics: Topic[];
+}
+
 
 export interface Trainee extends User {
   program: string;
@@ -113,6 +134,7 @@ export interface Course {
   status: 'Draft' | 'PendingApproval' | 'Approved' | 'Rejected';
   facilitatorId: string;
   documentUrl?: string;
+  contentUrl?: string; // <-- Add this line to match backend
   createdAt: string;
   updatedAt: string;
 }
@@ -192,4 +214,101 @@ export interface Ticket {
   dueDate?: string;
   resolution?: string;
   comments: Comment[];
+}
+
+
+export interface AttendanceRecord {
+    _id: string;
+    userId: {
+        _id: string;
+        name: string;
+        email: string;
+        role?: string; // Optional for when it's populated
+    };
+    programId?: { // Make programId an object since it will be populated
+        _id: string;
+        name: string;
+    };
+    sessionId?: string; // Optional
+    date: string;
+    checkIn?: string;
+    checkOut?: string;
+    method: 'geolocation' | 'qr_code' | 'manual' | 'facial_recognition';
+    status: 'Present' | 'Absent' | 'Excused' | 'Late';
+}
+
+export interface Program {
+  _id: string;
+  name: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  status: 'Draft' | 'PendingApproval' | 'Active' | 'Completed' | 'Rejected';
+  programManager?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  facilitators?: Facilitator[];
+  trainees?: Trainee[];
+  updatedAt: string;
+}
+
+export interface ClassSession {
+  _id: string;
+  type: 'physical' | 'online';
+  programId: {
+    _id: string;
+    name: string;
+  };
+  facilitatorId: {
+    _id: string;
+    name: string;
+  };
+  sessionId: string;
+  title: string;
+  description?: string;
+  startTime: string;
+  duration: number; // in minutes
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled';
+  accessLink?: string;
+  meetingLink?: string;
+  qrCodeImage?: string; // This is a frontend-only convenience field, not in DB model
+  updatedAt: string;
+}
+
+
+// ... other types
+
+export interface Assignment {
+    _id: string;
+    title: string;
+    description: string;
+    program: string | { _id: string; name: string; }; // Can be populated
+    course: string | { _id: string; title: string; }; // Can be populated
+    dueDate: string;
+    maxGrade: number;
+    createdAt?: string;
+    updatedAt?: string;
+}
+// --- ATTENDANCE TYPES ---
+
+export interface AttendanceRecord {
+    _id: string;
+    userId: {
+        _id: string;
+        name: string;
+        email: string;
+        role?: string;
+    };
+    programId?: {
+        _id: string;
+        name: string;
+    };
+    sessionId?: string;
+    date: string;
+    checkIn?: string;
+    checkOut?: string;
+    method: 'geolocation' | 'qr_code' | 'manual' | 'facial_recognition';
+    status: 'Present' | 'Absent' | 'Excused' | 'Late';
 }

@@ -1,30 +1,40 @@
 import api from '../api';
-import { Course } from '@/types';
+import { Assignment, Course, Program } from '@/types';
 
-// Get all courses for a specific program
-export const getCoursesForProgram = async (programId: string): Promise<Course[]> => {
-  if (!programId) return []; // Prevent API call if no program is selected
-  const response = await api.get(`/courses/program/${programId}`);
-  return response.data.data;
-};
-
-// NEW: Create a new course with a file upload for a facilitator
-export const createCourse = async (
-    title: string,
-    description: string,
-    programId: string,
-    courseDocument: File
-): Promise<Course> => {
+// Create a new course with a file upload
+export const createCourse = async (data: { title: string; description: string; programId: string; courseDocument: File }): Promise<Course> => {
     const formData = new FormData();
-    formData.append('title', title);
-    formData.append('description', description);
-    formData.append('programId', programId);
-    formData.append('courseDocument', courseDocument);
+    formData.append('title', data.title);
+    formData.append('description', data.description);
+    formData.append('programId', data.programId);
+    formData.append('courseDocument', data.courseDocument);
 
     const response = await api.post('/courses', formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data.data;
 };
+
+// Get all courses for the logged-in facilitator
+export const getMyCourses = async (): Promise<Course[]> => {
+    const response = await api.get('/courses/my-courses');
+    return response.data.data;
+};
+
+// Update a course
+export const updateCourse = async (id: string, data: { title: string; description: string }): Promise<Course> => {
+    const response = await api.patch(`/courses/${id}`, data);
+    return response.data.data;
+};
+
+// Delete a course
+export const deleteCourse = async (id: string): Promise<void> => {
+    await api.delete(`/courses/${id}`);
+};
+
+// Get all courses for a specific program ID
+export const getCoursesForProgram = async (programId: string): Promise<Course[]> => {
+    const response = await api.get(`/courses/program/${programId}`);
+    return response.data.data;
+};
+

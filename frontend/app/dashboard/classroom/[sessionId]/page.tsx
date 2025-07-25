@@ -1,454 +1,310 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/contexts/RoleContext";
+import { useSocket } from "@/lib/hooks/useSocket";
 import { toast } from "sonner";
-import { QrCode, Camera, Loader2, ScanLine } from "lucide-react";
+import jsQR from "jsqr";
+import { QrCode, Loader2, CheckCircle2, Video, Info, LogOut, Badge } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { openQrForSession, markQRAttendance } from "@/lib/services/attendance.service";
-import { QrReader } from "react-qr-reader";
+import { markQRAttendance, getSessionDetails, ClassSession } from "@/lib/services/attendance.service";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-interface JitsiMeetWrapperProps {
-    sessionId: string;
-    user: any;
-}
+// Helper function to get initials from a name
+const getInitials = (name: string = "") => name.split(' ').map(n => n[0]).join('').toUpperCase();
 
-// Alternative approach using direct iframe instead of React SDK
-const JitsiMeetWrapper: React.FC<JitsiMeetWrapperProps> = ({ sessionId, user }) => {
-    const [isLoading, setIsLoading] = useState(true);
-    const iframeRef = useRef<HTMLIFrameElement>(null);
-    
-    const userName = user?.name || `Guest${Math.floor(Math.random() * 1000)}`;
-    const userEmail = user?.email || `guest${Math.floor(Math.random() * 1000)}@temp.com`;
-    const roomName = `KlabSession${sessionId}`;
-    
-    // Build Jitsi URL with all parameters to avoid popups
-    const jitsiUrl = `https://meet.jit.si/${roomName}` +
-        `#userInfo.displayName="${encodeURIComponent(userName)}"` +
-        `&userInfo.email="${encodeURIComponent(userEmail)}"` +
-        `&config.prejoinConfig.enabled=false` +
-        `&config.requireDisplayName=false` +
-        `&config.enableWelcomePage=false` +
-        `&config.enableClosePage=false` +
-        `&config.enableAuthenticationUI=false` +
-        `&config.enableLobby=false` +
-        `&config.autoKnockLobby=false` +
-        `&config.enableGuestAccess=true` +
-        `&config.startWithAudioMuted=true` +
-        `&config.startWithVideoMuted=false` +
-        `&interfaceConfig.SHOW_JITSI_WATERMARK=false` +
-        `&interfaceConfig.AUTHENTICATION_ENABLE=false` +
-        `&interfaceConfig.GUEST_PROMOTION_ENABLE=false` +
-        `&interfaceConfig.MOBILE_APP_PROMO=false`;
-
-    useEffect(() => {
-        const timer = setTimeout(() => setIsLoading(false), 2000);
-        return () => clearTimeout(timer);
-    }, []);
-
-    if (isLoading) {
-        return (
-            <div className="flex h-full w-full items-center justify-center bg-black">
-                <Loader2 className="h-8 w-8 animate-spin text-white"/>
-                <p className="ml-4 text-lg text-white">Loading classroom...</p>
-            </div>
-        );
-    }
-
-    return (
-        <iframe
-            ref={iframeRef}
-            src={jitsiUrl}
-            allow="camera; microphone; fullscreen; display-capture; autoplay"
-            style={{
-                width: '100%',
-                height: '100%',
-                border: '0',
-                backgroundColor: '#000'
-            }}
-            sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
-            onLoad={() => {
-                console.log('Jitsi iframe loaded successfully');
-                // Post message to iframe to ensure proper configuration
-                if (iframeRef.current?.contentWindow) {
-                    iframeRef.current.contentWindow.postMessage({
-                        type: 'jitsi-config',
-                        config: {
-                            prejoinConfig: { enabled: false },
-                            requireDisplayName: false,
-                            enableAuthenticationUI: false
-                        }
-                    }, '*');
-                }
-            }}
-        />
-    );
-};
-
-// Alternative React SDK implementation with comprehensive popup blocking
-const JitsiReactSDKWrapper: React.FC<JitsiMeetWrapperProps> = ({ sessionId, user }) => {
-    // Only import JitsiMeeting when needed to avoid SSR issues
-    const [JitsiMeeting, setJitsiMeeting] = useState<any>(null);
-    
-    useEffect(() => {
-        // Dynamic import to avoid SSR issues
-        import('@jitsi/react-sdk').then((module) => {
-            setJitsiMeeting(() => module.JitsiMeeting);
-        }).catch((error) => {
-            console.error('Failed to load Jitsi React SDK:', error);
-        });
-    }, []);
-
-    if (!JitsiMeeting) {
-        return (
-            <div className="flex h-full w-full items-center justify-center bg-black">
-                <Loader2 className="h-8 w-8 animate-spin text-white"/>
-                <p className="ml-4 text-lg text-white">Loading Jitsi SDK...</p>
-            </div>
-        );
-    }
-
-    return (
-        <JitsiMeeting
-            domain="meet.jit.si"
-            roomName={`KlabSession${sessionId}`}
-            userInfo={{ 
-                displayName: user?.name || `Guest${Math.floor(Math.random() * 1000)}`,
-                email: user?.email || `guest${Math.floor(Math.random() * 1000)}@temp.com`
-            }}
-            // JWT token is explicitly null
-            jwt={null}
-            configOverwrite={{
-                // Completely disable prejoin
-                prejoinConfig: { 
-                    enabled: false,
-                    hideDisplayName: true,
-                    hideExtraJoinButtons: true
-                },
-                
-                // Authentication settings
-                requireDisplayName: false,
-                enableWelcomePage: false,
-                enableClosePage: false,
-                enableAuthenticationUI: false,
-                
-                // Lobby settings
-                enableLobby: false,
-                enableLobbyChat: false,
-                autoKnockLobby: false,
-                
-                // Guest settings
-                enableGuestAccess: true,
-                guestDialOutStatusCode: 0,
-                
-                // Media settings
-                startWithAudioMuted: true,
-                startWithVideoMuted: false,
-                
-                // UI settings
-                disableModeratorIndicator: true,
-                enableEmailInStats: false,
-                
-                // Security settings - disable features that might trigger popups
-                disableDeepLinking: true,
-                disableThirdPartyRequests: true,
-                disableProfile: true,
-                
-                // Conference settings
-                defaultRemoteDisplayName: 'Participant',
-                subject: `Klab Session ${sessionId}`,
-                
-                // Disable recording/streaming that might require auth
-                fileRecordingsEnabled: false,
-                liveStreamingEnabled: false,
-                
-                // P2P settings
-                enableP2P: true,
-                p2p: {
-                    enabled: true
-                },
-                
-                // Analytics disabled
-                analytics: {
-                    disabled: true
-                },
-                
-                // Disable features that might show popups
-                enableCalendarIntegration: false,
-                enableInsecureRoomNameWarning: false,
-                enableRemoteMuting: false,
-                
-                // Auto-join settings
-                startAudioOnly: false,
-                
-                // Override any server authentication
-                hosts: {
-                    domain: 'meet.jit.si'
-                },
-                
-                // Disable notifications that might trigger popups
-                disableJoinLeaveSounds: true,
-                enableTalkWhileMuted: false
-            }}
-            interfaceConfigOverwrite={{
-                // Hide authentication UI elements
-                AUTHENTICATION_ENABLE: false,
-                GUEST_PROMOTION_ENABLE: false,
-                
-                // Hide branding
-                SHOW_JITSI_WATERMARK: false,
-                SHOW_WATERMARK_FOR_GUESTS: false,
-                
-                // Hide potentially problematic UI elements
-                HIDE_INVITE_MORE_HEADER: true,
-                MOBILE_APP_PROMO: false,
-                SHOW_CHROME_EXTENSION_BANNER: false,
-                
-                // Notifications
-                DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
-                DISABLE_PRESENCE_STATUS: true,
-                
-                // Toolbar
-                TOOLBAR_BUTTONS: [
-                    'microphone', 'camera', 'hangup', 'chat',
-                    'desktop', 'fullscreen', 'tileview'
-                ],
-                
-                // Remove elements that might trigger auth
-                CLOSE_PAGE_GUEST_HINT: false,
-                HIDE_DEEP_LINKING_LOGO: true,
-                
-                // Settings
-                SETTINGS_SECTIONS: ['devices', 'language'],
-                
-                // Override defaults
-                DEFAULT_BACKGROUND: '#474747',
-                
-                // Disable problematic features
-                DISABLE_DOMINANT_SPEAKER_INDICATOR: false,
-                DISABLE_FOCUS_INDICATOR: false,
-                
-                // Film strip
-                VERTICAL_FILMSTRIP: false,
-                
-                // Video quality
-                VIDEO_QUALITY_LABEL_DISABLED: true
-            }}
-            onApiReady={(externalApi) => {
-                console.log('Jitsi API Ready - configuring to prevent popups');
-                
-                // Override any authentication requirements
-                externalApi.executeCommand('overwriteConfig', {
-                    prejoinConfig: { enabled: false },
-                    requireDisplayName: false,
-                    enableAuthenticationUI: false,
-                    enableLobby: false
-                });
-                
-                // Listen for events that might trigger popups
-                externalApi.addEventListener('videoConferenceJoined', () => {
-                    console.log('Successfully joined without popups');
-                });
-                
-                externalApi.addEventListener('participantJoined', () => {
-                    // Ensure no authentication prompts appear
-                    externalApi.executeCommand('overwriteConfig', {
-                        enableAuthenticationUI: false
-                    });
-                });
-                
-                // Block any authentication events
-                externalApi.addEventListener('authenticating', () => {
-                    console.log('Authentication blocked');
-                    return false;
-                });
-                
-                // Handle any popup attempts
-                externalApi.addEventListener('toolbarButtonClicked', (event) => {
-                    if (event.key === 'authenticate' || event.key === 'login') {
-                        event.preventDefault();
-                        return false;
-                    }
-                });
-            }}
-            getIFrameRef={(iframeRef) => { 
-                if (iframeRef) {
-                    iframeRef.style.height = '100%';
-                    iframeRef.style.width = '100%';
-                    iframeRef.style.border = '0';
-                    
-                    // Set iframe attributes to prevent popups
-                    iframeRef.setAttribute('allow', 'camera; microphone; display-capture; autoplay');
-                    iframeRef.setAttribute('sandbox', 'allow-forms allow-same-origin allow-scripts allow-popups-to-escape-sandbox');
-                    
-                    // Block authentication-related postMessages
-                    const originalPostMessage = iframeRef.contentWindow?.postMessage;
-                    if (originalPostMessage) {
-                        iframeRef.contentWindow.postMessage = function(message, targetOrigin, transfer) {
-                            if (typeof message === 'object' && message.type && 
-                                (message.type.includes('auth') || message.type.includes('login'))) {
-                                console.log('Blocked authentication message:', message);
-                                return;
-                            }
-                            return originalPostMessage.call(this, message, targetOrigin, transfer);
-                        };
-                    }
-                }
-            }}
-            containerStyles={{ 
-                width: '100%', 
-                height: '100%',
-                backgroundColor: '#000'
-            }}
-            spinner={() => (
-                <div className="flex h-full w-full items-center justify-center bg-black">
-                    <Loader2 className="h-8 w-8 animate-spin text-white"/>
-                    <p className="ml-4 text-lg text-white">Joining without authentication...</p>
-                </div>
-            )}
-        />
-    );
-};
-
-export default function ClassroomPage() {
+export default function ClassroomHubPage() {
     const params = useParams();
+    const router = useRouter();
     const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
     const { user, role, loading: authLoading } = useAuth();
+    const socket = useSocket(sessionId);
 
-    const [isQrModalOpen, setQrModalOpen] = useState(false);
-    const [isScanModalOpen, setScanModalOpen] = useState(false);
-    const [qrCodeImage, setQrCodeImage] = useState<string | null>(null);
+    const [session, setSession] = useState<ClassSession | null>(null);
+    const [loading, setLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [useIframe, setUseIframe] = useState(true); // Toggle between iframe and React SDK
+    
+    // State for both facilitator and trainee
+    const [meetingLink, setMeetingLink] = useState('');
+    const [participants, setParticipants] = useState<{ _id: string, name: string, role: string }[]>([]);
 
-    const handleStartAttendanceCheck = async () => {
-        if (!sessionId) return;
+    // Facilitator-specific state
+    const [isFacilitatorQrModalOpen, setFacilitatorQrModalOpen] = useState(false);
+    const [facilitatorQrCode, setFacilitatorQrCode] = useState<string | null>(null);
+
+    // Trainee-specific state
+    const [isTraineeModalOpen, setTraineeModalOpen] = useState(false);
+    const [traineeQrCode, setTraineeQrCode] = useState<string | null>(null);
+
+    // Fetch initial session details when the page loads
+    useEffect(() => {
+        const fetchDetails = async () => {
+            if (sessionId) {
+                try {
+                    const sessionData = await getSessionDetails(sessionId);
+                    setSession(sessionData.session);
+                    // Initialize the meeting link from API data if it exists
+                    if (sessionData.session.meetingLink) {
+                        setMeetingLink(sessionData.session.meetingLink);
+                    }
+                } catch (err) {
+                    toast.error("Failed to load session details.");
+                } finally {
+                    setLoading(false);
+                }
+            }
+        };
+        fetchDetails();
+    }, [sessionId]);
+
+    // Set up all WebSocket event listeners
+    useEffect(() => {
+        if (!socket || !user) return;
+
+        // On connecting, announce presence to the room
+        socket.emit('join_session_room', { sessionId, userId: user._id });
+
+        // Listen for when the facilitator starts an attendance check
+        const handleAttendanceStarted = ({ qrCodeImage }: { qrCodeImage: string }) => {
+            if (role === 'trainee') {
+                setTraineeQrCode(qrCodeImage);
+                setTraineeModalOpen(true);
+                toast.info("The facilitator has started an attendance check!");
+            }
+        };
+
+        // Listen for when the facilitator ends an attendance check
+        const handleAttendanceEnded = () => {
+            if (role === 'trainee') {
+                setTraineeModalOpen(false);
+                toast.warn("The attendance check has ended.");
+            }
+        };
+        
+        // Listen for real-time updates to the meeting link
+        const handleMeetingLinkUpdate = (link: string) => {
+            setMeetingLink(link);
+            if (role === 'trainee') {
+                toast.success("Facilitator has shared the meeting link!");
+            }
+        };
+
+        // Listen for updates to the participant list
+        const handleParticipantUpdate = (participantList: any[]) => {
+            setParticipants(participantList);
+        };
+
+        socket.on('attendance_started', handleAttendanceStarted);
+        socket.on('attendance_ended', handleAttendanceEnded);
+        socket.on('meeting_link_updated', handleMeetingLinkUpdate);
+        socket.on('participant_list_updated', handleParticipantUpdate);
+
+        // Cleanup function to remove listeners when the component unmounts
+        return () => {
+            socket.off('attendance_started', handleAttendanceStarted);
+            socket.off('attendance_ended', handleAttendanceEnded);
+            socket.off('meeting_link_updated', handleMeetingLinkUpdate);
+            socket.off('participant_list_updated', handleParticipantUpdate);
+        };
+    }, [socket, role, sessionId, user]);
+    
+    // Handler for the facilitator to start attendance
+    const handleStartAttendanceCheck = () => {
+        if (!socket) return toast.error("Not connected to the real-time server.");
         setIsProcessing(true);
-        setQrModalOpen(true);
-        try {
-            const result = await openQrForSession(sessionId);
-            setQrCodeImage(result.qrCodeImage);
-            toast.success("New QR code generated!");
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || "Failed to start attendance check.");
-            setQrModalOpen(false);
-        } finally {
+        socket.emit('facilitator_start_attendance', { sessionId }, (response: any) => {
+            setIsProcessing(false);
+            if (response.error) {
+                toast.error(response.error);
+            } else {
+                setFacilitatorQrCode(response.qrCodeImage);
+                setFacilitatorQrModalOpen(true);
+            }
+        });
+    };
+    
+    // Handler for the facilitator to end attendance
+    const handleEndAttendanceCheck = () => {
+        if (socket) socket.emit('facilitator_end_attendance', { sessionId });
+        setFacilitatorQrModalOpen(false);
+    };
+
+    // Handler for the facilitator to share their meeting link
+    const handleShareLink = () => {
+        if (!socket || !meetingLink.trim()) {
+            return toast.error("Please paste a valid meeting link first.");
+        }
+        socket.emit('facilitator_share_link', { sessionId, link: meetingLink });
+        toast.success("Meeting link has been shared with all trainees!");
+    };
+
+    // Handler for the trainee to scan the QR code that appears on their screen
+    const handleScanAndMark = () => {
+        if (!traineeQrCode) return;
+        setIsProcessing(true);
+        const image = new Image();
+        image.src = traineeQrCode;
+        image.crossOrigin = "Anonymous";
+        image.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if(!ctx) {
+                toast.error("Browser error: Could not process image.");
+                setIsProcessing(false);
+                return;
+            }
+            canvas.width = image.width;
+            canvas.height = image.height;
+            ctx.drawImage(image, 0, 0);
+            const imageData = ctx.getImageData(0, 0, image.width, image.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+            if (code?.data) {
+                markQRAttendance(code.data)
+                    .then(() => { toast.success("Attendance marked successfully!"); setTraineeModalOpen(false); })
+                    .catch((err) => toast.error(err.response?.data?.message || "QR code verification failed."))
+                    .finally(() => setIsProcessing(false));
+            } else {
+                toast.error("Could not read QR code from the received image.");
+                setIsProcessing(false);
+            }
+        };
+        image.onerror = () => {
+            toast.error("Failed to load QR code image for scanning.");
             setIsProcessing(false);
         }
     };
-
-    const handleQrScanResult = async (result: any) => {
-        if (result && !isProcessing) {
-            setIsProcessing(true);
-            toast.info("Verifying QR Code...");
-            try {
-                await markQRAttendance(result.text);
-                toast.success("Attendance marked!");
-                setScanModalOpen(false);
-            } catch (err: any) {
-                toast.error(err.response?.data?.message || "Invalid QR Code.");
-            } finally {
-                setIsProcessing(false);
-            }
-        }
-    };
-
-    if (authLoading || !sessionId) {
+    
+    // Loading and error states
+    if (loading || authLoading) {
         return (
-            <div className="flex h-full w-full items-center justify-center">
-                <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                <p className="ml-4 text-lg text-muted-foreground">Loading classroom...</p>
+            <div className="flex h-[calc(100vh-4rem)] w-full items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                    <p className="text-lg text-muted-foreground">Preparing Classroom Hub...</p>
+                </div>
             </div>
         );
     }
-
-    const defaultUser = user || {
-        name: `Guest${Math.floor(Math.random() * 1000)}`,
-        email: `guest${Math.floor(Math.random() * 1000)}@temp.com`
-    };
-
+    if (!session || !user) {
+        return (
+             <div className="flex h-full w-full items-center justify-center p-4">
+                <Alert variant="destructive" className="max-w-md">
+                    <AlertDescription>
+                        Could not load session. It may be inactive, or you might not be enrolled.
+                    </AlertDescription>
+                </Alert>
+             </div>
+        );
+    }
+    
+    // Main JSX render
     return (
-        <div className="h-[calc(100vh-4rem)] flex flex-col md:flex-row gap-4 p-4">
-            <div className="flex-1 h-[60vh] md:h-auto rounded-lg overflow-hidden border">
-                {useIframe ? (
-                    <JitsiMeetWrapper sessionId={sessionId} user={defaultUser} />
-                ) : (
-                    <JitsiReactSDKWrapper sessionId={sessionId} user={defaultUser} />
-                )}
-            </div>
-
-            <Card className="w-full md:w-80 flex-shrink-0">
-                <CardHeader><CardTitle>Session Controls</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="p-4 border rounded-lg bg-blue-50">
-                        <h3 className="font-semibold mb-2">Meeting Info</h3>
-                        <p className="text-sm text-gray-600">Session: {sessionId}</p>
-                        <p className="text-sm text-gray-600">
-                            Joined as: {defaultUser.name}
-                        </p>
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <CardTitle className="text-3xl">{session.title}</CardTitle>
+                            <CardDescription>{session.programId.name}</CardDescription>
+                        </div>
                         <Button 
-                            size="sm" 
                             variant="outline" 
-                            className="mt-2"
-                            onClick={() => setUseIframe(!useIframe)}
+                            onClick={() => router.push(role === 'facilitator' ? '/facilitator/attendance' : '/dashboard/Trainee/trattendance')}
                         >
-                            Switch to {useIframe ? 'React SDK' : 'Direct Iframe'}
+                            <LogOut className="mr-2 h-4 w-4" />
+                            Exit Classroom
                         </Button>
                     </div>
-                    
-                    {role === 'facilitator' && (
-                        <div className="p-4 border rounded-lg bg-gray-50">
-                            <h3 className="font-semibold mb-2">Facilitator Actions</h3>
-                            <Button className="w-full" onClick={handleStartAttendanceCheck} disabled={isProcessing}>
-                                {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <QrCode className="mr-2 h-4 w-4" />}
-                                Take Attendance
-                            </Button>
-                        </div>
-                    )}
-                    {role === 'trainee' && (
-                        <div className="p-4 border rounded-lg bg-gray-50">
-                            <h3 className="font-semibold mb-2">Trainee Actions</h3>
-                            <Button className="w-full" onClick={() => setScanModalOpen(true)}>
-                                <Camera className="mr-2 h-4 w-4" />
-                                Scan Attendance QR
-                            </Button>
-                        </div>
-                    )}
-                    
-                    {!role && (
-                        <div className="p-4 border rounded-lg bg-green-50">
-                            <h3 className="font-semibold mb-2">Guest Access</h3>
-                            <p className="text-sm text-gray-600">
-                                You've joined as a guest. No popups should appear!
-                            </p>
-                        </div>
-                    )}
-                </CardContent>
+                </CardHeader>
             </Card>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 space-y-4">
+                    {role === 'facilitator' && (
+                        <Card>
+                            <CardHeader><CardTitle>Facilitator Controls</CardTitle></CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="meetingLink">Video Call Link</Label>
+                                    <div className="flex gap-2">
+                                        <Input id="meetingLink" placeholder="Paste Google Meet, Zoom, etc. link here" value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} />
+                                        <Button onClick={handleShareLink}>Share Link</Button>
+                                    </div>
+                                </div>
+                                <div className="text-center border-t pt-4">
+                                     <Button size="lg" onClick={handleStartAttendanceCheck} disabled={isProcessing}>
+                                        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <QrCode className="mr-2 h-4 w-4" />}
+                                        Take Attendance
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+                     {role === 'trainee' && (
+                        <Card>
+                             <CardHeader><CardTitle>Join Your Class</CardTitle></CardHeader>
+                             <CardContent className="space-y-4">
+                                {meetingLink ? (
+                                    <a href={meetingLink} target="_blank" rel="noopener noreferrer">
+                                        <Button size="lg" className="w-full h-16 text-lg bg-green-600 hover:bg-green-700"><Video className="mr-3 h-6 w-6"/>Join Video Call</Button>
+                                    </a>
+                                ) : (
+                                    <div className="text-center p-4 bg-gray-50 rounded-lg min-h-[96px] flex flex-col justify-center">
+                                        <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground mb-2"/>
+                                        <p className="text-muted-foreground">Waiting for facilitator to share the meeting link...</p>
+                                    </div>
+                                )}
+                                <Alert>
+                                    <Info className="h-4 w-4" />
+                                    <AlertDescription>
+                                        Keep this page open. The attendance QR code will appear here automatically when the facilitator starts the check.
+                                    </AlertDescription>
+                                </Alert>
+                             </CardContent>
+                        </Card>
+                     )}
+                </div>
+                
+                <div className="md:col-span-1">
+                     <Card>
+                        <CardHeader><CardTitle className="flex justify-between items-center">Participants <Badge>{participants.length}</Badge></CardTitle></CardHeader>
+                        <CardContent className="space-y-2 max-h-[450px] overflow-y-auto">
+                            {participants.length > 0 ? participants.map(p => (
+                                <div key={p._id} className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-50">
+                                    <Avatar className="h-8 w-8"><AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${p.name}`} /><AvatarFallback className="text-xs">{getInitials(p.name)}</AvatarFallback></Avatar>
+                                    <span className="text-sm font-medium">{p.name}</span>
+                                </div>
+                            )) : <p className="text-sm text-muted-foreground text-center py-4">No one has joined the hub yet.</p>}
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
 
-            <Dialog open={isQrModalOpen} onOpenChange={setQrModalOpen}>
-                <DialogContent>
-                    <DialogHeader><DialogTitle>Share this QR Code</DialogTitle></DialogHeader>
-                    <div className="flex justify-center p-4">
-                        {isProcessing || !qrCodeImage ? <Loader2 className="h-16 w-16 animate-spin"/> : <img src={qrCodeImage} alt="Session QR Code" className="w-64 h-64" />}
-                    </div>
+            {/* Facilitator's Modal */}
+            <Dialog open={isFacilitatorQrModalOpen} onOpenChange={setFacilitatorQrModalOpen}>
+                <DialogContent onEscapeKeyDown={handleEndAttendanceCheck}>
+                    <DialogHeader><DialogTitle>Attendance is Live</DialogTitle><DialogDescription>Share your screen. Close this window to end the check.</DialogDescription></DialogHeader>
+                    <div className="flex justify-center p-4 min-h-[300px] items-center">{facilitatorQrCode ? <img src={facilitatorQrCode} alt="QR Code" /> : <Loader2 className="h-16 w-16 animate-spin"/>}</div>
+                    <Button variant="destructive" onClick={handleEndAttendanceCheck}>End Attendance Check</Button>
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={isScanModalOpen} onOpenChange={setScanModalOpen}>
+            {/* Trainee's Modal */}
+            <Dialog open={isTraineeModalOpen} onOpenChange={setTraineeModalOpen}>
                 <DialogContent>
-                    <DialogHeader><DialogTitle>Scan QR Code</DialogTitle></DialogHeader>
-                    {isProcessing ? (
-                        <div className="p-8 flex justify-center"><Loader2 className="h-10 w-10 animate-spin"/></div>
-                    ) : (
-                        <div className="relative p-2 border-2 border-dashed rounded-lg">
-                            <QrReader onResult={handleQrScanResult} constraints={{ facingMode: 'user' }} containerStyle={{ width: '100%' }} />
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><ScanLine className="h-48 w-48 text-white/20"/></div>
-                        </div>
-                    )}
+                    <DialogHeader><DialogTitle>Attendance Check!</DialogTitle><DialogDescription>Scan the code below to mark your presence.</DialogDescription></DialogHeader>
+                    <div className="flex justify-center p-4 min-h-[300px] items-center">{traineeQrCode ? <img src={traineeQrCode} alt="QR Code" /> : <Loader2 className="h-16 w-16 animate-spin"/>}</div>
+                    <Button className="w-full" onClick={handleScanAndMark} disabled={isProcessing}>
+                        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                        Scan and Mark My Attendance
+                    </Button>
                 </DialogContent>
             </Dialog>
         </div>

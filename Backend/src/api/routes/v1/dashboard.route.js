@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { getDashboardStats } from '../../controllers/dashboard.controller.js';
+import { getDashboardStats, getFacilitatorDashboardStats } from '../../controllers/dashboard.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole } from '../../middlewares/role.middleware.js';
 
 const router = Router();
-router.use(verifyJWT, checkRole(['SuperAdmin', 'Program Manager']));
+router.use(verifyJWT);
 
 /**
  * @openapi
@@ -28,6 +28,10 @@ router.use(verifyJWT, checkRole(['SuperAdmin', 'Program Manager']));
  *                 totalUsers: { type: integer }
  *                 pendingApprovals: { type: integer }
  */
-router.route('/stats').get(getDashboardStats);
+// SuperAdmin and Program Manager dashboard stats
+router.route('/stats').get(checkRole(['SuperAdmin', 'Program Manager']), getDashboardStats);
+
+// Facilitator dashboard stats
+router.route('/facilitator-stats').get(checkRole(['Facilitator']), getFacilitatorDashboardStats);
 
 export default router;
