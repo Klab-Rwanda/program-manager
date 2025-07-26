@@ -90,6 +90,16 @@ const approveProgram = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const program = await Program.findByIdAndUpdate(id, { status: 'Active', rejectionReason: null }, { new: true });
     if (!program) throw new ApiError(404, "Program not found");
+     if (program.programManager) {
+        await createNotification({
+            recipient: program.programManager._id,
+            sender: req.user._id,
+            title: "Program Approved!",
+            message: `Your program "${program.name}" has been approved by a Super Admin and is now Active.`,
+            link: `/dashboard/Manager/programs`, // Link to their programs list
+            type: 'success'
+        });
+    }
      await createLog({
         user: req.user._id,
         action: 'PROGRAM_APPROVED',
@@ -105,6 +115,16 @@ const rejectProgram = asyncHandler(async (req, res) => {
     if (!reason) throw new ApiError(400, "A reason for rejection is required.");
     const program = await Program.findByIdAndUpdate(id, { status: 'Rejected', rejectionReason: reason }, { new: true });
     if (!program) throw new ApiError(404, "Program not found");
+     if (program.programManager) {
+        await createNotification({
+            recipient: program.programManager._id,
+            sender: req.user._id,
+            title: "Action Required: Program Rejected",
+            message: `Your program "${program.name}" was rejected. Please review the feedback.`,
+            link: `/dashboard/Manager/programs`,
+            type: 'warning'
+        });
+    }
      await createLog({
         user: req.user._id,
         action: 'PROGRAM_REJECTED',
@@ -121,6 +141,14 @@ const enrollTrainee = asyncHandler(async (req, res) => {
     const trainee = await User.findById(traineeId);
     if (!trainee || trainee.role !== 'Trainee') throw new ApiError(404, "Trainee not found or user is not a trainee.");
     const program = await Program.findByIdAndUpdate(id, { $addToSet: { trainees: traineeId } }, { new: true });
+     await createNotification({
+        recipient: traineeId,
+        sender: req.user._id, // The Program Manager who enrolled them
+        title: "You've been enrolled!",
+        message: `You have been enrolled in the "${program.name}" program.`,
+        link: `/dashboard/Trainee/my-learning`, // Link to their main dashboard
+        type: 'info'
+    });
     return res.status(200).json(new ApiResponse(200, program, "Trainee enrolled successfully."));
 });
 
@@ -131,6 +159,14 @@ const enrollFacilitator = asyncHandler(async (req, res) => {
     const facilitator = await User.findById(facilitatorId);
     if (!facilitator || facilitator.role !== 'Facilitator') throw new ApiError(404, "Facilitator not found or user is not a facilitator.");
     const program = await Program.findByIdAndUpdate(id, { $addToSet: { facilitators: facilitatorId } }, { new: true });
+     await createNotification({
+        recipient: facilitatorId,
+        sender: req.user._id,
+        title: "You've been assigned a program!",
+        message: `You have been assigned as a facilitator for the "${program.name}" program.`,
+        link: `/dashboard/Facilitator/fac-programs`, // Link to their programs list
+        type: 'info'
+    });
     return res.status(200).json(new ApiResponse(200, program, "Facilitator enrolled successfully."));
 });
 

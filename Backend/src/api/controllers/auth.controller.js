@@ -6,6 +6,7 @@ import { sendRegistrationEmail, sendPasswordResetEmail, sendPasswordChangeConfir
 import { createLog } from "../../services/log.service.js";
 import jwt from "jsonwebtoken";
 import bcrypt from 'bcryptjs';
+import { createNotification } from "../../services/notification.service.js";
 
 const registerUser = asyncHandler(async (req, res) => {
   const { name, email, role } = req.body;
@@ -52,6 +53,20 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(500, "Something went wrong while registering the user");
   }
 
+    const superAdmins = await User.find({ role: 'SuperAdmin' });
+    for (const admin of superAdmins) {
+        // Don't notify the admin if they are creating the user themselves
+        if (admin._id.toString() !== req.user._id.toString()) {
+            await createNotification({
+                recipient: admin._id,
+                sender: req.user._id,
+                title: "New User Registered",
+                message: `${req.user.name} created a new ${user.role} account for ${user.name}.`,
+                link: `/dashboard/SuperAdmin/user-management`,
+                type: 'info'
+            });
+        }
+    }
   await createLog({
     user: req.user._id,
     action: "USER_CREATED",
