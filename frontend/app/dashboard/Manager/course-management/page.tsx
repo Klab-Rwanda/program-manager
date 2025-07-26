@@ -85,6 +85,7 @@ export default function CourseManagementPage() {
     const [roadmapStatusFilter, setRoadmapStatusFilter] = useState<string>("all");
     const [searchTerm, setSearchTerm] = useState<string>("");
     const [roadmapSearchTerm, setRoadmapSearchTerm] = useState<string>("");
+    const [assignmentFilter, setAssignmentFilter] = useState<string>("all");
 
     const fetchCourses = useCallback(async () => {
         setLoading(true);
@@ -779,93 +780,303 @@ export default function CourseManagementPage() {
                                 </CardContent>
                             </Card>
 
-                            {roadmapAssignmentsData.assignments.length === 0 ? (
-                                <Card className="text-center py-16">
-                                    <CardContent>
-                                        <GraduationCap className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                                        <h3 className="text-xl font-semibold">No Assignments Found</h3>
-                                        <p className="text-muted-foreground mt-2">
-                                            This weekly roadmap doesn't have any assignments yet.
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            ) : (
-                                roadmapAssignmentsData.assignments.map(assignment => (
-                                    <Card key={assignment.assignmentId}>
-                                        <CardHeader>
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <CardTitle>{assignment.assignmentTitle}</CardTitle>
-                                                    <CardDescription>{assignment.assignmentDescription}</CardDescription>
-                                                </div>
-                                                <div className="text-right text-sm text-muted-foreground">
-                                                    <div>Due: {new Date(assignment.dueDate).toLocaleDateString()}</div>
-                                                    <div>Max Grade: {assignment.maxGrade}</div>
+                            {roadmapAssignmentsData.assignments.map(assignment => (
+                                <Card key={assignment.assignmentId} className="mb-6">
+                                    <CardHeader>
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <CardTitle className="text-xl">{assignment.assignmentTitle}</CardTitle>
+                                                <div className="mt-2 prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-muted-foreground prose-strong:text-foreground prose-em:text-muted-foreground prose-ul:text-muted-foreground prose-ol:text-muted-foreground prose-li:text-muted-foreground prose-blockquote:text-muted-foreground prose-code:text-foreground prose-pre:text-muted-foreground">
+                                                    <div 
+                                                        dangerouslySetInnerHTML={{ __html: assignment.assignmentDescription }}
+                                                    />
                                                 </div>
                                             </div>
-                                        </CardHeader>
-                                        <CardContent>
-                                            {assignment.submissions.length === 0 ? (
-                                                <p className="text-muted-foreground text-center py-4">
-                                                    No submissions for this assignment yet.
-                                                </p>
-                                            ) : (
+                                            <div className="text-right">
+                                                <div className="text-sm text-muted-foreground">Due Date</div>
+                                                <div className="font-medium">{new Date(assignment.dueDate).toLocaleDateString()}</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-4 mt-4 text-sm">
+                                            <div>
+                                                <span className="text-muted-foreground">Max Grade:</span>
+                                                <span className="font-medium ml-1">{assignment.maxGrade} points</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">Facilitator:</span>
+                                                <span className="font-medium ml-1">{assignment.facilitatorName}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">Submissions:</span>
+                                                <span className="font-medium ml-1">{assignment.submissions.length}</span>
+                                            </div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {assignment.submissions.length === 0 ? (
+                                            <div className="text-center py-8">
+                                                <AlertCircle className="mx-auto h-8 w-8 text-gray-400 mb-2" />
+                                                <p className="text-muted-foreground">No submissions for this assignment yet.</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                <div className="flex justify-between items-center">
+                                                    <h4 className="text-lg font-semibold">Student Submissions & Performance</h4>
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="text-sm text-muted-foreground">
+                                                            {(() => {
+                                                                const filteredCount = assignment.submissions.filter(submission => {
+                                                                    const statusMatch = (() => {
+                                                                        switch (assignmentFilter) {
+                                                                            case 'submitted':
+                                                                                return submission.hasSubmitted;
+                                                                            case 'not-submitted':
+                                                                                return !submission.hasSubmitted;
+                                                                            case 'reviewed':
+                                                                                return submission.status === 'Reviewed';
+                                                                            case 'needs-revision':
+                                                                                return submission.status === 'NeedsRevision';
+                                                                            case 'pending':
+                                                                                return submission.hasSubmitted && submission.status === 'Submitted';
+                                                                            default:
+                                                                                return true;
+                                                                        }
+                                                                    })();
+
+                                                                    const searchMatch = !searchTerm || 
+                                                                        submission.traineeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                                                        submission.traineeEmail.toLowerCase().includes(searchTerm.toLowerCase());
+
+                                                                    return statusMatch && searchMatch;
+                                                                }).length;
+                                                                return `${filteredCount} of ${assignment.submissions.length} student${assignment.submissions.length !== 1 ? 's' : ''}`;
+                                                            })()}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Input
+                                                                placeholder="Search students..."
+                                                                value={searchTerm}
+                                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                                className="w-[200px] h-8"
+                                                            />
+                                                            <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
+                                                                <SelectTrigger className="w-[180px] h-8">
+                                                                    <SelectValue placeholder="Filter students" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="all">All Students</SelectItem>
+                                                                    <SelectItem value="submitted">Submitted</SelectItem>
+                                                                    <SelectItem value="not-submitted">Not Submitted</SelectItem>
+                                                                    <SelectItem value="reviewed">Reviewed</SelectItem>
+                                                                    <SelectItem value="needs-revision">Needs Revision</SelectItem>
+                                                                    <SelectItem value="pending">Pending Review</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
                                                 <Table>
                                                     <TableHeader>
                                                         <TableRow>
-                                                            <TableHead>Student</TableHead>
-                                                            <TableHead>Submitted</TableHead>
-                                                            <TableHead>Status</TableHead>
-                                                            <TableHead>Grade</TableHead>
-                                                            <TableHead>Attendance</TableHead>
+                                                            <TableHead className="w-[200px]">Student</TableHead>
+                                                            <TableHead className="w-[120px]">Submission Date</TableHead>
+                                                            <TableHead className="w-[100px]">Status</TableHead>
+                                                            <TableHead className="w-[100px] text-center">Assignment Grade</TableHead>
+                                                            <TableHead className="w-[120px] text-center">Attendance</TableHead>
+                                                            <TableHead className="w-[100px] text-center">Overall Performance</TableHead>
                                                             <TableHead>Feedback</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody>
-                                                        {assignment.submissions.map(submission => (
-                                                            <TableRow key={submission.submissionId}>
+                                                        {assignment.submissions
+                                                            .filter(submission => {
+                                                                // First apply status filter
+                                                                const statusMatch = (() => {
+                                                                    switch (assignmentFilter) {
+                                                                        case 'submitted':
+                                                                            return submission.hasSubmitted;
+                                                                        case 'not-submitted':
+                                                                            return !submission.hasSubmitted;
+                                                                        case 'reviewed':
+                                                                            return submission.status === 'Reviewed';
+                                                                        case 'needs-revision':
+                                                                            return submission.status === 'NeedsRevision';
+                                                                        case 'pending':
+                                                                            return submission.hasSubmitted && submission.status === 'Submitted';
+                                                                        default:
+                                                                            return true;
+                                                                    }
+                                                                })();
+
+                                                                // Then apply search filter
+                                                                const searchMatch = !searchTerm || 
+                                                                    submission.traineeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                                                    submission.traineeEmail.toLowerCase().includes(searchTerm.toLowerCase());
+
+                                                                return statusMatch && searchMatch;
+                                                            })
+                                                            .map(submission => (
+                                                            <TableRow key={submission.submissionId || submission.traineeEmail} className={
+                                                                !submission.hasSubmitted ? 'bg-gray-50' : ''
+                                                            }>
                                                                 <TableCell>
-                                                                    <div>
-                                                                        <div className="font-medium">{submission.traineeName}</div>
-                                                                        <div className="text-sm text-muted-foreground">{submission.traineeEmail}</div>
+                                                                    <div className="space-y-1">
+                                                                        <div className="font-medium text-sm">{submission.traineeName}</div>
+                                                                        <div className="text-xs text-muted-foreground">{submission.traineeEmail}</div>
+                                                                        {!submission.hasSubmitted && (
+                                                                            <Badge variant="outline" className="text-xs mt-1">
+                                                                                Not Enrolled
+                                                                            </Badge>
+                                                                        )}
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell>
-                                                                    {new Date(submission.submittedAt).toLocaleDateString()}
+                                                                    {submission.hasSubmitted ? (
+                                                                        <div className="text-sm">
+                                                                            {new Date(submission.submittedAt!).toLocaleDateString()}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-xs text-muted-foreground">-</span>
+                                                                    )}
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     <Badge variant={
                                                                         submission.status === 'Reviewed' ? 'default' :
-                                                                        submission.status === 'NeedsRevision' ? 'destructive' : 'secondary'
-                                                                    }>
+                                                                        submission.status === 'NeedsRevision' ? 'destructive' :
+                                                                        submission.status === 'Not Submitted' ? 'secondary' : 'outline'
+                                                                    } className="text-xs">
                                                                         {submission.status}
                                                                     </Badge>
                                                                 </TableCell>
-                                                                <TableCell>
-                                                                    <span className="font-medium">{submission.grade}</span>
+                                                                <TableCell className="text-center">
+                                                                    <div className="space-y-1">
+                                                                        <div className="font-semibold text-sm">
+                                                                            {submission.grade === 'Not graded' ? 
+                                                                                <span className="text-muted-foreground">-</span> : 
+                                                                                submission.grade
+                                                                            }
+                                                                        </div>
+                                                                        {submission.grade !== 'Not graded' && (
+                                                                            <div className="text-xs text-muted-foreground">
+                                                                                / {assignment.maxGrade}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 </TableCell>
-                                                                <TableCell>
-                                                                    <div className="text-center">
-                                                                        <div className="font-medium">{submission.attendancePercentage}%</div>
+                                                                <TableCell className="text-center">
+                                                                    <div className="space-y-1">
+                                                                        <div className="font-semibold text-sm">
+                                                                            {submission.attendancePercentage}%
+                                                                        </div>
                                                                         <div className="text-xs text-muted-foreground">
                                                                             {submission.presentSessions}/{submission.totalSessions} sessions
                                                                         </div>
                                                                     </div>
                                                                 </TableCell>
+                                                                <TableCell className="text-center">
+                                                                    <div className="space-y-1">
+                                                                        {submission.hasSubmitted && submission.grade !== 'Not graded' && submission.attendancePercentage > 0 ? (
+                                                                            <>
+                                                                                <div className="font-semibold text-sm">
+                                                                                    {(() => {
+                                                                                        const grade = parseFloat(submission.grade);
+                                                                                        const attendance = submission.attendancePercentage;
+                                                                                        const overall = Math.round((grade / assignment.maxGrade * 0.7 + attendance / 100 * 0.3) * 100);
+                                                                                        return `${overall}%`;
+                                                                                    })()}
+                                                                                </div>
+                                                                                <div className="text-xs text-muted-foreground">
+                                                                                    Combined Score
+                                                                                </div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <span className="text-xs text-muted-foreground">-</span>
+                                                                        )}
+                                                                    </div>
+                                                                </TableCell>
                                                                 <TableCell>
-                                                                    <div className="max-w-xs truncate" title={submission.feedback}>
-                                                                        {submission.feedback || 'No feedback'}
+                                                                    <div className="max-w-xs">
+                                                                        {submission.feedback ? (
+                                                                            <div className="text-sm" title={submission.feedback}>
+                                                                                {submission.feedback.length > 50 ? 
+                                                                                    `${submission.feedback.substring(0, 50)}...` : 
+                                                                                    submission.feedback
+                                                                                }
+                                                                            </div>
+                                                                        ) : (
+                                                                            <span className="text-xs text-muted-foreground">No feedback</span>
+                                                                        )}
                                                                     </div>
                                                                 </TableCell>
                                                             </TableRow>
                                                         ))}
                                                     </TableBody>
                                                 </Table>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                ))
-                            )}
+                                                
+                                                {/* Summary Statistics */}
+                                                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                                                    <h5 className="font-semibold mb-3">Assignment Summary</h5>
+                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                                        <div>
+                                                            <div className="text-muted-foreground">Average Grade</div>
+                                                            <div className="font-semibold">
+                                                                {(() => {
+                                                                    const gradedSubmissions = assignment.submissions.filter(s => s.hasSubmitted && s.grade !== 'Not graded');
+                                                                    if (gradedSubmissions.length === 0) return 'N/A';
+                                                                    const avg = gradedSubmissions.reduce((sum, s) => sum + parseFloat(s.grade), 0) / gradedSubmissions.length;
+                                                                    return `${avg.toFixed(1)}/${assignment.maxGrade}`;
+                                                                })()}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-muted-foreground">Average Attendance</div>
+                                                            <div className="font-semibold">
+                                                                {(() => {
+                                                                    const avg = assignment.submissions.reduce((sum, s) => sum + s.attendancePercentage, 0) / assignment.submissions.length;
+                                                                    return `${avg.toFixed(1)}%`;
+                                                                })()}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-muted-foreground">Submitted</div>
+                                                            <div className="font-semibold">
+                                                                {assignment.submissions.filter(s => s.hasSubmitted).length}/{assignment.submissions.length}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-muted-foreground">Not Submitted</div>
+                                                            <div className="font-semibold">
+                                                                {assignment.submissions.filter(s => !s.hasSubmitted).length}/{assignment.submissions.length}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm mt-4 pt-4 border-t">
+                                                        <div>
+                                                            <div className="text-muted-foreground">Reviewed</div>
+                                                            <div className="font-semibold">
+                                                                {assignment.submissions.filter(s => s.status === 'Reviewed').length}/{assignment.submissions.filter(s => s.hasSubmitted).length || 0}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-muted-foreground">Needs Revision</div>
+                                                            <div className="font-semibold">
+                                                                {assignment.submissions.filter(s => s.status === 'NeedsRevision').length}/{assignment.submissions.filter(s => s.hasSubmitted).length || 0}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-muted-foreground">Pending Review</div>
+                                                            <div className="font-semibold">
+                                                                {assignment.submissions.filter(s => s.hasSubmitted && s.status === 'Submitted').length}/{assignment.submissions.filter(s => s.hasSubmitted).length || 0}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            ))}
                         </div>
                     ) : (
                         <Card className="text-center py-16">

@@ -187,19 +187,29 @@ export const deleteRoadmap = asyncHandler(async (req, res) => {
 export const getRoadmapAssignmentsWithMarks = asyncHandler(async (req, res) => {
     const { roadmapId } = req.params;
     
+    console.log('🔍 getRoadmapAssignmentsWithMarks called with roadmapId:', roadmapId);
+    
     // Find the roadmap and verify it exists
     const roadmap = await Roadmap.findById(roadmapId)
         .populate('program', 'name')
         .populate('facilitator', 'name email');
     
     if (!roadmap) {
+        console.log('❌ Roadmap not found for ID:', roadmapId);
         throw new ApiError(404, "Roadmap not found");
     }
+    
+    console.log('✅ Found roadmap:', roadmap.title, 'Program:', roadmap.program?.name);
 
     // Get all assignments for this roadmap
     const assignments = await Assignment.find({ roadmap: roadmapId })
         .populate('facilitator', 'name email')
         .sort({ dueDate: -1 });
+    
+    console.log('📝 Found assignments:', assignments.length);
+    assignments.forEach(assignment => {
+        console.log(`   - ${assignment.title} (Due: ${assignment.dueDate})`);
+    });
 
     // Get all submissions for assignments in this roadmap
     const assignmentIds = assignments.map(assignment => assignment._id);
@@ -207,8 +217,20 @@ export const getRoadmapAssignmentsWithMarks = asyncHandler(async (req, res) => {
         .populate('trainee', 'name email')
         .populate('assignment', 'title maxGrade')
         .sort({ submittedAt: -1 });
+    
+    console.log('📤 Found submissions:', submissions.length);
+
+    // Get all trainees enrolled in this program
+    const program = await Program.findById(roadmap.program._id).populate('trainees', 'name email');
+    const allTrainees = program.trainees || [];
+    
+    console.log('👥 Found trainees in program:', allTrainees.length);
+    allTrainees.forEach(trainee => {
+        console.log(`   - ${trainee.name} (${trainee.email})`);
+    });
 
     // Get attendance data for trainees in this roadmap's program
+    console.log('📊 Fetching attendance data for program:', roadmap.program._id);
     const attendanceData = await Attendance.aggregate([
         {
             $match: {
@@ -265,6 +287,11 @@ export const getRoadmapAssignmentsWithMarks = asyncHandler(async (req, res) => {
             }
         }
     ]);
+    
+    console.log('📈 Found attendance data for', attendanceData.length, 'trainees');
+    attendanceData.forEach(att => {
+        console.log(`   - ${att.traineeName}: ${att.presentSessions}/${att.totalSessions} sessions (${att.attendancePercentage}%)`);
+    });
 
     // Organize data by assignment
     const assignmentsWithMarks = assignments.map(assignment => {
@@ -272,24 +299,49 @@ export const getRoadmapAssignmentsWithMarks = asyncHandler(async (req, res) => {
             sub.assignment && sub.assignment._id.toString() === assignment._id.toString()
         );
 
-        const submissionsWithAttendance = assignmentSubmissions.map(submission => {
+        // Create a complete list of all trainees with their submission status
+        const allTraineesWithSubmissions = allTrainees.map(trainee => {
+            const submission = assignmentSubmissions.find(sub => 
+                sub.trainee._id.toString() === trainee._id.toString()
+            );
+            
             const traineeAttendance = attendanceData.find(att => 
-                att.traineeId.toString() === submission.trainee._id.toString()
+                att.traineeId.toString() === trainee._id.toString()
             );
 
-            return {
-                submissionId: submission._id,
-                traineeName: submission.trainee.name,
-                traineeEmail: submission.trainee.email,
-                submittedAt: submission.submittedAt,
-                status: submission.status,
-                grade: submission.grade || 'Not graded',
-                feedback: submission.feedback || '',
-                attendancePercentage: traineeAttendance ? 
-                    Math.round(traineeAttendance.attendancePercentage) : 0,
-                totalSessions: traineeAttendance ? traineeAttendance.totalSessions : 0,
-                presentSessions: traineeAttendance ? traineeAttendance.presentSessions : 0
-            };
+            if (submission) {
+                // Student has submitted
+                return {
+                    submissionId: submission._id,
+                    traineeName: submission.trainee.name,
+                    traineeEmail: submission.trainee.email,
+                    submittedAt: submission.submittedAt,
+                    status: submission.status,
+                    grade: submission.grade || 'Not graded',
+                    feedback: submission.feedback || '',
+                    attendancePercentage: traineeAttendance ? 
+                        Math.round(traineeAttendance.attendancePercentage) : 0,
+                    totalSessions: traineeAttendance ? traineeAttendance.totalSessions : 0,
+                    presentSessions: traineeAttendance ? traineeAttendance.presentSessions : 0,
+                    hasSubmitted: true
+                };
+            } else {
+                // Student hasn't submitted
+                return {
+                    submissionId: null,
+                    traineeName: trainee.name,
+                    traineeEmail: trainee.email,
+                    submittedAt: null,
+                    status: 'Not Submitted',
+                    grade: 'Not graded',
+                    feedback: '',
+                    attendancePercentage: traineeAttendance ? 
+                        Math.round(traineeAttendance.attendancePercentage) : 0,
+                    totalSessions: traineeAttendance ? traineeAttendance.totalSessions : 0,
+                    presentSessions: traineeAttendance ? traineeAttendance.presentSessions : 0,
+                    hasSubmitted: false
+                };
+            }
         });
 
         return {
@@ -299,7 +351,7 @@ export const getRoadmapAssignmentsWithMarks = asyncHandler(async (req, res) => {
             dueDate: assignment.dueDate,
             maxGrade: assignment.maxGrade,
             facilitatorName: assignment.facilitator.name,
-            submissions: submissionsWithAttendance
+            submissions: allTraineesWithSubmissions
         };
     });
 

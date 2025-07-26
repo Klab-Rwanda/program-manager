@@ -149,16 +149,17 @@ export interface Course {
 
 // --- NEW TYPES FOR ASSIGNMENT MARKS ---
 export interface AssignmentSubmission {
-  submissionId: string;
+  submissionId: string | null;
   traineeName: string;
   traineeEmail: string;
-  submittedAt: string;
-  status: 'Submitted' | 'Reviewed' | 'NeedsRevision';
+  submittedAt: string | null;
+  status: 'Submitted' | 'Reviewed' | 'NeedsRevision' | 'Not Submitted';
   grade: string;
   feedback: string;
   attendancePercentage: number;
   totalSessions: number;
   presentSessions: number;
+  hasSubmitted: boolean;
 }
 
 export interface AssignmentWithMarks {
