@@ -7,6 +7,7 @@ import { createLog } from '../../services/log.service.js';
 import { Course } from '../models/course.model.js';
 import { Attendance } from '../models/attendance.model.js';
 import { Submission } from '../models/submission.model.js';
+import { createNotification } from '../../services/notification.service.js';
 
 // --- HELPER FUNCTION ---
 const verifyManagerAccess = async (programId, managerId) => {
@@ -70,6 +71,18 @@ const requestApproval = asyncHandler(async (req, res) => {
         details: `PM ${req.user.name} submitted program '${program.name}' for approval.`,
         entity: { id: program._id, model: 'Program' }
     });
+     const superAdmins = await User.find({ role: 'SuperAdmin' });
+    
+    // 2. Create a notification for each SuperAdmin
+    for (const admin of superAdmins) {
+        await createNotification({
+            recipient: admin._id,
+            sender: req.user._id,
+            title: "New Program for Approval",
+            message: `Program Manager ${req.user.name} has submitted the program "${program.name}" for your approval.`,
+            link: `/dashboard/SuperAdmin/program-approval/${program._id}`
+        });
+    }
     return res.status(200).json(new ApiResponse(200, program, "Program submitted for approval."));
 });
 
