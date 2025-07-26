@@ -185,15 +185,15 @@ manageRouter.route('/:id/status').patch(checkRole(['SuperAdmin']), userControlle
 
 /**
  * @openapi
- * /users/manage/{id}/assign-manager:
+ * /users/manage/{id}/facilitator-profile:
  *   patch:
  *     tags: [User Management (Admin)]
- *     summary: Assign a manager to a user
- *     description: (SuperAdmin only) Assigns a specific Program Manager to another user (e.g., a Trainee or Facilitator).
+ *     summary: Update facilitator profile details
+ *     description: (SuperAdmin & Program Manager) Updates facilitator-specific profile information like phone, specialization, experience, rating, etc.
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - { name: id, in: path, required: true, schema: { type: string, description: "ID of the user to be managed" } }
+ *       - { name: id, in: path, required: true, schema: { type: string } }
  *     requestBody:
  *       required: true
  *       content:
@@ -201,25 +201,20 @@ manageRouter.route('/:id/status').patch(checkRole(['SuperAdmin']), userControlle
  *           schema:
  *             type: object
  *             properties:
- *               managerId:
- *                 type: string
- *                 description: "ID of the Program Manager to assign. Send empty string to unassign."
+ *               phone: { type: string, example: '+1234567890' }
+ *               specialization: { type: string, example: 'Web Development' }
+ *               experience: { type: string, example: '5 years' }
+ *               rating: { type: number, minimum: 0, maximum: 5, example: 4.5 }
+ *               github: { type: string, example: 'https://github.com/username' }
+ *               type: { type: string, enum: ['regular', 'promoted'], example: 'regular' }
+ *               previousProgram: { type: string, example: 'Data Science Program' }
+ *               promotionDate: { type: string, format: date, example: '2024-01-15' }
  *     responses:
- *       200: { description: 'Manager assigned successfully.' }
+ *       200: { description: 'Facilitator profile updated successfully.' }
+ *       400: { description: 'Invalid data or user is not a facilitator.' }
+ *       404: { description: 'User not found.' }
  */
-// manageRouter.route('/:id/assign-manager').patch(checkRole(['SuperAdmin']), userController.assignManagerToUser);
-
-
-// Mount all the management routes under the /manage path
-router.use('/manage', manageRouter);
-
-manageRouter.route('/:id')
-    .get(checkRole(['SuperAdmin']), userController.getUserById)
-    .patch(checkRole(['SuperAdmin']), userController.updateUserDetailsByAdmin) // Add this
-    .delete(checkRole(['SuperAdmin']), userController.deleteUserByAdmin);
-
-// User status update by Admin (already existing, verify it uses `updateUserStatus`)
-manageRouter.route('/:id/status').patch(checkRole(['SuperAdmin']), userController.updateUserStatus);
+manageRouter.route('/:id/facilitator-profile').patch(checkRole(['SuperAdmin', 'Program Manager']), userController.updateFacilitatorProfile);
 
 // Mount all the management routes under the /manage path
 router.use('/manage', manageRouter);

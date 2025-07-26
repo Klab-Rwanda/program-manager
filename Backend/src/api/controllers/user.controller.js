@@ -5,6 +5,7 @@ import { Program } from '../models/program.model.js'; // Needed for getOnboarded
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { Attendance } from '../models/attendance.model.js';
 import { Submission } from '../models/submission.model.js';
+import { Course } from '../models/course.model.js';
 /**
  * @desc    Admin gets a list of all active users.
  * @route   GET /api/v1/users/manage
@@ -19,7 +20,95 @@ const getAllUsers = asyncHandler(async (req, res) => {
         query.role = { $regex: roleRegex };
     }
 
-    // Use aggregation to populate enrolled programs for trainees
+    // If fetching facilitators, provide comprehensive data
+    if (role && role.toLowerCase() === 'facilitator') {
+        const facilitators = await User.aggregate([
+            { $match: query },
+            {
+                $lookup: {
+                    from: "programs",
+                    localField: "_id",
+                    foreignField: "facilitators",
+                    as: "assignedPrograms"
+                }
+            },
+            {
+                $lookup: {
+                    from: "courses",
+                    localField: "_id",
+                    foreignField: "facilitator",
+                    as: "courses"
+                }
+            },
+            {
+                $addFields: {
+                    // Calculate students count from assigned programs
+                    studentsCount: {
+                        $reduce: {
+                            input: "$assignedPrograms",
+                            initialValue: 0,
+                            in: { $add: ["$$value", { $size: { $ifNull: ["$$this.trainees", []] } }] }
+                        }
+                    },
+                    // Count content submissions (courses)
+                    contentSubmissions: { $size: "$courses" },
+                    // Count approved content
+                    approvedContent: {
+                        $size: {
+                            $filter: {
+                                input: "$courses",
+                                cond: { $eq: ["$$this.status", "Approved"] }
+                            }
+                        }
+                    },
+                    // Get program names
+                    programs: {
+                        $map: {
+                            input: "$assignedPrograms",
+                            as: "program",
+                            in: "$$program.name"
+                        }
+                    },
+                    // Format join date
+                    joinDate: {
+                        $dateToString: {
+                            format: "%Y-%m-%d",
+                            date: { $ifNull: ["$joinDate", "$createdAt"] }
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    name: 1,
+                    email: 1,
+                    role: 1,
+                    status: 1,
+                    isActive: 1,
+                    phone: 1,
+                    specialization: 1,
+                    experience: 1,
+                    rating: 1,
+                    github: 1,
+                    joinDate: 1,
+                    studentsCount: 1,
+                    contentSubmissions: 1,
+                    approvedContent: 1,
+                    type: 1,
+                    previousProgram: 1,
+                    promotionDate: 1,
+                    programs: 1,
+                    createdAt: 1,
+                    updatedAt: 1
+                }
+            }
+        ]);
+        
+        return res.status(200).json(new ApiResponse(200, facilitators, "Facilitators fetched successfully."));
+    }
+
+    // For other roles, use the existing logic
     const users = await User.aggregate([
         { $match: query },
         {
@@ -352,7 +441,59 @@ export const getArchivedUsers = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, {}, "User has been deleted."));
 });
 
+/**
+ * @desc    Update facilitator profile details.
+ * @route   PATCH /api/v1/users/manage/:id/facilitator-profile
+ * @access  Private (SuperAdmin, Program Manager)
+ */
+const updateFacilitatorProfile = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { 
+        phone, 
+        specialization, 
+        experience, 
+        rating, 
+        github,
+        type,
+        previousProgram,
+        promotionDate 
+    } = req.body;
 
+    // Verify the user is a facilitator
+    const user = await User.findById(id);
+    if (!user) {
+        throw new ApiError(404, "User not found.");
+    }
+
+    if (user.role !== 'Facilitator') {
+        throw new ApiError(400, "This endpoint is only for facilitators.");
+    }
+
+    // Build update object with only provided fields
+    const updateData = {};
+    if (phone !== undefined) updateData.phone = phone;
+    if (specialization !== undefined) updateData.specialization = specialization;
+    if (experience !== undefined) updateData.experience = experience;
+    if (rating !== undefined) {
+        if (rating < 0 || rating > 5) {
+            throw new ApiError(400, "Rating must be between 0 and 5.");
+        }
+        updateData.rating = rating;
+    }
+    if (github !== undefined) updateData.github = github;
+    if (type !== undefined) updateData.type = type;
+    if (previousProgram !== undefined) updateData.previousProgram = previousProgram;
+    if (promotionDate !== undefined) updateData.promotionDate = promotionDate;
+
+    // Update the user
+    const updatedUser = await User.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true }
+    ).select('-password');
+
+    return res.status(200).json(new ApiResponse(200, updatedUser, "Facilitator profile updated successfully."));
+});
 
 export {
     getAllUsers, 
@@ -365,4 +506,5 @@ export {
     getUserListByRole,
     updateUserDetailsByAdmin,
     deleteUserByAdmin,
+    updateFacilitatorProfile,
 };

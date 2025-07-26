@@ -9,20 +9,33 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true },
     role: {
         type: String,
-
         enum: ['Trainee', 'Facilitator', 'Program Manager', 'SuperAdmin','IT-Support'],
-
         required: true,
     },
-     status: {
+    status: {
         type: String,
         enum: ['Pending', 'Active'],
         default: 'Pending' 
     },
     isActive: { type: Boolean, default: true },
-     isDeleted: { type: Boolean, default: false },
+    isDeleted: { type: Boolean, default: false },
     firstLogin: { type: Date }, // Will be set once on the very first login
     lastLogin: { type: Date },
+    
+    // Facilitator-specific fields
+    phone: { type: String, trim: true },
+    specialization: { type: String, trim: true },
+    experience: { type: String, trim: true },
+    rating: { type: Number, min: 0, max: 5, default: 0 },
+    github: { type: String, trim: true },
+    joinDate: { type: Date, default: Date.now },
+    studentsCount: { type: Number, default: 0 },
+    contentSubmissions: { type: Number, default: 0 },
+    approvedContent: { type: Number, default: 0 },
+    type: { type: String, enum: ['regular', 'promoted'], default: 'regular' },
+    previousProgram: { type: String, trim: true },
+    promotionDate: { type: Date },
+    
     // Fields for password reset
     forgotPasswordToken: String,
     forgotPasswordExpiry: Date,
@@ -33,6 +46,7 @@ userSchema.pre('save', async function (next) {
     this.password = await bcrypt.hash(this.password, 10);
     next();
 });
+
 userSchema.pre(/^find/, function (next) {
   if (this.op === 'findOne' || this.op === 'find') {
     const query = this.getQuery();
