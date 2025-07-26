@@ -13,6 +13,8 @@ import reportRouter from './report.route.js';
 import exportRouter from './export.route.js';
 import assignmentRouter from './assignment.route.js';
 import roadmapRouter from './roadmap.route.js';
+import settingsRouter from './settings.route.js';
+import notificationRouter from './notification.route.js'
 
 const router = Router();
 
@@ -31,6 +33,8 @@ const defaultRoutes = [
     { path: '/export', route: exportRouter },
     { path: '/assignments', route: assignmentRouter },
     { path: '/roadmaps', route: roadmapRouter },
+    { path: '/settings', route: settingsRouter },
+    { path: '/notifications', route: notificationRouter },
     
 ];
 

@@ -6,11 +6,7 @@ import { ApiResponse } from '../../utils/ApiResponse.js';
 import { Attendance } from '../models/attendance.model.js';
 import { Submission } from '../models/submission.model.js';
 import { Course } from '../models/course.model.js';
-/**
- * @desc    Admin gets a list of all active users.
- * @route   GET /api/v1/users/manage
- * @access  Private (SuperAdmin)
- */
+
 const getAllUsers = asyncHandler(async (req, res) => {
     const { role } = req.query; 
 
@@ -141,12 +137,13 @@ const getAllUsers = asyncHandler(async (req, res) => {
 });
 
 
+export const getAllManagers = asyncHandler(async (req, res) => {
+    const managers = await User.find({ role: 'Program Manager', isActive: true }).select('name email');
+    return res.status(200).json(new ApiResponse(200, managers, "Program Managers fetched successfully."));
+});
 
-/**
- * @desc    Admin gets a single user by their ID.
- * @route   GET /api/v1/users/manage/:id
- * @access  Private (SuperAdmin)
- */
+
+
 const getUserById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 

@@ -8,6 +8,8 @@ import fs from 'fs';
 import { Assignment } from '../models/assignment.model.js';
 import { Submission } from '../models/submission.model.js';
 import { Attendance } from '../models/attendance.model.js';
+import { createNotification } from '../../services/notification.service.js';
+
 
 export const createCourse = asyncHandler(async (req, res) => {
     const { title, description, programId } = req.body;
@@ -44,6 +46,15 @@ export const approveCourse = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Course not found");
     }
 
+     await createNotification({
+        recipient: course.facilitator, // The facilitator who created the course
+        sender: req.user._id, // The manager who approved it
+        title: "Your Course has been Approved!",
+        message: `Your course "${course.title}" is now active and visible to trainees.`,
+        link: `/facilitator/curriculum`, // Link for the facilitator
+        type: 'success',
+    });
+
     return res.status(200).json(new ApiResponse(200, course, "Course has been approved."));
 });
 
@@ -63,11 +74,7 @@ export const verifyFacilitatorAccess = async (courseId, facilitatorId) => {
 };
 
 
-/**
- * @desc    A Facilitator requests approval for a course they created.
- * @route   PATCH /api/v1/courses/{courseId}/request-approval
- * @access  Private (Facilitator)
- */
+
 export const requestCourseApproval = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     const facilitatorId = req.user._id;
@@ -86,11 +93,7 @@ export const requestCourseApproval = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, course, 'Course submitted for approval.'));
 });
 
-/**
- * @desc    Get all courses (for curriculum management)
- * @route   GET /api/v1/courses
- * @access  Private (Facilitator, Program Manager)
- */
+
 export const getAllCourses = asyncHandler(async (req, res) => {
     // Only Facilitator or Program Manager can access
     if (!['Facilitator', 'Program Manager'].includes(req.user.role)) {
@@ -101,11 +104,7 @@ export const getAllCourses = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, courses, 'All courses fetched successfully.'));
 });
 
-/**
- * @desc    Download a course file
- * @route   GET /api/v1/courses/:courseId/download
- * @access  Private (Facilitator, Program Manager)
- */
+
 export const downloadCourseFile = asyncHandler(async (req, res) => {
     if (!['Facilitator', 'Program Manager'].includes(req.user.role)) {
         throw new ApiError(403, 'Forbidden: Only facilitators and program managers can access this resource.');
@@ -269,11 +268,7 @@ export const getMyCourses = asyncHandler(async (req, res) => {
 
 
 
-/**
- * @desc    Update a course.
- * @route   PATCH /api/v1/courses/:id
- * @access  Private (Facilitator)
- */
+
 export const updateCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     const { title, description } = req.body;
@@ -296,12 +291,7 @@ export const updateCourse = asyncHandler(async (req, res) => {
 });
 
 
-// --- NEW FUNCTION ---
-/**
- * @desc    Facilitator deletes a course they own.
- * @route   DELETE /api/v1/courses/:courseId
- * @access  Private (Facilitator)
- */
+
 export const deleteCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     
@@ -341,8 +331,17 @@ export const rejectCourse = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Course not found");
     }
 
+    await createNotification({
+        recipient: course.facilitator,
+        sender: req.user._id,
+        title: "Action Required: Course Rejected",
+        message: `Your course "${course.title}" was rejected. Please review the feedback and resubmit.`,
+        link: `/dashboard/Facilitator/fac-curriculum`,
+        type: 'warning',
+    });
     return res.status(200).json(new ApiResponse(200, course, "Course has been rejected."));
 });
+
 
 // --- NEW FUNCTION ---
 /**
@@ -375,6 +374,9 @@ export const activateCourse = asyncHandler(async (req, res) => {
  * @route   GET /api/v1/courses/pending
  * @access  Private (ProgramManager)
  */
+
+
+
 export const getPendingCourses = asyncHandler(async (req, res) => {
     // In a more complex app, you'd filter by programs the manager owns.
     // For now, any manager can see all pending courses.
@@ -384,6 +386,7 @@ export const getPendingCourses = asyncHandler(async (req, res) => {
         
     return res.status(200).json(new ApiResponse(200, courses, "Pending courses fetched successfully."));
 });
+
 
 // --- NEW FUNCTION ---
 /**
@@ -541,5 +544,15 @@ export const getCourseAssignmentsWithMarks = asyncHandler(async (req, res) => {
         },
         assignments: assignmentsWithMarks
     }, "Course assignments with marks and attendance fetched successfully."));
+});
+
+
+export const getAllCoursesAdmin = asyncHandler(async (req, res) => {
+    const courses = await Course.find({}) // Find all courses, no filter
+        .populate('program', 'name')
+        .populate('facilitator', 'name')
+        .sort({ createdAt: -1 });
+        
+    return res.status(200).json(new ApiResponse(200, courses, "All courses fetched successfully."));
 });
 

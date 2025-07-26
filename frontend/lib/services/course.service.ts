@@ -78,9 +78,14 @@ export const deleteCourse = async (courseId: string): Promise<void> => {
     await api.delete(`/courses/${courseId}`);
 };
 
+
 // --- NEW FUNCTION ---
 // Program Manager: Get assignments with student marks and attendance for a course
 export const getCourseAssignmentsWithMarks = async (courseId: string): Promise<any> => {
     const response = await api.get(`/courses/${courseId}/assignments-with-marks`);
+
+export const getAllCoursesForAdmin = async (): Promise<Course[]> => {
+    const response = await api.get('/courses/all');
+
     return response.data.data;
 };

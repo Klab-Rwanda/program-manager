@@ -5,6 +5,7 @@ import { Program } from '../models/program.model.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { ClassSession } from '../models/classSession.model.js';
 import { Course } from '../models/course.model.js';
+import { Log } from '../models/log.model.js';
 
 /**
  * @desc    Get dashboard summary statistics.
@@ -64,4 +65,47 @@ export const getFacilitatorDashboardStats = asyncHandler(async (req, res) => {
         attendanceRate
     };
     return res.status(200).json(new ApiResponse(200, stats, "Facilitator dashboard stats fetched successfully."));
+});
+
+export const getAdminOverview = asyncHandler(async (req, res) => {
+    // Determine if the user is a manager to filter some stats
+    const isManager = req.user.role === 'Program Manager' ;
+    const managerQuery = isManager ? { programManager: req.user._id } : {};
+
+    const [
+        totalPrograms,
+        activePrograms,
+        pendingPrograms,
+        totalTrainees,
+        totalFacilitators,
+        pendingCourses,
+        recentLogs,
+        programsEndingSoon,
+    ] = await Promise.all([
+        Program.countDocuments(managerQuery),
+        Program.countDocuments({ ...managerQuery, status: 'Active' }),
+        Program.countDocuments({ ...managerQuery, status: 'PendingApproval' }),
+        User.countDocuments({ role: 'Trainee', isActive: true }), // System-wide for now
+        User.countDocuments({ role: 'Facilitator', isActive: true }), // System-wide for now
+        Course.countDocuments({ status: 'PendingApproval' }), // System-wide for now
+        Log.find({}).sort({ createdAt: -1 }).limit(5).populate('user', 'name role'),
+        Program.find({
+            ...managerQuery,
+            status: 'Active',
+            endDate: { $gte: new Date(), $lte: new Date(new Date().setDate(new Date().getDate() + 30)) }
+        }).sort('endDate').limit(3).select('name endDate')
+    ]);
+
+    const stats = {
+        totalPrograms,
+        activePrograms,
+        pendingPrograms,
+        totalTrainees,
+        totalFacilitators,
+        pendingCourses,
+        recentLogs,
+        programsEndingSoon,
+    };
+    
+    return res.status(200).json(new ApiResponse(200, stats, "Admin overview fetched successfully."));
 });

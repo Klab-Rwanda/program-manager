@@ -6,6 +6,7 @@ import { generateSessionQRCode } from '../services/qr.service.js';
 const sessionParticipants = new Map();
 
 const initializeSocket = (io) => {
+  
   io.on('connection', (socket) => {
     console.log(`A user connected via WebSocket: ${socket.id}`);
 

@@ -6,14 +6,17 @@ import {
     generateProgramReportPDF, 
     generateArchiveReportPDF, 
     generateBulkProgramsPDF,
-    generateCustomReportPDF 
+    generateCustomReportPDF, 
+    generateLogReportPDF
 } from '../../services/pdf.service.js';
 import { 
     generateProgramsExcel, 
     generateArchiveExcel, 
     generateCustomExcel,
-    generateBulkExportExcel 
+    generateBulkExportExcel, 
+    generateLogReportExcel
 } from '../../services/excel.service.js';
+import { Log } from '../models/log.model.js';
 
 // Export all programs as PDF
 const exportProgramsPDF = asyncHandler(async (req, res) => {
@@ -227,6 +230,37 @@ const customExport = asyncHandler(async (req, res) => {
         res.end();
     }
 });
+
+export const exportLogs = asyncHandler(async (req, res) => {
+    const { format = 'pdf', filters = {} } = req.body;
+    
+    // Build query from filters passed by the frontend
+    let query = {};
+    if (filters.action) query.action = filters.action;
+    if (filters.userId) query.user = filters.userId;
+    if (filters.startDate && filters.endDate) {
+        query.createdAt = { $gte: new Date(filters.startDate), $lte: new Date(filters.endDate) };
+    }
+
+    const logs = await Log.find(query)
+        .sort({ createdAt: -1 })
+        .populate('user', 'name role');
+        
+    const dateStr = new Date().toISOString().split('T')[0];
+
+    if (format === 'pdf') {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=master-log-${dateStr}.pdf`);
+        generateLogReportPDF(logs, filters, res);
+    } else { // excel
+        const workbook = await generateLogReportExcel(logs);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=master-log-${dateStr}.xlsx`);
+        await workbook.xlsx.write(res);
+        res.end();
+    }
+});
+
 
 export {
     exportProgramsPDF,

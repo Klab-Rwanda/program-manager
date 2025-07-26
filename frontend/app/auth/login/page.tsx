@@ -1,57 +1,68 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Mail, Lock, BookOpen } from "lucide-react"
-import { useAuth } from "@/lib/contexts/RoleContext"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Mail, Lock, BookOpen, Loader2 } from "lucide-react";
+import { useAuth } from "@/lib/contexts/RoleContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const { login } = useAuth()
-  const router = useRouter()
+  const { login } = useAuth();
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setIsLoading(true)
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
 
     try {
-      await login(email, password)
-      router.push("/dashboard")
-    } catch (err) {
-      setError("Invalid email or password. Please try again.")
-    } finally {
-      setIsLoading(false)
+      await login(email, password);
+      
+      // Show a success toast to the user
+      toast.success("Login Successful!", {
+        description: "Redirecting you to the dashboard...",
+        duration: 2000,
+      });
+      
+      // Use window.location.href to force a full page reload.
+      // This ensures all contexts and states are re-initialized correctly.
+      // A short timeout allows the user to see the success toast.
+      setTimeout(() => {
+        window.location.href = "/dashboard";
+      }, 1000);
+
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || "Invalid email or password. Please try again.";
+      setError(errorMessage);
+      setIsLoading(false); // Only set loading to false on error
     }
-  }
+  };
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row font-['Inter'] bg-gray-50">
-      {/* Left Panel */}
+      {/* Left Branding Panel */}
       <div className="w-full md:w-1/2 bg-white flex flex-col justify-center items-start p-8 md:p-20 z-10">
         <div className="animate-fadeIn">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-4 md:mb-6">
             Unlock Your Potential.
           </h1>
           <p className="text-base md:text-lg text-gray-600 leading-relaxed max-w-xl mb-2">
-            Welcome to the Klab ecosystem. Your central hub for learning, managing, and creating the future of tech in Rwanda.
-          </p>
-          <p className="text-base md:text-lg text-gray-600 leading-relaxed">
-            Let's build something amazing together.
+            Welcome to the kLab ecosystem. Your central hub for learning, managing, and creating the future of tech in Rwanda.
           </p>
         </div>
       </div>
 
-      {/* Right Panel */}
+      {/* Right Form Panel */}
       <div className="w-full md:w-[55%] flex items-center justify-center p-6 sm:p-10 md:pl-[15%] relative bg-[#1f497d] text-white animate-gradientAnimation clip-path-polygon md:clip-path-polygon">
-        <form
-          onSubmit={handleSubmit}
-          className="w-full max-w-md flex flex-col gap-6 animate-fadeInDelayed"
-        >
+        <form onSubmit={handleSubmit} className="w-full max-w-md flex flex-col gap-6 animate-fadeInDelayed">
           <div className="text-center mb-4">
             <div className="flex justify-center mb-4">
               <div className="h-16 w-16 flex items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm shadow-lg">
@@ -65,18 +76,16 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="bg-red-600 border border-red-400 text-white px-3 py-3 rounded-md text-center">
+            <div className="bg-red-600/90 border border-red-400 text-white px-4 py-3 rounded-md text-center text-sm">
               {error}
             </div>
           )}
 
-          <div>
-            <label htmlFor="email" className="text-sm font-medium mb-2 block text-gray-200">
-              Email
-            </label>
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-gray-200">Email</Label>
             <div className="relative">
-              <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
-              <input
+              <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Input
                 id="email"
                 type="email"
                 placeholder="you@example.com"
@@ -84,18 +93,16 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
-                className="w-full px-4 py-4 pl-12 rounded-lg border border-transparent bg-white/10 backdrop-blur-sm text-white placeholder-gray-400 text-base transition-all duration-200 focus:outline-none focus:border-blue-400 focus:bg-white/20 focus:shadow-[0_0_0_3px_rgba(96,165,250,0.4)]"
+                className="w-full h-12 px-4 pl-12 rounded-lg border-transparent bg-white/10 backdrop-blur-sm text-white placeholder-gray-400 focus:border-blue-400 focus:bg-white/20"
               />
             </div>
           </div>
 
-          <div>
-            <label htmlFor="password" className="text-sm font-medium mb-2 block text-gray-200">
-              Password
-            </label>
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-gray-200">Password</Label>
             <div className="relative">
-              <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
-              <input
+              <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Input
                 id="password"
                 type="password"
                 placeholder="••••••••"
@@ -103,66 +110,29 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading}
-                className="w-full px-4 py-4 pl-12 rounded-lg border border-transparent bg-white/10 backdrop-blur-sm text-white placeholder-gray-400 text-base transition-all duration-200 focus:outline-none focus:border-blue-400 focus:bg-white/20 focus:shadow-[0_0_0_3px_rgba(96,165,250,0.4)]"
+                className="w-full h-12 px-4 pl-12 rounded-lg border-transparent bg-white/10 backdrop-blur-sm text-white placeholder-gray-400 focus:border-blue-400 focus:bg-white/20"
               />
-            </div>
-            <div className="text-right mt-2">
-              <a href="/auth/forgot-password"
-                className="text-sm text-blue-300 hover:underline hover:text-white transition duration-200">
-              Forgot Password?
-              </a>
             </div>
           </div>
 
-          <button
+          <Button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-white text-gray-600 py-4 font-semibold text-base border-none rounded-lg cursor-pointer transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 hover:bg-gray-300 hover:text-white hover:font-bold disabled:text-gray-400 disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none"
+            size="lg"
+            className="w-full bg-white text-[#1f497d] font-semibold hover:bg-gray-200 disabled:opacity-70"
           >
-            {isLoading ? "ACCESSING..." : "ACCESS DASHBOARD"}
-          </button>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading ? "Signing In..." : "ACCESS DASHBOARD"}
+          </Button>
         </form>
       </div>
 
       <style jsx>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes fadeInDelayed {
-          0% { opacity: 0; transform: translateY(20px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-
-        @keyframes gradientAnimation {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-
-        .animate-fadeIn {
-          animation: fadeIn 0.8s ease-out forwards;
-        }
-
-        .animate-fadeInDelayed {
-          animation: fadeInDelayed 1.2s ease-out 0.4s forwards;
-        }
-
-        .animate-gradientAnimation {
-          animation: gradientAnimation 15s ease infinite;
-        }
-
-        .clip-path-polygon {
-          clip-path: polygon(20% 0, 100% 0, 100% 100%, 0% 100%);
-        }
-
-        @media (max-width: 768px) {
-          .clip-path-polygon {
-            clip-path: none;
-          }
-        }
+        .animate-gradientAnimation { background-size: 400% 400%; animation: gradientAnimation 15s ease infinite; }
+        @keyframes gradientAnimation { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        .clip-path-polygon { clip-path: polygon(20% 0, 100% 0, 100% 100%, 0% 100%); }
+        @media (max-width: 768px) { .clip-path-polygon { clip-path: none; } }
       `}</style>
     </div>
-  )
+  );
 }

@@ -1,11 +1,26 @@
-// ----------------------------
-// User
-// ----------------------------
+// ===================================================================
+//
+//                      MASTER TYPES DEFINITION FILE
+//
+// This file is the single source of truth for the data shapes
+// used throughout the frontend application.
+//
+// ===================================================================
+
+
+// -------------------------------------------------------------------
+// CORE USER & ROLE TYPES
+// -------------------------------------------------------------------
+
+/**
+ * Base user object returned from the backend.
+ * All other user roles (Trainee, Facilitator) extend this.
+ */
 export interface User {
   _id: string;
   name: string;
   email: string;
-  role: 'SuperAdmin' | 'Program Manager' | 'Facilitator' | 'Trainee' | 'it_support';
+  role: 'SuperAdmin' | 'Program Manager' | 'Facilitator' | 'Trainee' | 'IT-Support';
   status: 'Pending' | 'Active';
   isActive: boolean;
   firstLogin?: string;
@@ -13,6 +28,7 @@ export interface User {
   createdAt: string;
   updatedAt: string;
 }
+
 
 // ----------------------------
 // Facilitator
@@ -65,23 +81,51 @@ export interface Roadmap {
 }
 
 
+=======
+/**
+ * Represents a Facilitator, extending the base User.
+ * Includes additional fields specific to facilitators.
+ */
+export interface Facilitator extends User {
+  phone?: string;
+  specialization?: string;
+  experience?: string;
+  programs?: string[];
+  rating?: number;
+  github?: string;
+  joinDate?: string;
+  studentsCount?: number;
+  contentSubmissions?: number;
+  approvedContent?: number;
+  type?: string;
+}
+
+/**
+ * Represents a Trainee, extending the base User.
+ * Includes additional fields specific to trainees.
+ */
+
 export interface Trainee extends User {
-  program: string;
-  completionDate: string | number | Date;
-  attendanceRate: number;
-  finalScore: number;
-  phone: string;
-  location: string;
-  enrolledPrograms: string[]; // Array of program IDs
-  progress: number;
-  attendance: number;
-  completedProjects: number;
-  totalProjects: number;
-  joinDate: string;
-  lastActive: string;
+  phone?: string;
+  location?: string;
+  enrolledPrograms?: string[];
+  progress?: number;
+  attendance?: number;
+  completedProjects?: number;
+  totalProjects?: number;
+  joinDate?: string;
+  lastActive?: string;
 }
 
 
+// -------------------------------------------------------------------
+// PROGRAM & COURSE TYPES
+// -------------------------------------------------------------------
+
+/**
+ * Represents a single educational Program.
+ * Contains populated fields for related users and courses.
+ */
 export interface Program {
   _id: string;
   name: string;
@@ -95,48 +139,23 @@ export interface Program {
     name: string;
     email: string;
   };
-  facilitators?: Array<{
-    _id: string;
-    name: string;
-    email: string;
-  }>;
-  trainees?: Array<{
-    _id: string;
-    name: string;
-    email: string;
-  }>;
-  departments?: Array<{
-    _id: string;
-    name: string;
-  }>;
+  facilitators?: Facilitator[];
+  trainees?: Trainee[];
+  courses?: Course[]; // A program can have an array of courses
   isActive: boolean;
   isDeleted: boolean;
   isArchived: boolean;
-  category?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-
-export interface ContentSubmission {
-  _id: string;
-  facilitatorName: string;
-  program: string;
-  title: string;
-  description: string;
-  submissionDate?: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
-  type: string;
-  duration: string;
-  content?: string;
-  fileUrl?: string;
-}
-
+/**
+ * Represents a single Course within a Program.
+ */
 export interface Course {
   _id: string;
   title: string;
   description: string;
-  // The backend populates these, so they should be objects, not just strings
   program: {
     _id: string;
     name: string;
@@ -146,16 +165,12 @@ export interface Course {
     name: string;
   };
   status: 'Draft' | 'PendingApproval' | 'Approved' | 'Rejected';
-  
-  // --- ADD THIS REQUIRED PROPERTY ---
   contentUrl: string; 
-
-  // --- ADD THIS OPTIONAL PROPERTY ---
   rejectionReason?: string;
-  
   createdAt: string;
   updatedAt: string;
 }
+
 
 // --- NEW TYPES FOR ASSIGNMENT MARKS ---
 export interface AssignmentSubmission {
@@ -191,6 +206,34 @@ export interface CourseAssignmentsData {
   assignments: AssignmentWithMarks[];
 }
 
+
+/**
+ * Represents a project submission from a trainee.
+ */
+export interface Submission {
+    _id: string;
+    // Add other submission properties as needed from your backend model
+}
+
+
+// -------------------------------------------------------------------
+// STATISTICS & DATA TRANSFER OBJECT (DTO) TYPES
+// -------------------------------------------------------------------
+
+/**
+ * Shape of the statistics object for a single program.
+ * Matches the backend endpoint GET /programs/:id/stats
+ */
+export interface ProgramStats {
+    enrolledTrainees: number;
+    attendanceRate: number;
+    completionRate: number;
+}
+
+/**
+ * Data shape for creating a new program.
+ */
+
 export interface CreateProgramData {
   name: string;
   description: string;
@@ -198,6 +241,9 @@ export interface CreateProgramData {
   endDate: string;
 }
 
+/**
+ * Data shape for updating an existing program.
+ */
 export interface UpdateProgramData {
   name?: string;
   description?: string;
@@ -205,90 +251,26 @@ export interface UpdateProgramData {
   endDate?: string;
 }
 
-
+/**
+ * Shape of the statistics object for the Certificate page.
+ */
 export interface Certificate {
-  id: number
-  traineeName: string
-  traineeEmail: string
-  program: string
-  completionDate: string
-  issueDate: string | null
-  certificateId: string
-  status: string
-  grade: string
-  finalScore: number
-  attendanceRate: number
-  templateId: number
-}
-
-export interface Template {
-  id: number
-  name: string
-  description: string
-  isDefault: boolean
-  style: string
-  colorScheme: string
-}
-
-export interface Student extends Trainee {
-  id: number
-  name: string
-  email: string
-  program: string
-  finalScore: number
-  attendanceRate: number
-  completionDate: string
-  isEligible: boolean
-}
-
-// types/ticket.ts
-
-export interface Comment {
-  _id: string;
-  author: string;
-  message: string;
-  timestamp: string;
-}
-
-export interface Ticket {
-  _id: string;
-  title: string;
-  description: string;
-  category: string;
-  priority: string;
+  id: string;
+  traineeName: string;
+  traineeEmail: string;
+  program: string;
+  completionDate: string;
+  issueDate: string | null;
+  certificateId: string;
   status: string;
-  assignedTo?: string;
-  createdBy?: string;
-  createdAt: string;
-  updatedAt: string;
-  dueDate?: string;
-  resolution?: string;
-  comments: Comment[];
+  grade: string;
 }
 
-
-export interface AttendanceRecord {
-    _id: string;
-    userId: {
-        _id: string;
-        name: string;
-        email: string;
-        role?: string; // Optional for when it's populated
-    };
-    programId?: { // Make programId an object since it will be populated
-        _id: string;
-        name: string;
-    };
-    sessionId?: string; // Optional
-    date: string;
-    checkIn?: string;
-    checkOut?: string;
-    method: 'geolocation' | 'qr_code' | 'manual' | 'facial_recognition';
-    status: 'Present' | 'Absent' | 'Excused' | 'Late';
-}
-
-export interface Program {
-  _id: string;
+/**
+* Shape of the template object for the Certificate page.
+*/
+export interface Template {
+  id: number;
   name: string;
   description: string;
   startDate: string;
@@ -377,4 +359,9 @@ export interface RoadmapAssignmentsData {
         objectives: string[];
     };
     assignments: AssignmentWithMarks[];
+
+  isDefault: boolean;
+  style: string;
+  colorScheme: string;
+
 }
