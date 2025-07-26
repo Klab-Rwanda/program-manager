@@ -158,7 +158,8 @@ manageRouter.route('/').get(checkRole(['SuperAdmin', 'Program Manager']), userCo
  *       200: { description: 'User details fetched successfully.' }
  *       404: { description: 'User not found.' }
  */
-manageRouter.route('/:id').get(checkRole(['SuperAdmin']), userController.getUserById);
+manageRouter.route('/:id').get(checkRole(['SuperAdmin']), userController.getUserById)
+     .delete(checkRole(['SuperAdmin']), userController.deleteUserByAdmin);
 
 /**
  * @openapi
@@ -183,37 +184,6 @@ manageRouter.route('/:id').get(checkRole(['SuperAdmin']), userController.getUser
  */
 manageRouter.route('/:id/status').patch(checkRole(['SuperAdmin']), userController.updateUserStatus);
 
-/**
- * @openapi
- * /users/manage/{id}/facilitator-profile:
- *   patch:
- *     tags: [User Management (Admin)]
- *     summary: Update facilitator profile details
- *     description: (SuperAdmin & Program Manager) Updates facilitator-specific profile information like phone, specialization, experience, rating, etc.
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - { name: id, in: path, required: true, schema: { type: string } }
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               phone: { type: string, example: '+1234567890' }
- *               specialization: { type: string, example: 'Web Development' }
- *               experience: { type: string, example: '5 years' }
- *               rating: { type: number, minimum: 0, maximum: 5, example: 4.5 }
- *               github: { type: string, example: 'https://github.com/username' }
- *               type: { type: string, enum: ['regular', 'promoted'], example: 'regular' }
- *               previousProgram: { type: string, example: 'Data Science Program' }
- *               promotionDate: { type: string, format: date, example: '2024-01-15' }
- *     responses:
- *       200: { description: 'Facilitator profile updated successfully.' }
- *       400: { description: 'Invalid data or user is not a facilitator.' }
- *       404: { description: 'User not found.' }
- */
 manageRouter.route('/:id/facilitator-profile').patch(checkRole(['SuperAdmin', 'Program Manager']), userController.updateFacilitatorProfile);
 
 // Mount all the management routes under the /manage path
