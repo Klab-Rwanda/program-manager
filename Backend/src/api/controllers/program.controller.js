@@ -4,6 +4,9 @@ import { Program } from '../models/program.model.js';
 import { User } from '../models/user.model.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { createLog } from '../../services/log.service.js';
+import { Course } from '../models/course.model.js';
+import { Attendance } from '../models/attendance.model.js';
+import { Submission } from '../models/submission.model.js';
 
 // --- HELPER FUNCTION ---
 const verifyManagerAccess = async (programId, managerId) => {
@@ -129,15 +132,30 @@ const getAllPrograms = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, programs, "Programs fetched successfully."));
 });
 
-const getProgramById = asyncHandler(async (req, res) => {
+ const getProgramById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const program = await Program.findById(id).populate([
-        { path: 'programManager', select: 'name email' },
-        { path: 'facilitators', select: 'name email' },
-        { path: 'trainees', select: 'name email' }
+
+    // Use Promise.all to fetch the program and its associated courses simultaneously
+    const [program, courses] = await Promise.all([
+        Program.findById(id).populate([
+            { path: 'programManager', select: 'name email' },
+            { path: 'facilitators', select: 'name email role status isActive' },
+            { path: 'trainees', select: 'name email role status isActive' }
+        ]).lean(), // .lean() makes the query faster as it returns a plain JS object
+        Course.find({ program: id }).populate('facilitator', 'name').lean()
     ]);
-    if (!program) throw new ApiError(404, "Program not found");
-    return res.status(200).json(new ApiResponse(200, program, "Program details fetched successfully."));
+
+    if (!program) {
+        throw new ApiError(404, "Program not found");
+    }
+
+    // Combine the results
+    const programDetails = {
+        ...program,
+        courses: courses // Attach the courses to the program object
+    };
+
+    return res.status(200).json(new ApiResponse(200, programDetails, "Program details fetched successfully."));
 });
 
 const updateProgram = asyncHandler(async (req, res) => {
@@ -357,52 +375,38 @@ function getWeekdayCount(startDate, endDate) {
 }
 
 
-/**
- * @desc    Get detailed statistics for a single program, including attendance percentage.
- * @route   GET /api/v1/programs/{id}/stats
- * @access  Private (SuperAdmin, ProgramManager)
- */
+
 export const getProgramStats = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    const program = await Program.findById(id);
+    const program = await Program.findById(id).select('trainees startDate endDate');
     if (!program) throw new ApiError(404, "Program not found.");
+    
+    const traineeIds = program.trainees;
 
-    // --- ATTENDANCE CALCULATION ---
-    const attendanceRecords = await Attendance.find({ program: id });
+    // This is a simplified calculation. A real system might be more complex.
+    const [
+        totalPresent,
+        totalPossibleAttendanceDays, // Placeholder
+        completedSubmissions,
+        totalSubmissions, // Placeholder
+    ] = await Promise.all([
+        Attendance.countDocuments({ programId: id, status: 'Present' }),
+        Attendance.countDocuments({ programId: id }),
+        Submission.countDocuments({ program: id, status: 'Reviewed' }),
+        Submission.countDocuments({ program: id }),
+    ]);
 
-    const presentCount = attendanceRecords.filter(a => a.status === 'Present').length;
-    const excusedCount = attendanceRecords.filter(a => a.status === 'Excused').length;
-    
-    const today = new Date();
-    const programStartDate = new Date(program.startDate);
-    
-    // Only count days from the start of the program up to today.
-    const effectiveEndDate = today < new Date(program.endDate) ? today : new Date(program.endDate);
-    
-    let totalEligibleDays = 0;
-    if (programStartDate <= effectiveEndDate) {
-        totalEligibleDays = getWeekdayCount(programStartDate, effectiveEndDate);
-    }
-    
-    const totalRequiredDays = totalEligibleDays - excusedCount;
-    
-    let overallAttendancePercentage = 0;
-    if (totalRequiredDays > 0) {
-        overallAttendancePercentage = (presentCount / totalRequiredDays) * 100;
-    }
-    // --- END OF CALCULATION ---
+    const attendanceRate = totalPossibleAttendanceDays > 0 ? Math.round((totalPresent / totalPossibleAttendanceDays) * 100) : 0;
+    const completionRate = totalSubmissions > 0 ? Math.round((completedSubmissions / totalSubmissions) * 100) : 0;
 
     const stats = {
-        totalEnrolled: program.trainees.length,
-        totalFacilitators: program.facilitators.length,
-        overallAttendancePercentage: Math.round(overallAttendancePercentage * 100) / 100, // Round to 2 decimal places
-        totalPresentDays: presentCount,
-        totalExcusedDays: excusedCount,
-        totalEligibleDays: totalEligibleDays,
+        enrolledTrainees: traineeIds.length,
+        attendanceRate: attendanceRate,
+        completionRate: completionRate,
     };
 
-    return res.status(200).json(new ApiResponse(200, stats, "Program statistics fetched successfully."));
+    return res.status(200).json(new ApiResponse(200, stats, "Program stats fetched successfully."));
 });
 
 const getProgramStudentCount = asyncHandler(async (req, res) => {

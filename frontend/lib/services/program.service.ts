@@ -1,5 +1,6 @@
 import api from '../api';
 import { Program } from '@/types';
+import { ProgramStats } from './dashboard.service';
 export interface CreateProgramData {
   name: string;
   description: string;
@@ -95,5 +96,15 @@ export const generateProgramReport = async (id: string): Promise<Blob> => {
   });
   return response.data;
 }; 
-
+export const getProgramStats = async (id: string): Promise<ProgramStats | null> => {
+    try {
+        const response = await api.get(`/programs/${id}/stats`);
+        // The backend wraps data in a 'data' property.
+        return response.data.data;
+    } catch (error) {
+        // If the API call fails (e.g., 404 Not Found), log the error and return null.
+        console.error(`Failed to fetch stats for program ${id}:`, error);
+        return null;
+    }
+};
 export type { Program };

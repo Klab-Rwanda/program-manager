@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDashboardStats, getFacilitatorDashboardStats } from '../../controllers/dashboard.controller.js';
+import { getAdminOverview, getDashboardStats, getFacilitatorDashboardStats } from '../../controllers/dashboard.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole } from '../../middlewares/role.middleware.js';
 
@@ -33,5 +33,6 @@ router.route('/stats').get(checkRole(['SuperAdmin', 'Program Manager']), getDash
 
 // Facilitator dashboard stats
 router.route('/facilitator-stats').get(checkRole(['Facilitator']), getFacilitatorDashboardStats);
+router.route('/admin-overview').get(checkRole(['SuperAdmin', 'Program Manager']), getAdminOverview);
 
 export default router;
