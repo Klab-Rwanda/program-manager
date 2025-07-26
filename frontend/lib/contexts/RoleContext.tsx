@@ -63,7 +63,8 @@ const login = async (email: string, password: string) => {
   // ✅ Save token + user to localStorage
   localStorage.setItem("accessToken", data.data.accessToken);
   localStorage.setItem("user", JSON.stringify(data.data.user));
-  setUser(data.data.user); // Optional: update global user state
+  setUser(data.data.user); // Update global user state
+  setIsAuthenticated(true); // Set authentication status to true
 };
 
 

@@ -173,16 +173,34 @@ const enrollFacilitator = asyncHandler(async (req, res) => {
 const getAllPrograms = asyncHandler(async (req, res) => {
     let query = {};
     const { role, _id } = req.user;
-    if (role === 'Program Manager') query.programManager = _id;
-    else if (role === 'Facilitator') query.facilitators = _id;
-    else if (role === 'Trainee') query.trainees = _id;
+    
+    console.log('🔍 getAllPrograms Debug:');
+    console.log('User Role:', role);
+    console.log('User ID:', _id);
+    
+    if (role === 'Program Manager') {
+        query.programManager = _id;
+        console.log('Query for Program Manager:', query);
+    } else if (role === 'Facilitator') {
+        query.facilitators = _id;
+        console.log('Query for Facilitator:', query);
+    } else if (role === 'Trainee') {
+        query.trainees = _id;
+        console.log('Query for Trainee:', query);
+    } else if (role === 'SuperAdmin') {
+        // SuperAdmin can see all programs
+        console.log('Query for SuperAdmin: all programs');
+    }
     
     const programs = await Program.find(query).populate('programManager', 'name email');
+    console.log('Found programs count:', programs.length);
+    
     return res.status(200).json(new ApiResponse(200, programs, "Programs fetched successfully."));
 });
 
  const getProgramById = asyncHandler(async (req, res) => {
     const { id } = req.params;
+    const { role, _id } = req.user;
 
     // Use Promise.all to fetch the program and its associated courses simultaneously
     const [program, courses] = await Promise.all([
@@ -196,6 +214,22 @@ const getAllPrograms = asyncHandler(async (req, res) => {
 
     if (!program) {
         throw new ApiError(404, "Program not found");
+    }
+
+    // Check if user has access to this program based on their role
+    let hasAccess = false;
+    if (role === 'SuperAdmin') {
+        hasAccess = true; // SuperAdmin can access all programs
+    } else if (role === 'Program Manager' && program.programManager?._id?.toString() === _id.toString()) {
+        hasAccess = true; // Program Manager can access their own programs
+    } else if (role === 'Facilitator' && program.facilitators?.some(f => f._id?.toString() === _id.toString())) {
+        hasAccess = true; // Facilitator can access programs they're enrolled in
+    } else if (role === 'Trainee' && program.trainees?.some(t => t._id?.toString() === _id.toString())) {
+        hasAccess = true; // Trainee can access programs they're enrolled in
+    }
+
+    if (!hasAccess) {
+        throw new ApiError(403, "You don't have permission to access this program");
     }
 
     // Combine the results

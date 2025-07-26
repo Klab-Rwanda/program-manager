@@ -33,28 +33,40 @@ export interface User {
 // ----------------------------
 // Facilitator
 // ----------------------------
-export interface Facilitator {
-  _id: string;
-  name: string;
-  email: string;
-  phone: string;
-  specialization: string;
-  experience: string;
-  status: 'Active' | 'Inactive' | 'Pending';
-  programs: string[]; // Array of program IDs
-  rating: number;
-  github: string;
-  joinDate: string;
-  studentsCount: number;
-  contentSubmissions: number;
-  approvedContent: number;
-  type: string;
+export interface Facilitator extends User {
+  phone?: string;
+  specialization?: string;
+  experience?: string;
+  programs?: string[];
+  rating?: number;
+  github?: string;
+  joinDate?: string;
+  studentsCount?: number;
+  contentSubmissions?: number;
+  approvedContent?: number;
+  type?: string;
   previousProgram?: string;
   promotionDate?: string;
 }
 
-// ... other types
+// ----------------------------
+// Trainee
+// ----------------------------
+export interface Trainee extends User {
+  phone?: string;
+  location?: string;
+  enrolledPrograms?: string[];
+  progress?: number;
+  attendance?: number;
+  completedProjects?: number;
+  totalProjects?: number;
+  joinDate?: string;
+  lastActive?: string;
+}
 
+// ----------------------------
+// Topic & Roadmap
+// ----------------------------
 export interface Topic {
     _id: string;
     day: string;
@@ -78,43 +90,6 @@ export interface Roadmap {
     topics: Topic[];
     status?: string;
     feedback?: string;
-}
-
-
-=======
-/**
- * Represents a Facilitator, extending the base User.
- * Includes additional fields specific to facilitators.
- */
-export interface Facilitator extends User {
-  phone?: string;
-  specialization?: string;
-  experience?: string;
-  programs?: string[];
-  rating?: number;
-  github?: string;
-  joinDate?: string;
-  studentsCount?: number;
-  contentSubmissions?: number;
-  approvedContent?: number;
-  type?: string;
-}
-
-/**
- * Represents a Trainee, extending the base User.
- * Includes additional fields specific to trainees.
- */
-
-export interface Trainee extends User {
-  phone?: string;
-  location?: string;
-  enrolledPrograms?: string[];
-  progress?: number;
-  attendance?: number;
-  completedProjects?: number;
-  totalProjects?: number;
-  joinDate?: string;
-  lastActive?: string;
 }
 
 
@@ -359,9 +334,4 @@ export interface RoadmapAssignmentsData {
         objectives: string[];
     };
     assignments: AssignmentWithMarks[];
-
-  isDefault: boolean;
-  style: string;
-  colorScheme: string;
-
 }

@@ -10,7 +10,7 @@ router.use(verifyJWT);
 
 
 router.route('/')
-    .get(checkRole(['SuperAdmin', 'Program Manager']), programController.getAllPrograms)
+    .get(programController.getAllPrograms)
     .post(verifyJWT, checkRole(['Program Manager', 'SuperAdmin']), programController.createProgram);
     
 
@@ -52,10 +52,6 @@ router.route('/:id/report/pdf').get(checkRole(['SuperAdmin', 'Program Manager'])
 
 
 router.route('/:id/stats').get(checkRole(['SuperAdmin', 'Program Manager']), programController.getProgramStats);
-
-router.route('/:id')
-    .get(programController.getProgramById)
-
 
 router.route('/:id/archive').patch(checkRole(['SuperAdmin', 'Program Manager']), programController.archiveProgram);
 
