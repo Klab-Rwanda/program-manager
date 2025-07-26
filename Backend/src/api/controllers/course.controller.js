@@ -293,12 +293,7 @@ export const updateCourse = asyncHandler(async (req, res) => {
 });
 
 
-// --- NEW FUNCTION ---
-/**
- * @desc    Facilitator deletes a course they own.
- * @route   DELETE /api/v1/courses/:courseId
- * @access  Private (Facilitator)
- */
+
 export const deleteCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     
@@ -357,3 +352,12 @@ export const getPendingCourses = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, courses, "Pending courses fetched successfully."));
 });
 
+
+export const getAllCoursesAdmin = asyncHandler(async (req, res) => {
+    const courses = await Course.find({}) // Find all courses, no filter
+        .populate('program', 'name')
+        .populate('facilitator', 'name')
+        .sort({ createdAt: -1 });
+        
+    return res.status(200).json(new ApiResponse(200, courses, "All courses fetched successfully."));
+});

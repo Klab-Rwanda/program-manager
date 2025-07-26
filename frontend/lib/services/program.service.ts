@@ -108,3 +108,8 @@ export const getProgramStats = async (id: string): Promise<ProgramStats | null> 
     }
 };
 export type { Program };
+
+export const assignManagerToProgram = async (programId: string, managerId: string): Promise<Program> => {
+    const response = await api.patch(`/programs/${programId}/assign-manager`, { managerId });
+    return response.data.data;
+};

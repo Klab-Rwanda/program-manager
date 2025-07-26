@@ -223,4 +223,9 @@ router.route('/:courseId')
 router.route('/:courseId')
     .put(checkRole(['Facilitator']), courseController.updateCourse)
     .delete(checkRole(['Facilitator']), courseController.deleteCourse);
+
+    router.route('/all').get(
+    checkRole(['SuperAdmin']),
+    courseController.getAllCoursesAdmin
+);
 export default router;

@@ -20,7 +20,7 @@ export interface User {
   _id: string;
   name: string;
   email: string;
-  role: 'SuperAdmin' | 'Program Manager' | 'Facilitator' | 'Trainee' | 'it_support';
+  role: 'SuperAdmin' | 'Program Manager' | 'Facilitator' | 'Trainee' | 'IT-Support';
   status: 'Pending' | 'Active';
   isActive: boolean;
   firstLogin?: string;

@@ -218,5 +218,6 @@ manageRouter.route('/:id/facilitator-profile').patch(checkRole(['SuperAdmin', 'P
 
 // Mount all the management routes under the /manage path
 router.use('/manage', manageRouter);
+router.route('/managers').get(verifyJWT, checkRole(['SuperAdmin']), userController.getAllManagers);
 
 export default router;

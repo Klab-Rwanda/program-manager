@@ -330,33 +330,31 @@ export const assignManager = asyncHandler(async (req, res) => {
     const { managerId } = req.body;
 
     // Handle the case where the manager is being unassigned
-    if (!managerId || managerId === '') {
+    if (!managerId || managerId === 'unassign') {
         const program = await Program.findByIdAndUpdate(
             id,
             { $unset: { programManager: "" } }, // Use $unset to completely remove the field
             { new: true }
-        );
+        ).populate('programManager', 'name email');
+        
         if (!program) throw new ApiError(404, "Program not found.");
         return res.status(200).json(new ApiResponse(200, program, "Program Manager unassigned successfully."));
     }
 
-    // --- THE ROBUST FIX ---
-    // Validate that the user being assigned is actually a Program Manager, handling the space.
+    // Verify the user being assigned is a valid Program Manager
     const manager = await User.findOne({ 
         _id: managerId, 
-        role: 'Program Manager' // Use the exact string with the space
+        role: 'Program Manager'
     });
-    // --- END OF FIX ---
-
     if (!manager) {
         throw new ApiError(404, "The selected user is not a valid Program Manager.");
     }
 
     const program = await Program.findByIdAndUpdate(
         id,
-        { programManager: managerId }, // Assign to the singular 'programManager' field
+        { programManager: managerId },
         { new: true }
-    ).populate('programManager', 'name email'); // Populate the singular field
+    ).populate('programManager', 'name email');
     
     if (!program) throw new ApiError(404, "Program not found.");
 

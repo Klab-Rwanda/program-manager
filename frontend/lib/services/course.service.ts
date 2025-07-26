@@ -59,3 +59,8 @@ export const updateCourse = async (courseId: string, data: { title: string; desc
 export const deleteCourse = async (courseId: string): Promise<void> => {
     await api.delete(`/courses/${courseId}`);
 };
+
+export const getAllCoursesForAdmin = async (): Promise<Course[]> => {
+    const response = await api.get('/courses/all');
+    return response.data.data;
+};

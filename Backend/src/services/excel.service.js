@@ -173,3 +173,29 @@ export const generateBulkExportExcel = async (data, options = {}) => {
 
     return workbook;
 }; 
+
+export const generateLogReportExcel = async (logs) => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Activity Log');
+
+    worksheet.columns = [
+        { header: 'Timestamp', key: 'timestamp', width: 25 },
+        { header: 'User Name', key: 'userName', width: 25 },
+        { header: 'User Role', key: 'userRole', width: 20 },
+        { header: 'Action', key: 'action', width: 30 },
+        { header: 'Details', key: 'details', width: 50 },
+    ];
+
+    logs.forEach(log => {
+        worksheet.addRow({
+            timestamp: new Date(log.createdAt),
+            userName: log.user?.name || 'System/Unknown',
+            userRole: log.user?.role || 'N/A',
+            action: log.action,
+            details: log.details,
+        });
+    });
+    
+    worksheet.getRow(1).font = { bold: true };
+    return workbook;
+};
