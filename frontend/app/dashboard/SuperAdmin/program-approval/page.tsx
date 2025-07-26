@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Eye, Clock, CheckCircle, XCircle, FileText, Loader2, UserPlus, Check, X, BookOpen, ServerCrash } from "lucide-react";
+import { Search, Eye, Clock, CheckCircle, XCircle, FileText, Loader2, UserPlus, Check, X, AlertTriangle, BookOpen, ServerCrash } from "lucide-react";
 
 import { useAuth } from "@/lib/contexts/RoleContext";
 import { Program, User, Course } from "@/types";
@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,24 +27,26 @@ const ProgramApprovalPage: React.FC = () => {
     const router = useRouter();
     const { user } = useAuth();
     
-    // State for data
     const [programs, setPrograms] = useState<Program[]>([]);
     const [managers, setManagers] = useState<User[]>([]);
     const [courses, setCourses] = useState<Course[]>([]);
     
-    // State for UI
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
 
-    // State for modals
     const [assignModal, setAssignModal] = useState<{ open: boolean; program: Program | null }>({ open: false, program: null });
     const [rejectCourseModal, setRejectCourseModal] = useState<{ open: boolean; course: Course | null }>({ open: false, course: null });
     const [selectedManagerId, setSelectedManagerId] = useState("");
     const [rejectionReason, setRejectionReason] = useState("");
+    const [confirmationDialog, setConfirmationDialog] = useState<{
+        open: boolean;
+        title: string;
+        description: string;
+        onConfirm: () => void;
+    }>({ open: false, title: '', description: '', onConfirm: () => {} });
     
-    // State for filters
     const [programSearch, setProgramSearch] = useState("");
     const [programFilter, setProgramFilter] = useState("all");
     const [courseSearch, setCourseSearch] = useState("");
@@ -53,11 +56,7 @@ const ProgramApprovalPage: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            const [programsData, managersData, coursesData] = await Promise.all([
-                getAllPrograms(),
-                getAllManagers(),
-                getAllCoursesForAdmin()
-            ]);
+            const [programsData, managersData, coursesData] = await Promise.all([ getAllPrograms(), getAllManagers(), getAllCoursesForAdmin() ]);
             setPrograms(programsData);
             setManagers(managersData);
             setCourses(coursesData);
@@ -87,18 +86,29 @@ const ProgramApprovalPage: React.FC = () => {
         }
     };
 
-    const handleForceApproveCourse = async (course: Course) => {
-        if (!confirm(`Are you sure you want to approve course "${course.title}"?`)) return;
-        setProcessingId(course._id);
-        try {
-            await approveCourse(course._id);
-            toast.success("Course approved.");
-            fetchData();
-        } catch (err: any) { 
-            toast.error(err.response?.data?.message || "Approval failed."); 
-        } finally { 
-            setProcessingId(null); 
-        }
+    const handleForceApproveCourse = (course: Course) => {
+        setConfirmationDialog({
+            open: true,
+            title: "Are you sure you want to approve this course?",
+            description: `This action will approve "${course.title}" and make it immediately available to all trainees in the "${course.program.name}" program.`,
+            onConfirm: async () => {
+                setProcessingId(course._id);
+                try {
+                    await approveCourse(course._id);
+                    toast.success("Course approved successfully.");
+                    fetchData();
+                } catch (err: any) { 
+                    toast.error(err.response?.data?.message || "Approval failed."); 
+                } finally { 
+                    setProcessingId(null); 
+                }
+            }
+        });
+    };
+
+    const openRejectCourseModal = (course: Course) => {
+        setRejectCourseModal({ open: true, course });
+        setRejectionReason("");
     };
 
     const handleForceRejectCourse = async () => {
@@ -106,9 +116,8 @@ const ProgramApprovalPage: React.FC = () => {
         setProcessingId(rejectCourseModal.course._id);
         try {
             await rejectCourseService(rejectCourseModal.course._id, rejectionReason);
-            toast.success("Course rejected.");
+            toast.success("Course rejected successfully.");
             setRejectCourseModal({ open: false, course: null });
-            setRejectionReason("");
             fetchData();
         } catch (err: any) { 
             toast.error(err.response?.data?.message || "Rejection failed."); 
@@ -157,15 +166,7 @@ const ProgramApprovalPage: React.FC = () => {
                         <CardContent>
                             <div className="rounded-md border"><Table><TableHeader><TableRow><TableHead>Program</TableHead><TableHead>Manager</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
                                 {filteredPrograms.length > 0 ? filteredPrograms.map((program) => (
-                                    <TableRow key={program._id}>
-                                        <TableCell className="font-medium">{program.name}</TableCell>
-                                        <TableCell className="text-muted-foreground">{program.programManager?.name || 'Unassigned'}</TableCell>
-                                        <TableCell>{getStatusBadge(program.status)}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="outline" size="sm" className="mr-2" onClick={() => { setAssignModal({ open: true, program }); setSelectedManagerId(program.programManager?._id || "unassign"); }}><UserPlus className="mr-2 h-4 w-4"/> Assign Manager</Button>
-                                            <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/SuperAdmin/program-approval/${program._id}`)}><Eye className="mr-2 h-4 w-4"/> View Details</Button>
-                                        </TableCell>
-                                    </TableRow>
+                                    <TableRow key={program._id}><TableCell className="font-medium">{program.name}</TableCell><TableCell className="text-muted-foreground">{program.programManager?.name || 'Unassigned'}</TableCell><TableCell>{getStatusBadge(program.status)}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" className="mr-2" onClick={() => { setAssignModal({ open: true, program }); setSelectedManagerId(program.programManager?._id || "unassign"); }}><UserPlus className="mr-2 h-4 w-4"/> Assign</Button><Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/SuperAdmin/program-approval/${program._id}`)}><Eye className="mr-2 h-4 w-4"/> View</Button></TableCell></TableRow>
                                 )) : <TableRow><TableCell colSpan={4} className="h-24 text-center">No programs match your filters.</TableCell></TableRow>}
                             </TableBody></Table></div>
                         </CardContent>
@@ -174,19 +175,15 @@ const ProgramApprovalPage: React.FC = () => {
 
                 <TabsContent value="courses" className="space-y-4">
                     <Card>
-                        <CardHeader><div className="flex flex-col md:flex-row gap-4"><Input placeholder="Search courses, programs, or facilitators..." value={courseSearch} onChange={(e) => setCourseSearch(e.target.value)} className="max-w-sm"/><Select value={courseFilter} onValueChange={setCourseFilter}><SelectTrigger className="w-full md:w-[200px]"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem><SelectItem value="PendingApproval">Pending Approval</SelectItem><SelectItem value="Approved">Approved</SelectItem><SelectItem value="Rejected">Rejected</SelectItem><SelectItem value="Draft">Draft</SelectItem></SelectContent></Select></div></CardHeader>
+                        <CardHeader><div className="flex flex-col md:flex-row gap-4"><Input placeholder="Search courses..." value={courseSearch} onChange={(e) => setCourseSearch(e.target.value)} className="max-w-sm"/><Select value={courseFilter} onValueChange={setCourseFilter}><SelectTrigger className="w-full md:w-[200px]"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">All Statuses</SelectItem><SelectItem value="PendingApproval">Pending</SelectItem><SelectItem value="Approved">Approved</SelectItem><SelectItem value="Rejected">Rejected</SelectItem><SelectItem value="Draft">Draft</SelectItem></SelectContent></Select></div></CardHeader>
                         <CardContent>
-                             <div className="rounded-md border">
-                                <Table><TableHeader><TableRow><TableHead>Course Title</TableHead><TableHead>Program</TableHead><TableHead>Facilitator</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
+                             <div className="rounded-md border"><Table><TableHeader><TableRow><TableHead>Course Title</TableHead><TableHead>Program</TableHead><TableHead>Facilitator</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
                                     {filteredCourses.length > 0 ? filteredCourses.map(course => (
-                                        <TableRow key={course._id}>
-                                            <TableCell className="font-medium">{course.title}</TableCell><TableCell>{course.program.name}</TableCell><TableCell>{course.facilitator.name}</TableCell><TableCell>{getStatusBadge(course.status)}</TableCell>
-                                            <TableCell className="text-right flex gap-1 justify-end">
-                                                <a href={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '')}/${course.contentUrl.replace(/\\/g, '/')}`} target="_blank" rel="noopener noreferrer"><Button variant="ghost" size="icon" title="View Document"><Eye className="h-4 w-4"/></Button></a>
-                                                {course.status !== 'Approved' && <Button size="icon" variant="ghost" className="text-green-600 hover:bg-green-100 hover:text-green-700" title="Force Approve" onClick={() => handleForceApproveCourse(course)} disabled={processingId === course._id}>{processingId === course._id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Check className="h-4 w-4"/>}</Button>}
-                                                {course.status !== 'Rejected' && <Button size="icon" variant="ghost" className="text-red-600 hover:bg-red-100 hover:text-red-700" title="Force Reject" onClick={() => setRejectCourseModal({open: true, course})} disabled={processingId === course._id}><X className="h-4 w-4"/></Button>}
-                                            </TableCell>
-                                        </TableRow>
+                                        <TableRow key={course._id}><TableCell className="font-medium">{course.title}</TableCell><TableCell>{course.program.name}</TableCell><TableCell>{course.facilitator.name}</TableCell><TableCell>{getStatusBadge(course.status)}</TableCell><TableCell className="text-right flex gap-1 justify-end">
+                                            <a href={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '')}/${course.contentUrl.replace(/\\/g, '/')}`} target="_blank" rel="noopener noreferrer"><Button variant="ghost" size="icon" title="View Document"><Eye className="h-4 w-4"/></Button></a>
+                                            {course.status !== 'Approved' && <Button size="icon" variant="ghost" className="text-green-600 hover:bg-green-100 hover:text-green-700" title="Force Approve" onClick={() => handleForceApproveCourse(course)} disabled={processingId === course._id}>{processingId === course._id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Check className="h-4 w-4"/>}</Button>}
+                                            {course.status !== 'Rejected' && <Button size="icon" variant="ghost" className="text-red-600 hover:bg-red-100 hover:text-red-700" title="Force Reject" onClick={() => openRejectCourseModal(course)} disabled={processingId === course._id}><X className="h-4 w-4"/></Button>}
+                                        </TableCell></TableRow>
                                     )) : <TableRow><TableCell colSpan={5} className="h-24 text-center">No courses match your filters.</TableCell></TableRow>}
                                 </TableBody></Table>
                              </div>
@@ -204,11 +201,25 @@ const ProgramApprovalPage: React.FC = () => {
             </Dialog>
             <Dialog open={rejectCourseModal.open} onOpenChange={(open) => setRejectCourseModal({ ...rejectCourseModal, open })}>
                  <DialogContent>
-                    <DialogHeader><DialogTitle>Reject Course: {rejectCourseModal.course?.title}</DialogTitle><DialogDescription>Provide a reason for rejection. The facilitator will see this.</DialogDescription></DialogHeader>
+                    <DialogHeader><DialogTitle>Reject Course: {rejectCourseModal.course?.title}</DialogTitle><DialogDescription>Provide a reason for rejection.</DialogDescription></DialogHeader>
                     <div className="py-4"><Label>Reason *</Label><Textarea value={rejectionReason} onChange={e => setRejectionReason(e.target.value)} /></div>
                     <DialogFooter><Button variant="outline" onClick={() => setRejectCourseModal({open: false, course: null})}>Cancel</Button><Button variant="destructive" onClick={handleForceRejectCourse} disabled={!!processingId}>Confirm Rejection</Button></DialogFooter>
                 </DialogContent>
             </Dialog>
+            
+            {/* Reusable Confirmation Dialog for any action */}
+            <AlertDialog open={confirmationDialog.open} onOpenChange={(open) => setConfirmationDialog({ ...confirmationDialog, open })}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="text-primary"/>{confirmationDialog.title}</AlertDialogTitle>
+                        <AlertDialogDescription>{confirmationDialog.description}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmationDialog.onConfirm}>Continue</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 };
