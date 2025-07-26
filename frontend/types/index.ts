@@ -29,6 +29,59 @@ export interface User {
   updatedAt: string;
 }
 
+
+// ----------------------------
+// Facilitator
+// ----------------------------
+export interface Facilitator {
+  _id: string;
+  name: string;
+  email: string;
+  phone: string;
+  specialization: string;
+  experience: string;
+  status: 'Active' | 'Inactive' | 'Pending';
+  programs: string[]; // Array of program IDs
+  rating: number;
+  github: string;
+  joinDate: string;
+  studentsCount: number;
+  contentSubmissions: number;
+  approvedContent: number;
+  type: string;
+  previousProgram?: string;
+  promotionDate?: string;
+}
+
+// ... other types
+
+export interface Topic {
+    _id: string;
+    day: string;
+    title: string;
+    startTime?: string; // e.g., "09:00"
+    endTime?: string; // e.g., "12:00"
+    duration?: string; // e.g., "3 hours" - kept for backward compatibility
+    sessionType: 'in-person' | 'online';
+    isCompleted: boolean;
+}
+
+export interface Roadmap {
+    _id: string;
+    program: string | { _id: string; name: string; };
+    course: string | { _id: string; title: string; };
+    facilitator: string | { _id: string; name: string; email: string; };
+    weekNumber: number;
+    title: string;
+    startDate: string;
+    objectives: string[];
+    topics: Topic[];
+    status?: string;
+    feedback?: string;
+}
+
+
+=======
 /**
  * Represents a Facilitator, extending the base User.
  * Includes additional fields specific to facilitators.
@@ -51,6 +104,7 @@ export interface Facilitator extends User {
  * Represents a Trainee, extending the base User.
  * Includes additional fields specific to trainees.
  */
+
 export interface Trainee extends User {
   phone?: string;
   location?: string;
@@ -117,6 +171,42 @@ export interface Course {
   updatedAt: string;
 }
 
+
+// --- NEW TYPES FOR ASSIGNMENT MARKS ---
+export interface AssignmentSubmission {
+  submissionId: string;
+  traineeName: string;
+  traineeEmail: string;
+  submittedAt: string;
+  status: 'Submitted' | 'Reviewed' | 'NeedsRevision';
+  grade: string;
+  feedback: string;
+  attendancePercentage: number;
+  totalSessions: number;
+  presentSessions: number;
+}
+
+export interface AssignmentWithMarks {
+  assignmentId: string;
+  assignmentTitle: string;
+  assignmentDescription: string;
+  dueDate: string;
+  maxGrade: number;
+  facilitatorName: string;
+  submissions: AssignmentSubmission[];
+}
+
+export interface CourseAssignmentsData {
+  course: {
+    _id: string;
+    title: string;
+    program: string;
+    facilitator: string;
+  };
+  assignments: AssignmentWithMarks[];
+}
+
+
 /**
  * Represents a project submission from a trainee.
  */
@@ -143,6 +233,7 @@ export interface ProgramStats {
 /**
  * Data shape for creating a new program.
  */
+
 export interface CreateProgramData {
   name: string;
   description: string;
@@ -182,7 +273,95 @@ export interface Template {
   id: number;
   name: string;
   description: string;
+  startDate: string;
+  endDate: string;
+  status: 'Draft' | 'PendingApproval' | 'Active' | 'Completed' | 'Rejected';
+  programManager?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  facilitators?: Facilitator[];
+  trainees?: Trainee[];
+  updatedAt: string;
+}
+
+export interface ClassSession {
+  _id: string;
+  type: 'physical' | 'online';
+  programId: {
+    _id: string;
+    name: string;
+  };
+  facilitatorId: {
+    _id: string;
+    name: string;
+  };
+  sessionId: string;
+  title: string;
+  description?: string;
+  startTime: string;
+  duration: number; // in minutes
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled';
+  accessLink?: string;
+  meetingLink?: string;
+  qrCodeImage?: string; // This is a frontend-only convenience field, not in DB model
+  updatedAt: string;
+}
+
+
+// ... other types
+
+export interface Assignment {
+    _id: string;
+    title: string;
+    description: string;
+    program: string | { _id: string; name: string; }; // Can be populated
+    course: string | { _id: string; title: string; }; // Can be populated
+    roadmap: string | { _id: string; title: string; weekNumber: number; }; // Can be populated
+    dueDate: string;
+    maxGrade: number;
+    sentToTrainees?: boolean;
+    sentToTraineesAt?: string;
+    createdAt?: string;
+    updatedAt?: string;
+}
+// --- ATTENDANCE TYPES ---
+
+export interface AttendanceRecord {
+    _id: string;
+    userId: {
+        _id: string;
+        name: string;
+        email: string;
+        role?: string;
+    };
+    programId?: {
+        _id: string;
+        name: string;
+    };
+    sessionId?: string;
+    date: string;
+    checkIn?: string;
+    checkOut?: string;
+    method: 'geolocation' | 'qr_code' | 'manual' | 'facial_recognition';
+    status: 'Present' | 'Absent' | 'Excused' | 'Late';
+}
+
+export interface RoadmapAssignmentsData {
+    roadmap: {
+        _id: string;
+        title: string;
+        weekNumber: number;
+        program: string;
+        facilitator: string;
+        startDate: string;
+        objectives: string[];
+    };
+    assignments: AssignmentWithMarks[];
+
   isDefault: boolean;
   style: string;
   colorScheme: string;
+
 }

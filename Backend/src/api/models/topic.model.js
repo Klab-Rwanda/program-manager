@@ -15,9 +15,17 @@ const topicSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    startTime: {
+        type: String, // e.g., "09:00"
+        required: false
+    },
+    endTime: {
+        type: String, // e.g., "12:00"
+        required: false
+    },
     duration: {
-        type: String, // e.g., "3 hours"
-        required: true
+        type: String, // e.g., "3 hours" - kept for backward compatibility
+        required: false
     },
     sessionType: {
         type: String,

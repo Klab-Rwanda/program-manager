@@ -37,7 +37,7 @@ const menuItems = [
     // Program Manager
     { title: "Programs", url: "/dashboard/Manager/programs", icon: BookOpen, roles: ['program_manager'], countKey: 'programs' },
     { title: "Facilitators", url: "/dashboard/Manager/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },
-    { title: "Approvals", url: "/dashboard/Manager/approvals", icon: CheckCircle, roles: ['program_manager'], countKey: 'pendingApprovals' },
+    { title: "Course Management", url: "/dashboard/Manager/course-management", icon: CheckCircle, roles: ['program_manager'], countKey: 'pendingApprovals' },
     { title: "Trainees", url: "/dashboard/Manager/trainees", icon: Users, roles: ['program_manager'], countKey: 'trainees' },
     { title: "Attendance", url: "/dashboard/Manager/attendance", icon: Calendar, roles: ['program_manager'] },
     { title: "Certificates", url: "/dashboard/Manager/certificates", icon: Award, roles: ['program_manager'], countKey: 'certificates' },

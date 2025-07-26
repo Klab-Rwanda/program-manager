@@ -34,6 +34,7 @@ export default function FacilitatorCourseManagementPage() {
     const [isUploadOpen, setUploadOpen] = useState(false);
     const [isEditOpen, setEditOpen] = useState(false);
     const [isDeleteOpen, setDeleteOpen] = useState(false);
+    const [isViewDocumentOpen, setViewDocumentOpen] = useState(false);
     const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
 
     // Forms state
@@ -154,6 +155,15 @@ export default function FacilitatorCourseManagementPage() {
         setDeleteOpen(true);
     };
 
+    const openViewDocumentModal = (course: Course) => {
+        setSelectedCourse(course);
+        setViewDocumentOpen(true);
+    };
+
+    const handleIframeError = () => {
+        toast.error("Unable to display document. Please try opening in a new tab.");
+    };
+
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'Draft': return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1"/>Draft</Badge>;
@@ -218,13 +228,18 @@ export default function FacilitatorCourseManagementPage() {
                                             {isProcessingId === course._id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
                                         </Button>
                                     )}
-                                    <Button size="sm" variant="secondary" className="flex-1" asChild>
-                                        <a href={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '')}/${course.contentUrl.replace(/\\/g, '/')}`} target="_blank" rel="noopener noreferrer"><Eye className="h-4 w-4"/></a>
+                                    <Button 
+                                        size="sm" 
+                                        variant="secondary" 
+                                        className="flex-1" 
+                                        onClick={() => openViewDocumentModal(course)}
+                                    >
+                                        <Eye className="h-4 w-4 text-blue-600"/>
                                     </Button>
                                     {isEditable && (
-                                        <Button size="sm" variant="outline" onClick={() => openEditModal(course)}><Edit className="h-4 w-4"/></Button>
+                                        <Button size="sm" variant="outline" className="flex-1" onClick={() => openEditModal(course)}><Edit className="h-4 w-4"/></Button>
                                     )}
-                                    <Button size="sm" variant="destructive" onClick={() => openDeleteModal(course)}><Trash2 className="h-4 w-4"/></Button>
+                                    <Button size="sm" variant="destructive" className="flex-1" onClick={() => openDeleteModal(course)}><Trash2 className="h-4 w-4"/></Button>
                                 </div>
                             </div>
                         </Card>
@@ -308,6 +323,48 @@ export default function FacilitatorCourseManagementPage() {
                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4" />} Delete Course
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* View Document Modal */}
+            <Dialog open={isViewDocumentOpen} onOpenChange={setViewDocumentOpen}>
+                <DialogContent className="max-w-2xl max-h-[75vh] w-[85vw] mx-auto">
+                    <DialogHeader className="pb-2">
+                        <DialogTitle className="text-lg">Course Details: {selectedCourse?.title}</DialogTitle>
+                    </DialogHeader>
+                    <div className="mt-2 p-4">
+                        {selectedCourse ? (
+                            <div className="space-y-4">
+                                <div>
+                                    <h3 className="font-semibold text-lg mb-2">Course Information</h3>
+                                    <div className="space-y-2">
+                                        <p><strong>Title:</strong> {selectedCourse.title}</p>
+                                        <p><strong>Program:</strong> {selectedCourse.program?.name}</p>
+                                        <p><strong>Status:</strong> {selectedCourse.status}</p>
+                                        {selectedCourse.description && (
+                                            <div>
+                                                <strong>Description:</strong>
+                                                <p className="mt-1 text-gray-700">{selectedCourse.description}</p>
+                                            </div>
+                                        )}
+                                        {selectedCourse.rejectionReason && (
+                                            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+                                                <strong className="text-red-800">Rejection Reason:</strong>
+                                                <p className="mt-1 text-red-700">{selectedCourse.rejectionReason}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-center justify-center h-[50vh] border rounded-md bg-gray-50">
+                                <div className="text-center">
+                                    <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                                    <p className="text-gray-500">No course information available</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>
