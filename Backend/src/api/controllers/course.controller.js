@@ -5,6 +5,9 @@ import { Program } from '../models/program.model.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import path from 'path';
 import fs from 'fs';
+import { Assignment } from '../models/assignment.model.js';
+import { Submission } from '../models/submission.model.js';
+import { Attendance } from '../models/attendance.model.js';
 
 export const createCourse = asyncHandler(async (req, res) => {
     const { title, description, programId } = req.body;
@@ -343,6 +346,31 @@ export const rejectCourse = asyncHandler(async (req, res) => {
 
 // --- NEW FUNCTION ---
 /**
+ * @desc    Program Manager activates a rejected course.
+ * @route   PATCH /api/v1/courses/{courseId}/activate
+ * @access  Private (ProgramManager)
+ */
+export const activateCourse = asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    
+    const course = await Course.findByIdAndUpdate(
+        courseId, 
+        { 
+            status: 'Approved',
+            $unset: { rejectionReason: "" } // Remove rejection reason when activating
+        }, 
+        { new: true }
+    );
+    
+    if (!course) {
+        throw new ApiError(404, "Course not found");
+    }
+
+    return res.status(200).json(new ApiResponse(200, course, "Course has been activated."));
+});
+
+// --- NEW FUNCTION ---
+/**
  * @desc    Program Manager gets all courses pending their approval.
  * @route   GET /api/v1/courses/pending
  * @access  Private (ProgramManager)
@@ -355,5 +383,163 @@ export const getPendingCourses = asyncHandler(async (req, res) => {
         .populate('program', 'name');
         
     return res.status(200).json(new ApiResponse(200, courses, "Pending courses fetched successfully."));
+});
+
+// --- NEW FUNCTION ---
+/**
+ * @desc    Program Manager gets courses by status.
+ * @route   GET /api/v1/courses/status/:status
+ * @access  Private (ProgramManager)
+ */
+export const getCoursesByStatus = asyncHandler(async (req, res) => {
+    const { status } = req.params;
+    
+    // Validate status parameter
+    const validStatuses = ['Draft', 'PendingApproval', 'Approved', 'Rejected'];
+    if (!validStatuses.includes(status)) {
+        throw new ApiError(400, "Invalid status. Must be one of: Draft, PendingApproval, Approved, Rejected");
+    }
+    
+    const courses = await Course.find({ status })
+        .populate('facilitator', 'name email')
+        .populate('program', 'name')
+        .sort({ createdAt: -1 }); // Sort by newest first
+        
+    return res.status(200).json(new ApiResponse(200, courses, `Courses with status '${status}' fetched successfully.`));
+});
+
+// --- NEW FUNCTION ---
+/**
+ * @desc    Program Manager gets assignments with student marks and attendance for a course.
+ * @route   GET /api/v1/courses/{courseId}/assignments-with-marks
+ * @access  Private (ProgramManager)
+ */
+export const getCourseAssignmentsWithMarks = asyncHandler(async (req, res) => {
+    const { courseId } = req.params;
+    
+    // Find the course and verify it exists
+    const course = await Course.findById(courseId)
+        .populate('program', 'name')
+        .populate('facilitator', 'name email');
+    
+    if (!course) {
+        throw new ApiError(404, "Course not found");
+    }
+
+    // Get all assignments for this course
+    const assignments = await Assignment.find({ course: courseId })
+        .populate('facilitator', 'name email')
+        .sort({ dueDate: -1 });
+
+    // Get all submissions for this course with trainee info
+    const submissions = await Submission.find({ course: courseId })
+        .populate('trainee', 'name email')
+        .populate('assignment', 'title maxGrade')
+        .sort({ submittedAt: -1 });
+
+    // Get attendance data for trainees in this course's program
+    const attendanceData = await Attendance.aggregate([
+        {
+            $match: {
+                programId: course.program._id
+            }
+        },
+        {
+            $group: {
+                _id: '$userId',
+                totalSessions: { $sum: 1 },
+                presentSessions: {
+                    $sum: {
+                        $cond: [
+                            { $in: ['$status', ['Present', 'Late']] },
+                            1,
+                            0
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            $lookup: {
+                from: 'users',
+                localField: '_id',
+                foreignField: '_id',
+                as: 'trainee'
+            }
+        },
+        {
+            $unwind: '$trainee'
+        },
+        {
+            $project: {
+                traineeId: '$_id',
+                traineeName: '$trainee.name',
+                traineeEmail: '$trainee.email',
+                totalSessions: 1,
+                presentSessions: 1,
+                attendancePercentage: {
+                    $multiply: [
+                        {
+                            $cond: [
+                                { $eq: ['$totalSessions', 0] },
+                                0,
+                                {
+                                    $divide: ['$presentSessions', '$totalSessions']
+                                }
+                            ]
+                        },
+                        100
+                    ]
+                }
+            }
+        }
+    ]);
+
+    // Organize data by assignment
+    const assignmentsWithMarks = assignments.map(assignment => {
+        const assignmentSubmissions = submissions.filter(sub => 
+            sub.assignment && sub.assignment._id.toString() === assignment._id.toString()
+        );
+
+        const submissionsWithAttendance = assignmentSubmissions.map(submission => {
+            const traineeAttendance = attendanceData.find(att => 
+                att.traineeId.toString() === submission.trainee._id.toString()
+            );
+
+            return {
+                submissionId: submission._id,
+                traineeName: submission.trainee.name,
+                traineeEmail: submission.trainee.email,
+                submittedAt: submission.submittedAt,
+                status: submission.status,
+                grade: submission.grade || 'Not graded',
+                feedback: submission.feedback || '',
+                attendancePercentage: traineeAttendance ? 
+                    Math.round(traineeAttendance.attendancePercentage) : 0,
+                totalSessions: traineeAttendance ? traineeAttendance.totalSessions : 0,
+                presentSessions: traineeAttendance ? traineeAttendance.presentSessions : 0
+            };
+        });
+
+        return {
+            assignmentId: assignment._id,
+            assignmentTitle: assignment.title,
+            assignmentDescription: assignment.description,
+            dueDate: assignment.dueDate,
+            maxGrade: assignment.maxGrade,
+            facilitatorName: assignment.facilitator.name,
+            submissions: submissionsWithAttendance
+        };
+    });
+
+    return res.status(200).json(new ApiResponse(200, {
+        course: {
+            _id: course._id,
+            title: course.title,
+            program: course.program.name,
+            facilitator: course.facilitator.name
+        },
+        assignments: assignmentsWithMarks
+    }, "Course assignments with marks and attendance fetched successfully."));
 });
 

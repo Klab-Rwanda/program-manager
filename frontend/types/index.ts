@@ -43,7 +43,9 @@ export interface Topic {
     _id: string;
     day: string;
     title: string;
-    duration: string;
+    startTime?: string; // e.g., "09:00"
+    endTime?: string; // e.g., "12:00"
+    duration?: string; // e.g., "3 hours" - kept for backward compatibility
     sessionType: 'in-person' | 'online';
     isCompleted: boolean;
 }
@@ -51,11 +53,15 @@ export interface Topic {
 export interface Roadmap {
     _id: string;
     program: string | { _id: string; name: string; };
+    course: string | { _id: string; title: string; };
+    facilitator: string | { _id: string; name: string; email: string; };
     weekNumber: number;
     title: string;
     startDate: string;
     objectives: string[];
     topics: Topic[];
+    status?: string;
+    feedback?: string;
 }
 
 
@@ -149,6 +155,40 @@ export interface Course {
   
   createdAt: string;
   updatedAt: string;
+}
+
+// --- NEW TYPES FOR ASSIGNMENT MARKS ---
+export interface AssignmentSubmission {
+  submissionId: string;
+  traineeName: string;
+  traineeEmail: string;
+  submittedAt: string;
+  status: 'Submitted' | 'Reviewed' | 'NeedsRevision';
+  grade: string;
+  feedback: string;
+  attendancePercentage: number;
+  totalSessions: number;
+  presentSessions: number;
+}
+
+export interface AssignmentWithMarks {
+  assignmentId: string;
+  assignmentTitle: string;
+  assignmentDescription: string;
+  dueDate: string;
+  maxGrade: number;
+  facilitatorName: string;
+  submissions: AssignmentSubmission[];
+}
+
+export interface CourseAssignmentsData {
+  course: {
+    _id: string;
+    title: string;
+    program: string;
+    facilitator: string;
+  };
+  assignments: AssignmentWithMarks[];
 }
 
 export interface CreateProgramData {
@@ -296,8 +336,11 @@ export interface Assignment {
     description: string;
     program: string | { _id: string; name: string; }; // Can be populated
     course: string | { _id: string; title: string; }; // Can be populated
+    roadmap: string | { _id: string; title: string; weekNumber: number; }; // Can be populated
     dueDate: string;
     maxGrade: number;
+    sentToTrainees?: boolean;
+    sentToTraineesAt?: string;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -321,4 +364,17 @@ export interface AttendanceRecord {
     checkOut?: string;
     method: 'geolocation' | 'qr_code' | 'manual' | 'facial_recognition';
     status: 'Present' | 'Absent' | 'Excused' | 'Late';
+}
+
+export interface RoadmapAssignmentsData {
+    roadmap: {
+        _id: string;
+        title: string;
+        weekNumber: number;
+        program: string;
+        facilitator: string;
+        startDate: string;
+        objectives: string[];
+    };
+    assignments: AssignmentWithMarks[];
 }

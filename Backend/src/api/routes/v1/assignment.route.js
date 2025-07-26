@@ -17,6 +17,9 @@ router.route('/:id')
     .patch(checkRole(['Facilitator']), assignmentController.updateAssignment)
     .delete(checkRole(['Facilitator']), assignmentController.deleteAssignment);
 
+router.route('/:id/resend-notifications')
+    .post(checkRole(['Facilitator']), assignmentController.resendAssignmentNotifications);
+
 // Shared route for Trainees and Facilitators
 router.route('/course/:courseId')
     .get(checkRole(['Facilitator', 'Trainee']), assignmentController.getAssignmentsForCourse);

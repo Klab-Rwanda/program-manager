@@ -17,6 +17,18 @@ export const getMyCourses = async (): Promise<Course[]> => {
     return response.data.data;
 };
 
+// Program Manager: Fetch all courses (for course management)
+export const getAllCourses = async (): Promise<Course[]> => {
+    const response = await api.get('/courses');
+    return response.data.data;
+};
+
+// Program Manager: Fetch courses by status
+export const getCoursesByStatus = async (status: string): Promise<Course[]> => {
+    const response = await api.get(`/courses/status/${status}`);
+    return response.data.data;
+};
+
 // Facilitator: Request approval for a course
 export const requestCourseApproval = async (courseId: string): Promise<Course> => {
     const response = await api.patch(`/courses/${courseId}/request-approval`);
@@ -41,6 +53,12 @@ export const rejectCourse = async (courseId: string, reason: string): Promise<Co
     return response.data.data;
 };
 
+// Program Manager: Activate a course (change status from pending to active)
+export const activateCourse = async (courseId: string): Promise<Course> => {
+    const response = await api.patch(`/courses/${courseId}/activate`);
+    return response.data.data;
+};
+
 // --- NEW FUNCTION FOR TRAINEES ---
 // Trainee: Get all APPROVED courses for a specific program
 export const getApprovedCoursesForProgram = async (programId: string): Promise<Course[]> => {
@@ -58,4 +76,11 @@ export const updateCourse = async (courseId: string, data: { title: string; desc
 // Facilitator: Delete a course
 export const deleteCourse = async (courseId: string): Promise<void> => {
     await api.delete(`/courses/${courseId}`);
+};
+
+// --- NEW FUNCTION ---
+// Program Manager: Get assignments with student marks and attendance for a course
+export const getCourseAssignmentsWithMarks = async (courseId: string): Promise<any> => {
+    const response = await api.get(`/courses/${courseId}/assignments-with-marks`);
+    return response.data.data;
 };

@@ -21,6 +21,11 @@ const assignmentSchema = new mongoose.Schema({
         ref: 'Course',
         required: true
     },
+    roadmap: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Roadmap',
+        required: true
+    },
     facilitator: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
@@ -37,6 +42,14 @@ const assignmentSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: true
+    },
+    sentToTrainees: {
+        type: Boolean,
+        default: false
+    },
+    sentToTraineesAt: {
+        type: Date,
+        default: null
     }
 }, { timestamps: true });
 

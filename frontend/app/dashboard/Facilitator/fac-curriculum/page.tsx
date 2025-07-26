@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { Upload, FileText, Send, AlertCircle, CheckCircle, Clock, Plus, Loader2, Eye } from "lucide-react";
-import { getMyCoursesSimulated, createCourse, requestCourseApproval } from "@/lib/services/course.service";
+import { createCourse, requestCourseApproval } from "@/lib/services/course.service";
 import { Course, Program } from "@/types";
 import api from "@/lib/api";
 

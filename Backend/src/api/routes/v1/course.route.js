@@ -77,6 +77,11 @@ router.route('/:courseId/approve').patch(
     courseController.approveCourse
 );
 
+router.route('/:courseId/activate').patch(
+    checkRole(['Program Manager']), 
+    courseController.activateCourse
+);
+
 /**
  * @openapi
  * /courses/program/{programId}:
@@ -136,6 +141,17 @@ router.route('/pending').get(
     checkRole(['Program Manager']),
     courseController.getPendingCourses
 );
+
+router.route('/status/:status').get(
+    checkRole(['Program Manager']),
+    courseController.getCoursesByStatus
+);
+
+router.route('/:courseId/assignments-with-marks').get(
+    checkRole(['Program Manager']),
+    courseController.getCourseAssignmentsWithMarks
+);
+
 router.route('/:courseId/reject').patch(
     checkRole(['Program Manager']),
     courseController.rejectCourse
