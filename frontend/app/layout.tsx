@@ -9,6 +9,7 @@ import { CountsProvider } from "@/lib/contexts/CountsContext";
 import { SidebarProvider } from "@/lib/contexts/SidebarContext";
 import { AuthProvider } from "@/lib/contexts/authContext"; // ✅ Add this
 import { Toaster } from "sonner";
+import { NotificationProvider } from "@/lib/contexts/NotificationContext";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -31,6 +32,7 @@ export default function RootLayout({
           <RoleProvider>
             <CountsProvider>
               <SidebarProvider>
+                <NotificationProvider>
                 <ThemeProvider
                   attribute="class"
                   defaultTheme="system"
@@ -40,6 +42,7 @@ export default function RootLayout({
                   {children}
                   <Toaster richColors position="top-right" />
                 </ThemeProvider>
+                </NotificationProvider>
               </SidebarProvider>
             </CountsProvider>
           </RoleProvider>

@@ -16,6 +16,9 @@ api.interceptors.request.use(
     const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
+      console.log('🔑 Token being sent:', token.substring(0, 20) + '...');
+    } else {
+      console.log('❌ No token found in localStorage');
     }
     return config;
   },
@@ -30,6 +33,7 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    console.log('🚨 API Error:', error.response?.status, error.response?.data);
     if (error.response?.status === 401 || 
         (error.response?.data?.message && error.response.data.message.includes('jwt expired'))) {
       // Clear the expired token

@@ -34,3 +34,9 @@ export const getMyAvailableAssignments = async (): Promise<Assignment[]> => {
     const response = await api.get('/assignments/my-available');
     return response.data.data;
 };
+
+// For Facilitator to resend assignment notifications to trainees
+export const resendAssignmentToTrainees = async (assignmentId: string): Promise<{ success: boolean; sentCount: number; totalCount: number }> => {
+    const response = await api.post(`/assignments/${assignmentId}/resend-notifications`);
+    return response.data.data;
+};

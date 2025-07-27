@@ -61,6 +61,13 @@ const startOnlineSession = asyncHandler(async (req, res) => {
 
 const startPhysicalSession = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
+    const { latitude, longitude, radius = 50 } = req.body; // Facilitator provides their location
+
+    // --- GEOLOCATION FIX ---
+    if (!latitude || !longitude) {
+        throw new ApiError(400, "Your location (latitude and longitude) is required to start a physical session.");
+    }
+
     const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'physical' });
     const session = await ClassSession.findOne(query);
 
@@ -68,9 +75,18 @@ const startPhysicalSession = asyncHandler(async (req, res) => {
     if (session.status !== 'scheduled') throw new ApiError(400, "Session is already active or completed.");
 
     session.status = 'active';
+    // Save the class location based on where the facilitator started it
+    session.location = {
+        lat: latitude,
+        lng: longitude,
+        radius: radius
+    };
     await session.save();
+    // --- END OF FIX ---
+
     return res.status(200).json(new ApiResponse(200, session, "Physical session started successfully."));
 });
+
 
 const openQrForSession = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
@@ -123,18 +139,28 @@ const markQRAttendance = asyncHandler(async (req, res) => {
         throw new ApiError(403, "You are not enrolled in this program's session.");
     }
 
-    const todayDateString = new Date().toISOString().split('T')[0];
-    const attendance = await Attendance.findOneAndUpdate(
-        { userId: req.user._id, programId: session.programId, date: todayDateString },
-        { 
-            $set: { checkIn: new Date(), method: 'qr_code', status: 'Present', sessionId: session._id },
-            $setOnInsert: { userId: req.user._id, programId: session.programId, date: todayDateString }
-        },
-        { upsert: true, new: true, runValidators: true }
-    );
+    // --- THIS IS THE FIX ---
+    // The query now looks for a record matching the user and the specific session.
+    const query = { userId: req.user._id, sessionId: session._id };
+
+    // The data to be inserted or updated.
+    const update = {
+        $set: {
+            programId: session.programId,
+            date: new Date(session.startTime).toISOString().split('T')[0],
+            timestamp: new Date(),
+            method: 'qr_code',
+            status: 'Present'
+        }
+    };
+    
+    // Using findOneAndUpdate with upsert is atomic and safe.
+    const attendance = await Attendance.findOneAndUpdate(query, update, { upsert: true, new: true });
+    // --- END OF FIX ---
 
     return res.status(201).json(new ApiResponse(201, { attendance }, "QR attendance marked successfully."));
 });
+
 
 const markGeolocationAttendance = asyncHandler(async (req, res) => {
     const { sessionId, latitude, longitude } = req.body;
@@ -153,17 +179,25 @@ const markGeolocationAttendance = asyncHandler(async (req, res) => {
         throw new ApiError(400, "You are not within the required class location radius.");
     }
 
-    const todayDateString = new Date().toISOString().split('T')[0];
-    const attendance = await Attendance.findOneAndUpdate(
-        { userId: req.user._id, programId: session.programId, date: todayDateString },
-        { 
-            $set: { checkIn: new Date(), method: 'geolocation', status: 'Present', locationCheckIn: { lat: latitude, lng: longitude }, sessionId: session._id },
-            $setOnInsert: { userId: req.user._id, programId: session.programId, date: todayDateString }
-        },
-        { upsert: true, new: true, runValidators: true }
-    );
+    // --- THIS IS THE FIX ---
+    const query = { userId: req.user._id, sessionId: session._id };
+    const update = {
+        $set: {
+            programId: session.programId,
+            date: new Date(session.startTime).toISOString().split('T')[0],
+            timestamp: new Date(),
+            method: 'geolocation',
+            status: 'Present',
+            location: { lat: latitude, lng: longitude }
+        }
+    };
+    
+    const attendance = await Attendance.findOneAndUpdate(query, update, { upsert: true, new: true });
+    // --- END OF FIX ---
+
     return res.status(201).json(new ApiResponse(201, { attendance }, "Geolocation attendance marked successfully."));
 });
+
 
 
 // ===================================================================

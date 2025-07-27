@@ -1,109 +1,150 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Download, FileText, Loader2 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { toast } from "sonner";
+import { FileText, Download, BookOpen, Loader2 } from "lucide-react";
+import { getMyCourses } from "@/lib/services/course.service";
 import { getAllPrograms } from "@/lib/services/program.service";
-import { getCoursesForProgram } from "@/lib/services/course.service";
-import { Program, Course } from "@/types";
+import { Course, Program } from "@/types";
+import { useAuth } from "@/lib/contexts/RoleContext";
 
-interface ProgramWithCourses extends Program {
-    courses?: Course[];
-}
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-export default function ResourcesPage() {
-    const [programsWithCourses, setProgramsWithCourses] = useState<ProgramWithCourses[]>([]);
+export default function TraineeResourcesPage() {
+    const { user, loading: authLoading } = useAuth();
+    const [myPrograms, setMyPrograms] = useState<Program[]>([]);
+    const [selectedProgramId, setSelectedProgramId] = useState<string>("");
+    const [approvedCourses, setApprovedCourses] = useState<Course[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeAccordionItem, setActiveAccordionItem] = useState<string>("");
+    const [error, setError] = useState<string | null>(null);
 
-    const fetchResources = useCallback(async () => {
+    const fetchInitialData = useCallback(async () => {
+        if (!user) return;
         setLoading(true);
+        setError(null);
         try {
-            const enrolledPrograms = await getAllPrograms();
-
-            if (enrolledPrograms.length === 0) {
-                setProgramsWithCourses([]);
-                return;
-            }
-
-            const programsData = await Promise.all(
-                enrolledPrograms.map(async (program) => {
-                    const courses = await getCoursesForProgram(program._id);
-                    return { ...program, courses };
-                })
-            );
-
-            setProgramsWithCourses(programsData);
-            
-            // Automatically open the first program in the accordion
-            if (programsData.length > 0) {
-                setActiveAccordionItem(programsData[0]._id);
+            // The backend's getAllPrograms already filters to show only the trainee's enrolled programs
+            const programsData = await getAllPrograms();
+            setMyPrograms(programsData);
+            if (programsData.length > 0 && !selectedProgramId) {
+                setSelectedProgramId(programsData[0]._id);
             }
         } catch (err) {
-            toast.error("Failed to load learning resources.");
+            toast.error("Failed to load your enrolled programs.");
+            setError("Could not load programs. Please try again later.");
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [user, selectedProgramId]);
 
-    useEffect(() => { fetchResources(); }, [fetchResources]);
+    const fetchCoursesForProgram = useCallback(async () => {
+        if (!selectedProgramId) {
+            setApprovedCourses([]); // Clear courses if no program is selected
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+            // The getMyCourses endpoint for a trainee returns only approved courses for their programs.
+            const allMyCourses = await getMyCourses();
+            // Filter these courses by the selected program ID on the frontend.
+            setApprovedCourses(allMyCourses.filter(course => course.program._id === selectedProgramId));
+        } catch (err) {
+            toast.error("Failed to load resources for this program.");
+            setError("Could not load resources. Please try again later.");
+        } finally {
+            setLoading(false);
+        }
+    }, [selectedProgramId]);
+    
+    useEffect(() => {
+        if (!authLoading) {
+            fetchInitialData();
+        }
+    }, [authLoading, fetchInitialData]);
 
-    if (loading) {
-        return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin"/></div>;
+    useEffect(() => {
+        fetchCoursesForProgram();
+    }, [selectedProgramId, fetchCoursesForProgram]);
+
+    if (authLoading) {
+        return <div className="flex justify-center items-center h-full"><Loader2 className="h-8 w-8 animate-spin"/></div>;
     }
 
     return (
         <div className="space-y-6">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Learning Resources</h1>
-                <p className="text-muted-foreground">Access all learning materials for your enrolled programs.</p>
+                <p className="text-muted-foreground">Access all approved course materials for your programs.</p>
             </div>
 
-            {programsWithCourses.length === 0 ? (
-                 <Card>
-                    <CardContent className="pt-6 text-center text-muted-foreground">
-                        You are not enrolled in any programs with available resources.
+            {error && <Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Select Your Program</CardTitle>
+                    <CardDescription>Choose one of your enrolled programs to see its resources.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {myPrograms.length > 0 ? (
+                        <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
+                            <SelectTrigger className="max-w-md">
+                                <SelectValue placeholder="Select one of your programs..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {myPrograms.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">You are not currently enrolled in any programs.</p>
+                    )}
+                </CardContent>
+            </Card>
+
+            {loading ? (
+                <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin"/></div>
+            ) : approvedCourses.length === 0 ? (
+                <Card className="text-center py-12">
+                    <CardContent>
+                        <BookOpen className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                        <h3 className="text-lg font-semibold">No Resources Available</h3>
+                        <p className="text-muted-foreground">There are no approved course materials for this program yet.</p>
                     </CardContent>
                 </Card>
             ) : (
-                <Accordion type="single" collapsible value={activeAccordionItem} onValueChange={setActiveAccordionItem} className="w-full">
-                    {programsWithCourses.map(program => (
-                        <AccordionItem value={program._id} key={program._id}>
-                            <AccordionTrigger className="text-lg font-semibold hover:no-underline p-4">
-                               {program.name}
-                            </AccordionTrigger>
-                            <AccordionContent>
-                                <div className="border-t">
-                                    {program.courses && program.courses.length > 0 ? (
-                                        <div className="space-y-2 p-4">
-                                            {program.courses.map(course => (
-                                                <div key={course._id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
-                                                    <div className="flex items-center gap-3">
-                                                        <FileText className="h-5 w-5 text-primary"/>
-                                                        <div>
-                                                            <h4 className="font-medium">{course.title}</h4>
-                                                            <p className="text-xs text-muted-foreground">{course.description}</p>
-                                                        </div>
-                                                    </div>
-                                                    <a href={course.contentUrl} target="_blank" rel="noopener noreferrer">
-                                                        <Button variant="outline" size="sm">
-                                                            <Download className="mr-2 h-4 w-4"/> Download
-                                                        </Button>
-                                                    </a>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="text-muted-foreground text-sm p-4">No course materials have been uploaded for this program yet.</p>
-                                    )}
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {approvedCourses.map(course => (
+                        <Card key={course._id}>
+                            <CardHeader>
+                                <div className="flex items-start gap-4">
+                                    <FileText className="h-8 w-8 text-primary flex-shrink-0 mt-1"/>
+                                    <div>
+                                        <CardTitle>{course.title}</CardTitle>
+                                        <CardDescription>by {course.facilitator.name}</CardDescription>
+                                    </div>
                                 </div>
-                            </AccordionContent>
-                        </AccordionItem>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm text-muted-foreground mb-4 line-clamp-3 h-14">{course.description}</p>
+                                <Button className="w-full" asChild>
+                                    {/* --- THIS IS THE FUNCTIONAL DOWNLOAD LINK --- */}
+                                    <a 
+                                      href={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '')}/${course.contentUrl.replace(/\\/g, '/')}`}
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      download
+                                    >
+                                        <Download className="mr-2 h-4 w-4"/>
+                                        Download Material
+                                    </a>
+                                </Button>
+                            </CardContent>
+                        </Card>
                     ))}
-                </Accordion>
+                </div>
             )}
         </div>
     );

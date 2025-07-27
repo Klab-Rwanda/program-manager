@@ -5,7 +5,7 @@ import { checkRole } from '../../middlewares/role.middleware.js';
 
 const router = Router();
 router.use(verifyJWT);
-
+router.route('/program/:programId').get(checkRole(['Trainee']), assignmentController.getAssignmentsForProgram);
 // Facilitator routes
 router.route('/')
     .post(checkRole(['Facilitator']), assignmentController.createAssignment);
@@ -16,6 +16,9 @@ router.route('/my-assignments')
 router.route('/:id')
     .patch(checkRole(['Facilitator']), assignmentController.updateAssignment)
     .delete(checkRole(['Facilitator']), assignmentController.deleteAssignment);
+
+router.route('/:id/resend-notifications')
+    .post(checkRole(['Facilitator']), assignmentController.resendAssignmentNotifications);
 
 // Shared route for Trainees and Facilitators
 router.route('/course/:courseId')

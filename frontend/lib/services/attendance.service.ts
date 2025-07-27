@@ -1,12 +1,31 @@
 import api from '../api';
-// --- THIS IS THE FIX ---
-// Import all necessary types from the central types file
-import { Program, ClassSession, AttendanceRecord } from '@/types';
-// --- END OF FIX ---
 
-// Note: All local interface definitions for ClassSession and AttendanceRecord have been removed.
+import { Program,  AttendanceRecord } from '@/types';
 
-// --- Manager/Admin Reporting Services ---
+
+
+export interface ClassSession {
+  _id: string;
+  type: 'physical' | 'online';
+  programId: {
+    _id: string;
+    name: string;
+  };
+  facilitatorId: {
+    _id: string;
+    name: string;
+  };
+  sessionId: string;
+  title: string;
+  description?: string;
+  startTime: string;
+  duration: number; // in minutes
+  status: 'scheduled' | 'active' | 'completed' | 'cancelled';
+  accessLink?: string;
+  meetingLink?: string;
+  qrCodeImage?: string; // This is a frontend-only convenience field, not in DB model
+  updatedAt: string;
+}
 
 export const getProgramAttendanceReport = async (programId: string, startDate: string, endDate: string): Promise<AttendanceRecord[]> => {
     const response = await api.get(`/attendance/report/program/${programId}`, {

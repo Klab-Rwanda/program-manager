@@ -1,34 +1,44 @@
 import mongoose from 'mongoose';
+import mongoosePaginate from 'mongoose-paginate-v2';
 
 const notificationSchema = new mongoose.Schema({
-    user: { // The user who will receive the notification
+    // The user who will receive the notification
+    recipient: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true,
+    },
+    // The user who triggered the event (optional, e.g., a PM approving a program)
+    sender: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
     },
     title: {
         type: String,
-        required: true
+        required: true,
     },
     message: {
         type: String,
-        required: true
+        required: true,
     },
     type: {
         type: String,
-        enum: ['info', 'success', 'warning', 'error'],
-        default: 'info'
+        enum: ['info', 'success', 'warning', 'error', 'approval'],
+        default: 'info',
+    },
+    // A link the user can click to go to the relevant page
+    link: {
+        type: String,
     },
     isRead: {
         type: Boolean,
-        default: false
+        default: false,
     },
-    link: { // Optional: A URL to navigate to when the notification is clicked
-        type: String
-    }
 }, { timestamps: true });
 
-// Index for efficient querying of unread notifications for a user
-notificationSchema.index({ user: 1, isRead: 1 });
+notificationSchema.plugin(mongoosePaginate);
+
+// Index for efficient querying of a user's notifications
+notificationSchema.index({ recipient: 1, createdAt: -1 });
 
 export const Notification = mongoose.model('Notification', notificationSchema);

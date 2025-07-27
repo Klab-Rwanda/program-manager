@@ -192,4 +192,7 @@ router.route('/bulk').post(exportController.bulkExport);
  */
 router.route('/custom').post(exportController.customExport);
 
+router.route('/logs')
+    .post(checkRole(['SuperAdmin']), exportController.exportLogs);
+
 export default router; 

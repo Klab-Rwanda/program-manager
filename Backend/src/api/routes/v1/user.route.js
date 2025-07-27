@@ -158,7 +158,8 @@ manageRouter.route('/').get(checkRole(['SuperAdmin', 'Program Manager']), userCo
  *       200: { description: 'User details fetched successfully.' }
  *       404: { description: 'User not found.' }
  */
-manageRouter.route('/:id').get(checkRole(['SuperAdmin']), userController.getUserById);
+manageRouter.route('/:id').get(checkRole(['SuperAdmin']), userController.getUserById)
+     .delete(checkRole(['SuperAdmin']), userController.deleteUserByAdmin);
 
 /**
  * @openapi
@@ -183,45 +184,10 @@ manageRouter.route('/:id').get(checkRole(['SuperAdmin']), userController.getUser
  */
 manageRouter.route('/:id/status').patch(checkRole(['SuperAdmin']), userController.updateUserStatus);
 
-/**
- * @openapi
- * /users/manage/{id}/assign-manager:
- *   patch:
- *     tags: [User Management (Admin)]
- *     summary: Assign a manager to a user
- *     description: (SuperAdmin only) Assigns a specific Program Manager to another user (e.g., a Trainee or Facilitator).
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - { name: id, in: path, required: true, schema: { type: string, description: "ID of the user to be managed" } }
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               managerId:
- *                 type: string
- *                 description: "ID of the Program Manager to assign. Send empty string to unassign."
- *     responses:
- *       200: { description: 'Manager assigned successfully.' }
- */
-// manageRouter.route('/:id/assign-manager').patch(checkRole(['SuperAdmin']), userController.assignManagerToUser);
-
+manageRouter.route('/:id/facilitator-profile').patch(checkRole(['SuperAdmin', 'Program Manager']), userController.updateFacilitatorProfile);
 
 // Mount all the management routes under the /manage path
 router.use('/manage', manageRouter);
-
-manageRouter.route('/:id')
-    .get(checkRole(['SuperAdmin']), userController.getUserById)
-    .patch(checkRole(['SuperAdmin']), userController.updateUserDetailsByAdmin) // Add this
-    .delete(checkRole(['SuperAdmin']), userController.deleteUserByAdmin);
-
-// User status update by Admin (already existing, verify it uses `updateUserStatus`)
-manageRouter.route('/:id/status').patch(checkRole(['SuperAdmin']), userController.updateUserStatus);
-
-// Mount all the management routes under the /manage path
-router.use('/manage', manageRouter);
+router.route('/managers').get(verifyJWT, checkRole(['SuperAdmin']), userController.getAllManagers);
 
 export default router;

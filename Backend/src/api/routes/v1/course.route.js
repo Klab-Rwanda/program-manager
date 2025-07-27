@@ -77,6 +77,11 @@ router.route('/:courseId/approve').patch(
     courseController.approveCourse
 );
 
+router.route('/:courseId/activate').patch(
+    checkRole(['Program Manager']), 
+    courseController.activateCourse
+);
+
 /**
  * @openapi
  * /courses/program/{programId}:
@@ -130,6 +135,26 @@ router.route('/program/:programId').get(
     // but the controller itself (getCoursesForProgram) does not enforce it.
     // If you need strict enrollment-based access, add middleware to verify user is in program.
     courseController.getCoursesForProgram
+);
+
+router.route('/pending').get(
+    checkRole(['Program Manager']),
+    courseController.getPendingCourses
+);
+
+router.route('/status/:status').get(
+    checkRole(['Program Manager']),
+    courseController.getCoursesByStatus
+);
+
+router.route('/:courseId/assignments-with-marks').get(
+    checkRole(['Program Manager']),
+    courseController.getCourseAssignmentsWithMarks
+);
+
+router.route('/:courseId/reject').patch(
+    checkRole(['Program Manager']),
+    courseController.rejectCourse
 );
 router.route('/:courseId/request-approval').patch(
     checkRole(['Facilitator']),
@@ -212,6 +237,11 @@ router.route('/:courseId')
 
 
 router.route('/:courseId')
-    .patch(checkRole(['Facilitator']), upload.single('courseDocument'), courseController.updateCourse)
+    .put(checkRole(['Facilitator']), courseController.updateCourse)
     .delete(checkRole(['Facilitator']), courseController.deleteCourse);
+
+    router.route('/all').get(
+    checkRole(['SuperAdmin']),
+    courseController.getAllCoursesAdmin
+);
 export default router;

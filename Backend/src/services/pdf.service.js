@@ -145,3 +145,42 @@ export const generateCustomReportPDF = (data, template, stream) => {
 
     doc.end();
 };
+
+export const generateLogReportPDF = (logs, filters, stream) => {
+    const doc = new PDFDocument({ margin: 50 });
+    doc.pipe(stream);
+
+    doc.fontSize(20).text('Master Activity Log Report', { align: 'center' });
+    doc.fontSize(10).text(`Generated on: ${new Date().toLocaleDateString()}`, { align: 'center' });
+    if (filters.startDate && filters.endDate) {
+        doc.fontSize(10).text(`Period: ${filters.startDate} to ${filters.endDate}`, { align: 'center' });
+    }
+    doc.moveDown(2);
+    
+    // Table Headers
+    const tableTop = doc.y;
+    const itemX = 50;
+    const userX = 150;
+    const actionX = 280;
+    const detailsX = 400;
+
+    doc.fontSize(10).font('Helvetica-Bold')
+       .text('Timestamp', itemX)
+       .text('User (Role)', userX)
+       .text('Action', actionX)
+       .text('Details', detailsX)
+       .moveDown(0.5);
+    
+    // Table Body
+    doc.font('Helvetica');
+    logs.forEach(log => {
+        const y = doc.y;
+        doc.text(new Date(log.createdAt).toLocaleString(), itemX, y, { width: 100 })
+           .text(`${log.user?.name || 'N/A'} (${log.user?.role || 'N/A'})`, userX, y, { width: 120 })
+           .text(log.action.replace(/_/g, ' '), actionX, y, { width: 110 })
+           .text(log.details, detailsX, y, { width: 150 });
+        doc.moveDown(1.5);
+    });
+
+    doc.end();
+};

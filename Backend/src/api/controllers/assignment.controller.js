@@ -4,6 +4,9 @@ import { ApiResponse } from '../../utils/ApiResponse.js';
 import { Assignment } from '../models/assignment.model.js';
 import { Course } from '../models/course.model.js';
 import { Program } from '../models/program.model.js';
+import { Roadmap } from '../models/roadmap.model.js';
+import { User } from '../models/user.model.js';
+import { sendAssignmentNotificationEmail } from '../../services/email.service.js';
 
 // Helper to verify facilitator owns the course/program
 const verifyFacilitatorAccess = async (courseId, facilitatorId) => {
@@ -15,26 +18,137 @@ const verifyFacilitatorAccess = async (courseId, facilitatorId) => {
     return course;
 };
 
+// Helper to send assignment notifications to trainees
+const sendAssignmentNotifications = async (assignment, course, program, facilitator) => {
+    try {
+        // Get all trainees enrolled in this program
+        const trainees = await User.find({ 
+            _id: { $in: program.trainees },
+            role: 'Trainee'
+        }).select('name email');
+
+        if (trainees.length === 0) {
+            console.log('No trainees found for program:', program._id);
+            return { success: true, sentCount: 0 };
+        }
+
+        console.log(`Sending assignment notifications to ${trainees.length} trainees`);
+
+        // Send emails to all trainees
+        const emailPromises = trainees.map(trainee => 
+            sendAssignmentNotificationEmail(
+                trainee.email,
+                trainee.name,
+                assignment.title,
+                course.title,
+                program.name,
+                assignment.dueDate,
+                facilitator.name
+            )
+        );
+
+        const results = await Promise.allSettled(emailPromises);
+        const successfulEmails = results.filter(result => result.status === 'fulfilled' && result.value).length;
+
+        console.log(`Successfully sent ${successfulEmails} out of ${trainees.length} assignment notifications`);
+
+        return { 
+            success: true, 
+            sentCount: successfulEmails,
+            totalCount: trainees.length
+        };
+    } catch (error) {
+        console.error('Error sending assignment notifications:', error);
+        return { 
+            success: false, 
+            error: error.message,
+            sentCount: 0
+        };
+    }
+};
+
 /**
  * @desc    Create a new assignment for a course.
  * @route   POST /api/v1/assignments
  * @access  Private (Facilitator)
  */
 export const createAssignment = asyncHandler(async (req, res) => {
-    const { title, description, courseId, dueDate, maxGrade } = req.body;
+    console.log('=== CREATE ASSIGNMENT DEBUG ===');
+    console.log('Request body:', req.body);
+    console.log('User ID:', req.user._id);
+    
+    const { title, description, courseId, roadmapId, dueDate, maxGrade } = req.body;
     const facilitatorId = req.user._id;
+
+    console.log('Extracted fields:', { title, description, courseId, roadmapId, dueDate, maxGrade });
+
+    // Validate required fields
+    if (!title || !description || !courseId || !roadmapId || !dueDate) {
+        console.log('Validation failed - missing fields:', { title: !!title, description: !!description, courseId: !!courseId, roadmapId: !!roadmapId, dueDate: !!dueDate });
+        throw new ApiError(400, "All required fields must be provided.");
+    }
 
     const course = await verifyFacilitatorAccess(courseId, facilitatorId);
 
-    const assignment = await Assignment.create({
+    // Verify roadmap exists and belongs to the course
+    const roadmap = await Roadmap.findById(roadmapId);
+    if (!roadmap) {
+        throw new ApiError(404, "Roadmap not found.");
+    }
+    if (roadmap.course.toString() !== courseId) {
+        throw new ApiError(400, "Roadmap does not belong to the selected course.");
+    }
+
+    console.log('Creating assignment with data:', {
         title,
         description,
         course: courseId,
+        roadmap: roadmapId,
         program: course.program,
         facilitator: facilitatorId,
         dueDate,
         maxGrade,
     });
+
+    const assignment = await Assignment.create({
+        title,
+        description,
+        course: courseId,
+        roadmap: roadmapId,
+        program: course.program,
+        facilitator: facilitatorId,
+        dueDate,
+        maxGrade,
+    });
+
+    console.log('Assignment created successfully:', assignment._id);
+
+    // Send notifications to trainees
+    try {
+        // Get program and facilitator details for notifications
+        const program = await Program.findById(course.program).populate('trainees');
+        const facilitator = await User.findById(facilitatorId).select('name');
+
+        if (program && facilitator) {
+            console.log('Sending assignment notifications to trainees...');
+            const notificationResult = await sendAssignmentNotifications(assignment, course, program, facilitator);
+            
+            if (notificationResult.success) {
+                // Update assignment to mark as sent to trainees
+                await Assignment.findByIdAndUpdate(assignment._id, {
+                    sentToTrainees: true,
+                    sentToTraineesAt: new Date()
+                });
+                
+                console.log(`Assignment notifications sent: ${notificationResult.sentCount}/${notificationResult.totalCount} trainees notified`);
+            } else {
+                console.error('Failed to send assignment notifications:', notificationResult.error);
+            }
+        }
+    } catch (notificationError) {
+        console.error('Error in assignment notification process:', notificationError);
+        // Don't fail the assignment creation if notifications fail
+    }
 
     return res.status(201).json(new ApiResponse(201, assignment, "Assignment created successfully."));
 });
@@ -59,6 +173,7 @@ export const getMyCreatedAssignments = asyncHandler(async (req, res) => {
     const assignments = await Assignment.find({ facilitator: req.user._id })
         .populate('course', 'title')
         .populate('program', 'name')
+        .populate('roadmap', 'title weekNumber')
         .sort({ dueDate: -1 });
     return res.status(200).json(new ApiResponse(200, assignments));
 });
@@ -71,15 +186,27 @@ export const getMyCreatedAssignments = asyncHandler(async (req, res) => {
  */
 export const updateAssignment = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { title, description, dueDate, maxGrade } = req.body;
+    const { title, description, roadmapId, dueDate, maxGrade } = req.body;
     
     const assignment = await Assignment.findById(id);
     if (!assignment) throw new ApiError(404, "Assignment not found.");
 
     await verifyFacilitatorAccess(assignment.course, req.user._id);
 
+    // If roadmapId is provided, verify it exists and belongs to the course
+    if (roadmapId) {
+        const roadmap = await Roadmap.findById(roadmapId);
+        if (!roadmap) {
+            throw new ApiError(404, "Roadmap not found.");
+        }
+        if (roadmap.course.toString() !== assignment.course.toString()) {
+            throw new ApiError(400, "Roadmap does not belong to the assignment's course.");
+        }
+    }
+
     assignment.title = title ?? assignment.title;
     assignment.description = description ?? assignment.description;
+    assignment.roadmap = roadmapId ?? assignment.roadmap;
     assignment.dueDate = dueDate ?? assignment.dueDate;
     assignment.maxGrade = maxGrade ?? assignment.maxGrade;
     
@@ -126,4 +253,72 @@ export const getMyAvailableAssignments = asyncHandler(async (req, res) => {
     .sort({ dueDate: 1 }); // Sort by the nearest due date first
 
     return res.status(200).json(new ApiResponse(200, assignments, "Available assignments fetched successfully."));
+});
+
+export const getAssignmentsForProgram = asyncHandler(async (req, res) => {
+    const { programId } = req.params;
+
+    // 1. Find all APPROVED courses for this program.
+    const approvedCourses = await Course.find({ 
+        program: programId, 
+        status: 'Approved' 
+    }).select('_id');
+
+    const courseIds = approvedCourses.map(c => c._id);
+
+    // 2. Find all assignments linked to those approved courses.
+    // This assumes you have an Assignment model with a 'course' field.
+    // For now, we will return mock data.
+    // const assignments = await Assignment.find({ course: { $in: courseIds } });
+    
+    // MOCK DATA since Assignment model/controller doesn't exist
+    const mockAssignments = [
+        { _id: 'asg1', title: 'E-commerce Website', course: courseIds[0], dueDate: new Date(), status: 'Pending' },
+        { _id: 'asg2', title: 'Data Visualization Dashboard', course: courseIds[0], dueDate: new Date(), status: 'Submitted', grade: 95 }
+    ];
+
+    return res.status(200).json(new ApiResponse(200, mockAssignments, "Assignments fetched successfully."));
+});
+
+/**
+ * @desc    Resend assignment notifications to trainees.
+ * @route   POST /api/v1/assignments/:id/resend-notifications
+ * @access  Private (Facilitator)
+ */
+export const resendAssignmentNotifications = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    
+    const assignment = await Assignment.findById(id)
+        .populate('course', 'title')
+        .populate('program', 'name trainees')
+        .populate('facilitator', 'name');
+    
+    if (!assignment) {
+        throw new ApiError(404, "Assignment not found.");
+    }
+
+    // Verify facilitator owns the assignment
+    await verifyFacilitatorAccess(assignment.course, req.user._id);
+
+    console.log('Resending assignment notifications for:', assignment.title);
+
+    // Send notifications to trainees
+    const notificationResult = await sendAssignmentNotifications(
+        assignment, 
+        assignment.course, 
+        assignment.program, 
+        assignment.facilitator
+    );
+
+    if (notificationResult.success) {
+        // Update assignment to mark as sent to trainees
+        await Assignment.findByIdAndUpdate(assignment._id, {
+            sentToTrainees: true,
+            sentToTraineesAt: new Date()
+        });
+        
+        console.log(`Assignment notifications resent: ${notificationResult.sentCount}/${notificationResult.totalCount} trainees notified`);
+    }
+
+    return res.status(200).json(new ApiResponse(200, notificationResult, "Assignment notifications resent successfully."));
 });

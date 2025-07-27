@@ -116,3 +116,16 @@ export const exportTemplates = {
     ]
   }
 }; 
+
+export const exportMasterLog = async (
+  format: 'pdf' | 'excel', 
+  filters: any
+): Promise<Blob> => {
+  const response = await api.post('/export/logs', {
+    format,
+    filters
+  }, {
+    responseType: 'blob'
+  });
+  return response.data;
+};

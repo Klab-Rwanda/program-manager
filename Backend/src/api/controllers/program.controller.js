@@ -4,6 +4,10 @@ import { Program } from '../models/program.model.js';
 import { User } from '../models/user.model.js';
 import { ApiResponse } from '../../utils/ApiResponse.js';
 import { createLog } from '../../services/log.service.js';
+import { Course } from '../models/course.model.js';
+import { Attendance } from '../models/attendance.model.js';
+import { Submission } from '../models/submission.model.js';
+import { createNotification } from '../../services/notification.service.js';
 
 // --- HELPER FUNCTION ---
 const verifyManagerAccess = async (programId, managerId) => {
@@ -67,6 +71,18 @@ const requestApproval = asyncHandler(async (req, res) => {
         details: `PM ${req.user.name} submitted program '${program.name}' for approval.`,
         entity: { id: program._id, model: 'Program' }
     });
+     const superAdmins = await User.find({ role: 'SuperAdmin' });
+    
+    // 2. Create a notification for each SuperAdmin
+    for (const admin of superAdmins) {
+        await createNotification({
+            recipient: admin._id,
+            sender: req.user._id,
+            title: "New Program for Approval",
+            message: `Program Manager ${req.user.name} has submitted the program "${program.name}" for your approval.`,
+            link: `/dashboard/SuperAdmin/program-approval/${program._id}`
+        });
+    }
     return res.status(200).json(new ApiResponse(200, program, "Program submitted for approval."));
 });
 
@@ -74,6 +90,16 @@ const approveProgram = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const program = await Program.findByIdAndUpdate(id, { status: 'Active', rejectionReason: null }, { new: true });
     if (!program) throw new ApiError(404, "Program not found");
+     if (program.programManager) {
+        await createNotification({
+            recipient: program.programManager._id,
+            sender: req.user._id,
+            title: "Program Approved!",
+            message: `Your program "${program.name}" has been approved by a Super Admin and is now Active.`,
+            link: `/dashboard/Manager/programs`, // Link to their programs list
+            type: 'success'
+        });
+    }
      await createLog({
         user: req.user._id,
         action: 'PROGRAM_APPROVED',
@@ -89,6 +115,16 @@ const rejectProgram = asyncHandler(async (req, res) => {
     if (!reason) throw new ApiError(400, "A reason for rejection is required.");
     const program = await Program.findByIdAndUpdate(id, { status: 'Rejected', rejectionReason: reason }, { new: true });
     if (!program) throw new ApiError(404, "Program not found");
+     if (program.programManager) {
+        await createNotification({
+            recipient: program.programManager._id,
+            sender: req.user._id,
+            title: "Action Required: Program Rejected",
+            message: `Your program "${program.name}" was rejected. Please review the feedback.`,
+            link: `/dashboard/Manager/programs`,
+            type: 'warning'
+        });
+    }
      await createLog({
         user: req.user._id,
         action: 'PROGRAM_REJECTED',
@@ -105,6 +141,14 @@ const enrollTrainee = asyncHandler(async (req, res) => {
     const trainee = await User.findById(traineeId);
     if (!trainee || trainee.role !== 'Trainee') throw new ApiError(404, "Trainee not found or user is not a trainee.");
     const program = await Program.findByIdAndUpdate(id, { $addToSet: { trainees: traineeId } }, { new: true });
+     await createNotification({
+        recipient: traineeId,
+        sender: req.user._id, // The Program Manager who enrolled them
+        title: "You've been enrolled!",
+        message: `You have been enrolled in the "${program.name}" program.`,
+        link: `/dashboard/Trainee/my-learning`, // Link to their main dashboard
+        type: 'info'
+    });
     return res.status(200).json(new ApiResponse(200, program, "Trainee enrolled successfully."));
 });
 
@@ -115,29 +159,86 @@ const enrollFacilitator = asyncHandler(async (req, res) => {
     const facilitator = await User.findById(facilitatorId);
     if (!facilitator || facilitator.role !== 'Facilitator') throw new ApiError(404, "Facilitator not found or user is not a facilitator.");
     const program = await Program.findByIdAndUpdate(id, { $addToSet: { facilitators: facilitatorId } }, { new: true });
+     await createNotification({
+        recipient: facilitatorId,
+        sender: req.user._id,
+        title: "You've been assigned a program!",
+        message: `You have been assigned as a facilitator for the "${program.name}" program.`,
+        link: `/dashboard/Facilitator/fac-programs`, // Link to their programs list
+        type: 'info'
+    });
     return res.status(200).json(new ApiResponse(200, program, "Facilitator enrolled successfully."));
 });
 
 const getAllPrograms = asyncHandler(async (req, res) => {
     let query = {};
     const { role, _id } = req.user;
-    if (role === 'Program Manager') query.programManager = _id;
-    else if (role === 'Facilitator') query.facilitators = _id;
-    else if (role === 'Trainee') query.trainees = _id;
+    
+    console.log('🔍 getAllPrograms Debug:');
+    console.log('User Role:', role);
+    console.log('User ID:', _id);
+    
+    if (role === 'Program Manager') {
+        query.programManager = _id;
+        console.log('Query for Program Manager:', query);
+    } else if (role === 'Facilitator') {
+        query.facilitators = _id;
+        console.log('Query for Facilitator:', query);
+    } else if (role === 'Trainee') {
+        query.trainees = _id;
+        console.log('Query for Trainee:', query);
+    } else if (role === 'SuperAdmin') {
+        // SuperAdmin can see all programs
+        console.log('Query for SuperAdmin: all programs');
+    }
     
     const programs = await Program.find(query).populate('programManager', 'name email');
+    console.log('Found programs count:', programs.length);
+    
     return res.status(200).json(new ApiResponse(200, programs, "Programs fetched successfully."));
 });
 
-const getProgramById = asyncHandler(async (req, res) => {
+ const getProgramById = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const program = await Program.findById(id).populate([
-        { path: 'programManager', select: 'name email' },
-        { path: 'facilitators', select: 'name email' },
-        { path: 'trainees', select: 'name email' }
+    const { role, _id } = req.user;
+
+    // Use Promise.all to fetch the program and its associated courses simultaneously
+    const [program, courses] = await Promise.all([
+        Program.findById(id).populate([
+            { path: 'programManager', select: 'name email' },
+            { path: 'facilitators', select: 'name email role status isActive' },
+            { path: 'trainees', select: 'name email role status isActive' }
+        ]).lean(), // .lean() makes the query faster as it returns a plain JS object
+        Course.find({ program: id }).populate('facilitator', 'name').lean()
     ]);
-    if (!program) throw new ApiError(404, "Program not found");
-    return res.status(200).json(new ApiResponse(200, program, "Program details fetched successfully."));
+
+    if (!program) {
+        throw new ApiError(404, "Program not found");
+    }
+
+    // Check if user has access to this program based on their role
+    let hasAccess = false;
+    if (role === 'SuperAdmin') {
+        hasAccess = true; // SuperAdmin can access all programs
+    } else if (role === 'Program Manager' && program.programManager?._id?.toString() === _id.toString()) {
+        hasAccess = true; // Program Manager can access their own programs
+    } else if (role === 'Facilitator' && program.facilitators?.some(f => f._id?.toString() === _id.toString())) {
+        hasAccess = true; // Facilitator can access programs they're enrolled in
+    } else if (role === 'Trainee' && program.trainees?.some(t => t._id?.toString() === _id.toString())) {
+        hasAccess = true; // Trainee can access programs they're enrolled in
+    }
+
+    if (!hasAccess) {
+        throw new ApiError(403, "You don't have permission to access this program");
+    }
+
+    // Combine the results
+    const programDetails = {
+        ...program,
+        courses: courses // Attach the courses to the program object
+    };
+
+    return res.status(200).json(new ApiResponse(200, programDetails, "Program details fetched successfully."));
 });
 
 const updateProgram = asyncHandler(async (req, res) => {
@@ -312,33 +413,31 @@ export const assignManager = asyncHandler(async (req, res) => {
     const { managerId } = req.body;
 
     // Handle the case where the manager is being unassigned
-    if (!managerId || managerId === '') {
+    if (!managerId || managerId === 'unassign') {
         const program = await Program.findByIdAndUpdate(
             id,
             { $unset: { programManager: "" } }, // Use $unset to completely remove the field
             { new: true }
-        );
+        ).populate('programManager', 'name email');
+        
         if (!program) throw new ApiError(404, "Program not found.");
         return res.status(200).json(new ApiResponse(200, program, "Program Manager unassigned successfully."));
     }
 
-    // --- THE ROBUST FIX ---
-    // Validate that the user being assigned is actually a Program Manager, handling the space.
+    // Verify the user being assigned is a valid Program Manager
     const manager = await User.findOne({ 
         _id: managerId, 
-        role: 'Program Manager' // Use the exact string with the space
+        role: 'Program Manager'
     });
-    // --- END OF FIX ---
-
     if (!manager) {
         throw new ApiError(404, "The selected user is not a valid Program Manager.");
     }
 
     const program = await Program.findByIdAndUpdate(
         id,
-        { programManager: managerId }, // Assign to the singular 'programManager' field
+        { programManager: managerId },
         { new: true }
-    ).populate('programManager', 'name email'); // Populate the singular field
+    ).populate('programManager', 'name email');
     
     if (!program) throw new ApiError(404, "Program not found.");
 
@@ -357,52 +456,38 @@ function getWeekdayCount(startDate, endDate) {
 }
 
 
-/**
- * @desc    Get detailed statistics for a single program, including attendance percentage.
- * @route   GET /api/v1/programs/{id}/stats
- * @access  Private (SuperAdmin, ProgramManager)
- */
+
 export const getProgramStats = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
-    const program = await Program.findById(id);
+    const program = await Program.findById(id).select('trainees startDate endDate');
     if (!program) throw new ApiError(404, "Program not found.");
+    
+    const traineeIds = program.trainees;
 
-    // --- ATTENDANCE CALCULATION ---
-    const attendanceRecords = await Attendance.find({ program: id });
+    // This is a simplified calculation. A real system might be more complex.
+    const [
+        totalPresent,
+        totalPossibleAttendanceDays, // Placeholder
+        completedSubmissions,
+        totalSubmissions, // Placeholder
+    ] = await Promise.all([
+        Attendance.countDocuments({ programId: id, status: 'Present' }),
+        Attendance.countDocuments({ programId: id }),
+        Submission.countDocuments({ program: id, status: 'Reviewed' }),
+        Submission.countDocuments({ program: id }),
+    ]);
 
-    const presentCount = attendanceRecords.filter(a => a.status === 'Present').length;
-    const excusedCount = attendanceRecords.filter(a => a.status === 'Excused').length;
-    
-    const today = new Date();
-    const programStartDate = new Date(program.startDate);
-    
-    // Only count days from the start of the program up to today.
-    const effectiveEndDate = today < new Date(program.endDate) ? today : new Date(program.endDate);
-    
-    let totalEligibleDays = 0;
-    if (programStartDate <= effectiveEndDate) {
-        totalEligibleDays = getWeekdayCount(programStartDate, effectiveEndDate);
-    }
-    
-    const totalRequiredDays = totalEligibleDays - excusedCount;
-    
-    let overallAttendancePercentage = 0;
-    if (totalRequiredDays > 0) {
-        overallAttendancePercentage = (presentCount / totalRequiredDays) * 100;
-    }
-    // --- END OF CALCULATION ---
+    const attendanceRate = totalPossibleAttendanceDays > 0 ? Math.round((totalPresent / totalPossibleAttendanceDays) * 100) : 0;
+    const completionRate = totalSubmissions > 0 ? Math.round((completedSubmissions / totalSubmissions) * 100) : 0;
 
     const stats = {
-        totalEnrolled: program.trainees.length,
-        totalFacilitators: program.facilitators.length,
-        overallAttendancePercentage: Math.round(overallAttendancePercentage * 100) / 100, // Round to 2 decimal places
-        totalPresentDays: presentCount,
-        totalExcusedDays: excusedCount,
-        totalEligibleDays: totalEligibleDays,
+        enrolledTrainees: traineeIds.length,
+        attendanceRate: attendanceRate,
+        completionRate: completionRate,
     };
 
-    return res.status(200).json(new ApiResponse(200, stats, "Program statistics fetched successfully."));
+    return res.status(200).json(new ApiResponse(200, stats, "Program stats fetched successfully."));
 });
 
 const getProgramStudentCount = asyncHandler(async (req, res) => {

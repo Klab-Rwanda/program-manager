@@ -148,8 +148,69 @@ const sendPasswordChangeConfirmationEmail = async (email, name) => {
     }
 };
 
+const sendAssignmentNotificationEmail = async (traineeEmail, traineeName, assignmentTitle, courseTitle, programName, dueDate, facilitatorName) => {
+    const subject = `New Assignment: ${assignmentTitle} - ${courseTitle}`;
+    
+    const htmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #333; margin-bottom: 10px;">Klab Program Manager</h1>
+                <h2 style="color: #1f497d; margin-top: 0;">New Assignment Available</h2>
+            </div>
+            
+            <p>Hello ${traineeName},</p>
+            <p>A new assignment has been created for your program. Here are the details:</p>
+            
+            <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #1f497d; margin-top: 0;">Assignment Details</h3>
+                <ul style="list-style: none; padding: 0; margin: 0;">
+                    <li style="margin-bottom: 10px;"><strong>Assignment:</strong> ${assignmentTitle}</li>
+                    <li style="margin-bottom: 10px;"><strong>Course:</strong> ${courseTitle}</li>
+                    <li style="margin-bottom: 10px;"><strong>Program:</strong> ${programName}</li>
+                    <li style="margin-bottom: 10px;"><strong>Due Date:</strong> ${new Date(dueDate).toLocaleDateString()}</li>
+                    <li style="margin-bottom: 10px;"><strong>Facilitator:</strong> ${facilitatorName}</li>
+                </ul>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <p style="margin: 0;"><strong>Action Required</strong></p>
+                <p style="margin: 5px 0; color: #666;">Please log in to your dashboard to view the full assignment details and submit your work.</p>
+            </div>
+            
+            <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p style="margin: 0; color: #856404;"><strong>⏰ Reminder:</strong> Make sure to submit your assignment before the due date to avoid any penalties.</p>
+            </div>
+            
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+            <p style="font-size: 12px; color: #666;">
+                This is an automated notification from Klab Program Manager.<br>
+                If you have any questions, please contact your facilitator.<br>
+                Best regards,<br>
+                The Klab Team
+            </p>
+        </div>
+    `;
+
+    const mailOptions = {
+        from: `"Klab Program Manager" <${process.env.EMAIL_USER}>`,
+        to: traineeEmail,
+        subject: subject,
+        html: htmlBody,
+    };
+
+    try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`Assignment notification email sent to ${traineeEmail}: ${info.messageId}`);
+        return true;
+    } catch (error) {
+        console.error(`Error sending assignment notification email to ${traineeEmail}:`, error);
+        return false;
+    }
+};
+
 export { 
     sendRegistrationEmail, 
     sendPasswordResetEmail, 
-    sendPasswordChangeConfirmationEmail 
+    sendPasswordChangeConfirmationEmail,
+    sendAssignmentNotificationEmail
 };
