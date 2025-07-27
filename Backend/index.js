@@ -24,6 +24,7 @@ const io = new Server(server, {
   }
 });
 
+
 // Pass the 'io' instance to our socket configuration
 initializeSocket(io);
 export { io };
