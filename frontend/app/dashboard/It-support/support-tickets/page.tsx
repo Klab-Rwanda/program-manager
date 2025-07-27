@@ -25,7 +25,7 @@ useEffect(() => {
     }
 
     try {
-      const res = await fetch("http://localhost:8000/api/v1/tickets", {
+      const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/tickets", `{
          credentials: "include",
         headers: {
            
