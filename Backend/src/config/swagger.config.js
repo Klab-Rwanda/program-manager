@@ -14,7 +14,7 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: 'http://localhost:8000/api/v1',
+       url: "https://program-manager-klab.onrender.com/api/v1",
         description: 'Development Server'
       }
     ],

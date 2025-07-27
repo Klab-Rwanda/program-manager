@@ -18,13 +18,15 @@ export default function ForgotPasswordPage() {
   setMessage("");
 
   try {
-    const res = await fetch("http://localhost:8000/api/v1/auth/forgot-password", {
+    const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
+     const res = await fetch(`${API_BASE_URL}/api/v1/auth/forgot-password`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email }),
-    });
+     headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ email }),
+});
 
     const data = await res.json();
 
