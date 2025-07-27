@@ -32,17 +32,16 @@ export default function ResetPasswordPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/auth/reset-password/${token}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          newPassword: password,
-          confirm: confirmPassword,
-        }),
-      });
-
+     const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/auth/reset-password/${token}`, {
+  method: "PUT",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    newPassword: password,
+    confirm: confirmPassword,
+  }),
+});
       const data = await response.json();
 
       if (!response.ok) {
