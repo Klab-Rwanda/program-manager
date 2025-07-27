@@ -2,17 +2,15 @@
 import axios from 'axios';
 
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
 
 const api = axios.create({
   baseURL: API_URL,
-  withCredentials: true, 
+  withCredentials: true,
 });
-
 
 api.interceptors.request.use(
   (config) => {
-    
     const token = localStorage.getItem('accessToken');
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
@@ -34,7 +32,7 @@ api.interceptors.response.use(
   },
   (error) => {
     console.log('🚨 API Error:', error.response?.status, error.response?.data);
-    if (error.response?.status === 401 || 
+    if (error.response?.status === 401 ||
         (error.response?.data?.message && error.response.data.message.includes('jwt expired'))) {
       // Clear the expired token
       localStorage.removeItem('accessToken');
