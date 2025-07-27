@@ -54,6 +54,7 @@ export const getFacilitatorSessions = async (): Promise<ClassSession[]> => {
     return response.data.data;
 };
 
+
 export const startOnlineSession = async (sessionId: string): Promise<{ session: ClassSession }> => {
     const response = await api.post(`/attendance/sessions/${sessionId}/start-online`);
     return response.data.data;
