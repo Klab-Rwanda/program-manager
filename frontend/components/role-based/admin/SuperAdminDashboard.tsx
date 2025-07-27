@@ -84,7 +84,7 @@ export function SuperAdminDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold tracking-tight">System Overview</h1>
-          <Link href="/SuperAdmin/user-management">
+          <Link href="/dashboard/SuperAdmin/user-management">
              <Button className="bg-[#1f497d] hover:bg-[#1a3f6b]">
                 <Users className="mr-2 h-4 w-4" />
                 Manage Users
@@ -147,7 +147,7 @@ export function SuperAdminDashboard() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                    <Link href="/SuperAdmin/program-approval" className="block p-3 rounded-md hover:bg-yellow-100">
+                    <Link href="/dashboard/SuperAdmin/program-approval" className="block p-3 rounded-md hover:bg-yellow-100">
                         <div className="flex justify-between items-center">
                             <span className="font-semibold">{stats.pendingPrograms} Programs</span>
                             <ArrowRight className="h-4 w-4 text-muted-foreground"/>
@@ -167,9 +167,9 @@ export function SuperAdminDashboard() {
             <Card>
                 <CardHeader><CardTitle>Quick Links</CardTitle></CardHeader>
                 <CardContent className="flex flex-col gap-2">
-                    <Link href="/SuperAdmin/program-approval"><Button variant="ghost" className="w-full justify-start"><BookOpen className="mr-2 h-4 w-4"/> All Programs</Button></Link>
-                    <Link href="/SuperAdmin/reports-export"><Button variant="ghost" className="w-full justify-start"><BarChart3 className="mr-2 h-4 w-4"/> Generate Reports</Button></Link>
-                    <Link href="/SuperAdmin/master-log"><Button variant="ghost" className="w-full justify-start"><FileText className="mr-2 h-4 w-4"/> View Master Log</Button></Link>
+                    <Link href="/dashboard/SuperAdmin/program-approval"><Button variant="ghost" className="w-full justify-start"><BookOpen className="mr-2 h-4 w-4"/> All Programs</Button></Link>
+                    <Link href="/dashboard/SuperAdmin/reports-export"><Button variant="ghost" className="w-full justify-start"><BarChart3 className="mr-2 h-4 w-4"/> Generate Reports</Button></Link>
+                    <Link href="/dashboard/SuperAdmin/master-log"><Button variant="ghost" className="w-full justify-start"><FileText className="mr-2 h-4 w-4"/> View Master Log</Button></Link>
                 </CardContent>
             </Card>
         </div>

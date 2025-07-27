@@ -216,7 +216,7 @@ export default function ClassroomHubPage() {
                         </div>
                         <Button 
                             variant="outline" 
-                            onClick={() => router.push(role === 'facilitator' ? '/facilitator/attendance' : '/dashboard/Trainee/trattendance')}
+                            onClick={() => router.push(role === 'facilitator' ? '/dashboard/Facilitator/Fac-attendance' : '/dashboard/Trainee/Trattendance')}
                         >
                             <LogOut className="mr-2 h-4 w-4" />
                             Exit Classroom

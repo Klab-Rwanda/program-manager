@@ -8,7 +8,7 @@ import { Course } from '../models/course.model.js';
 import { Log } from '../models/log.model.js';
 import { Roadmap } from '../models/roadmap.model.js';
 import { Assignment } from '../models/assignment.model.js';
-import { AssignmentSubmission } from '../models/assignmentSubmission.model.js';
+import { Submission } from '../models/submission.model.js';
 
 /**
  * @desc    Get dashboard summary statistics.
@@ -133,7 +133,7 @@ export const getRecentActivity = asyncHandler(async (req, res) => {
     .populate('facilitator', 'name');
 
     // Get recent assignment submissions
-    const recentSubmissions = await AssignmentSubmission.find({
+    const recentSubmissions = await Submission.find({
         submittedAt: { $exists: true, $ne: null }
     })
     .sort({ submittedAt: -1 })
