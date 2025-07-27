@@ -1,181 +1,252 @@
 "use client";
 
-
-import React, { useEffect, useState } from "react";
-import { Ticket } from "@/types";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Plus } from "lucide-react";
 
-export default function ITSupportDashboard() {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-  const [comment, setComment] = useState("");
+// Ticket interface - add this to your types/index.ts file
+export interface Ticket {
+  _id: string;
+  title: string;
+  description: string;
+  category: string;
+  priority: "Low" | "Medium" | "High" | "Critical";
+  status: "Open" | "In Progress" | "Resolved" | "Closed";
+  createdBy: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  assignedTo?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  comments: {
+    _id: string;
+    message: string;
+    author: {
+      _id: string;
+      name: string;
+      email: string;
+    };
+    createdAt: string;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+}
+
+interface CreateTicketData {
+  title: string;
+  description: string;
+  category: string;
+  priority: "Low" | "Medium" | "High" | "Critical";
+}
+
+interface CreateTicketComponentProps {
+  onTicketCreated?: (ticket: any) => void;
+}
+
+export default function CreateTicketComponent({ onTicketCreated }: CreateTicketComponentProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState<CreateTicketData>({
+    title: "",
+    description: "",
+    category: "",
+    priority: "Medium"
+  });
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
- 
-useEffect(() => {
-  const fetchTickets = async () => {
-    const token = localStorage.getItem("token");
+  const categories = [
+    "Hardware Issue",
+    "Software Issue",
+    "Network Problem",
+    "Account Access",
+    "Email Issue",
+    "System Performance",
+    "Security Concern",
+    "Mobile Device",
+    "Printer Issue",
+    "Other"
+  ];
 
-    if (!token) {
-      console.log("No token found");
+  const priorities = [
+    { value: "Low", label: "Low", color: "text-green-600" },
+    { value: "Medium", label: "Medium", color: "text-yellow-600" },
+    { value: "High", label: "High", color: "text-orange-600" },
+    { value: "Critical", label: "Critical", color: "text-red-600" }
+  ];
+
+  const handleInputChange = (field: keyof CreateTicketData, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.title.trim() || !formData.description.trim() || !formData.category) {
+      alert("Please fill in all required fields");
       return;
     }
 
+    setLoading(true);
+    
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/tickets", `{
-         credentials: "include",
-        headers: {
-           
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          "Accept": "application/json"
-        },
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || "Failed to fetch tickets");
+      const token = localStorage.getItem("accessToken") || localStorage.getItem("token");
+      
+      if (!token) {
+        throw new Error("No authentication token found");
       }
 
-      const data = await res.json();
-      setTickets(data.tickets || []);
-    } catch (err: any) {
-      console.error("Error fetching tickets:", err.message);
-
-    }
-  };
-
-  fetchTickets();
-}, []);
-
-
-  const handleAddComment = async () => {
-    if (!selectedTicket) return;
-
-    try {
-      const res = await fetch(
-        `http://localhost:8000/api/v1/tickets/${selectedTicket._id}/comment`,
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/tickets`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
+            Accept: "application/json"
           },
-          body: JSON.stringify({ message: comment }),
+          body: JSON.stringify(formData)
         }
       );
 
-      if (res.ok) {
-        const updated = await res.json();
-        const updatedTickets = tickets.map((ticket) =>
-          ticket._id === updated.data._id ? updated.data : ticket
-        );
-        setTickets(updatedTickets);
-        setSelectedTicket(updated.data);
-        setComment("");
-      } else {
-        console.error("Failed to add comment");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to create ticket");
       }
-    } catch (error) {
-      console.error("Error:", error);
-    }
-  };
 
-  const handleResolve = async () => {
-    if (!selectedTicket) return;
-
-    try {
-      const res = await fetch(
-        `http://localhost:8000/api/v1/tickets/${selectedTicket._id}/resolve`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (res.ok) {
-        const updated = await res.json();
-        const updatedTickets = tickets.map((ticket) =>
-          ticket._id === updated.data._id ? updated.data : ticket
-        );
-        setTickets(updatedTickets);
-        setSelectedTicket(updated.data);
-      } else {
-        console.error("Failed to resolve ticket");
+      const result = await response.json();
+      
+      // Reset form
+      setFormData({
+        title: "",
+        description: "",
+        category: "",
+        priority: "Medium"
+      });
+      
+      setIsOpen(false);
+      
+      // Call the callback if provided
+      if (onTicketCreated) {
+        onTicketCreated(result.data || result);
       }
-    } catch (error) {
-      console.error("Error:", error);
+      
+      alert("Ticket created successfully!");
+      
+    } catch (error: any) {
+      console.error("Error creating ticket:", error);
+      alert(error.message || "Failed to create ticket. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Support Tickets</h1>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button className="flex items-center gap-2">
+          <Plus size={16} />
+          Create New Ticket
+        </Button>
+      </DialogTrigger>
+      
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create Support Ticket</DialogTitle>
+        </DialogHeader>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="title">Title *</Label>
+            <Input
+              id="title"
+              placeholder="Brief description of the issue"
+              value={formData.title}
+              onChange={(e) => handleInputChange("title", e.target.value)}
+              required
+            />
+          </div>
 
-      {loading ? (
-        <p>Loading tickets...</p>
-      ) : tickets.length === 0 ? (
-        <p>No tickets available.</p>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {tickets.map((ticket) => (
-            <Card key={ticket._id} className="p-4">
-              <h2 className="text-lg font-semibold">{ticket.title}</h2>
-              <p className="text-sm text-gray-500">{ticket.category}</p>
-              <p className="text-sm mt-2 line-clamp-2">{ticket.description}</p>
-              <div className="mt-4 flex justify-end">
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      onClick={() => setSelectedTicket(ticket)}
-                    >
-                      View
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-lg">
-                    <h2 className="text-xl font-semibold mb-2">
-                      {selectedTicket?.title}
-                    </h2>
-                    <p className="mb-2">{selectedTicket?.description}</p>
-                    <div className="mb-4">
-                      <h3 className="font-semibold mb-1">Comments:</h3>
-                      {selectedTicket?.comments?.length ? (
-                        <ul className="space-y-1 max-h-[150px] overflow-auto text-sm">
-                          {selectedTicket.comments.map((c) => (
-                            <li key={c._id}>🗨️ {c.message}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm italic">No comments</p>
-                      )}
-                    </div>
-                    <textarea
-                      className="w-full border rounded p-2 text-sm mb-2"
-                      placeholder="Write a comment..."
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                    />
-                    <div className="flex gap-2 justify-end">
-                      <Button onClick={handleAddComment} disabled={!comment}>
-                        Add Comment
-                      </Button>
-                      <Button onClick={handleResolve} variant="secondary">
-                        Mark as Resolved
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
+          <div className="space-y-2">
+            <Label htmlFor="category">Category *</Label>
+            <Select 
+              value={formData.category} 
+              onValueChange={(value) => handleInputChange("category", value)}
+              required
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="priority">Priority</Label>
+            <Select 
+              value={formData.priority} 
+              onValueChange={(value: "Low" | "Medium" | "High" | "Critical") => 
+                handleInputChange("priority", value)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {priorities.map((priority) => (
+                  <SelectItem key={priority.value} value={priority.value}>
+                    <span className={priority.color}>{priority.label}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description *</Label>
+            <Textarea
+              id="description"
+              placeholder="Please provide detailed information about the issue, including steps to reproduce it if applicable..."
+              value={formData.description}
+              onChange={(e) => handleInputChange("description", e.target.value)}
+              rows={4}
+              required
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Creating..." : "Create Ticket"}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
