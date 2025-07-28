@@ -113,6 +113,14 @@ export default function LoginPage() {
                 className="w-full h-12 px-4 pl-12 rounded-lg border-transparent bg-white/10 backdrop-blur-sm text-white placeholder-gray-400 focus:border-blue-400 focus:bg-white/20"
               />
             </div>
+            <div className="text-right">
+              <a 
+                href="/auth/forgot-password" 
+                className="text-sm text-gray-200 hover:text-white transition-colors"
+              >
+                Forgot Password?
+              </a>
+            </div>
           </div>
 
           <Button

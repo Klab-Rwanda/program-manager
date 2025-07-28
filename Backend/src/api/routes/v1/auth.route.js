@@ -131,7 +131,7 @@ router.post("/forgot-password", forgotPassword);
 /**
  * @openapi
  * /auth/reset-password/{token}:
- *   post:
+ *   put:
  *     tags: [Authentication]
  *     summary: Reset password using token
  *     description: Resets the user's password using a valid reset token received via email.
