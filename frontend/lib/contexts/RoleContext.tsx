@@ -46,11 +46,12 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   };
 
 const login = async (email: string, password: string) => {
- const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/auth/login`, {
+const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/auth/login`, {
   method: "POST",
   headers: {
     "Content-Type": "application/json"
   },
+  credentials: "include", // Ensure cookies are sent
   body: JSON.stringify({ email, password }),
 });
   const data = await res.json();

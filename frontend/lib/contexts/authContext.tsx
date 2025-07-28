@@ -14,7 +14,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState(null);
 
-  const isAuthenticated = !!user; // ✅ Define this before returning context
+  const isAuthenticated = !!user; 
 
   const login = async (email: string, password: string) => {
     try {
@@ -23,6 +23,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   headers: {
     "Content-Type": "application/json",
   },
+  credentials: "include",
   body: JSON.stringify({ email, password }),
 });
       if (!res.ok) {
