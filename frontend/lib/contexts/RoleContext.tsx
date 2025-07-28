@@ -46,12 +46,16 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   };
 
 const login = async (email: string, password: string) => {
-const res = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/auth/login`, {
+const API_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8000' 
+  : 'https://program-manager-klab.onrender.com';
+
+const res = await fetch(`${API_URL}/api/v1/auth/login`, {
   method: "POST",
   headers: {
     "Content-Type": "application/json"
   },
-  credentials: "include", // Ensure cookies are sent
+  credentials: "include",
   body: JSON.stringify({ email, password }),
 });
   const data = await res.json();
