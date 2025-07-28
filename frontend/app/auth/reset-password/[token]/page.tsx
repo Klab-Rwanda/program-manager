@@ -36,7 +36,7 @@ export default function ResetPasswordPage() {
   ? 'http://localhost:8000'
   : 'https://program-manager-klab.onrender.com';
 
-const response = await fetch(`${API_URL}/api/v1/reset-password/${token}`, {
+const response = await fetch(`${API_URL}/api/v1/auth/reset-password/${token}`, {
   method: "PUT",
   headers: {
     "Content-Type": "application/json",
