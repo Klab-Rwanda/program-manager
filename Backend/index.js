@@ -17,9 +17,14 @@ const app = express();
 const server = http.createServer(app); // Create an HTTP server from the Express app
 
 // Setup Socket.io
+
+// And update Socket.io too:
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: [
+      'http://localhost:3000',
+      'https://program-manager-klab.vercel.app'
+    ],
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -35,9 +40,13 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: [
+    'http://localhost:3000',
+    'https://program-manager-klab.vercel.app'
+  ],
   credentials: true
 }));
+
 
 app.use(express.static('public'));
 app.use(express.json({ limit: '10mb' }));
