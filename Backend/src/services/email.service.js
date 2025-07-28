@@ -213,9 +213,66 @@ const sendAssignmentNotificationEmail = async (traineeEmail, traineeName, assign
     }
 };
 
+const sendCertificateIssuedEmail = async (traineeEmail, traineeName, programName) => {
+    const subject = `Your Certificate for ${programName} is Issued!`;
+    const dashboardLink = `http://localhost:3000/dashboard/Trainee/my-certificates`; // Adjust to your frontend URL
+
+    const htmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #333; margin-bottom: 10px;">Klab Program Manager</h1>
+                <h2 style="color: #28a745; margin-top: 0;">Certificate of Completion</h2>
+            </div>
+            
+            <p>Hello ${traineeName},</p>
+            <p>We are thrilled to inform you that your certificate for successfully completing the <strong>${programName}</strong> program has been issued!</p>
+            
+            <div style="background-color: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 20px 0; text-align: center;">
+                <p style="margin: 0; color: #155724; font-size: 16px;"><strong>Congratulations on your achievement! 🎉</strong></p>
+            </div>
+            
+            <p>You can view and download your certificate from your dashboard:</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="${dashboardLink}" 
+                   style="background-color: #1f497d; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; font-size: 16px;">
+                    View My Certificates
+                </a>
+            </div>
+            
+            <p>We wish you all the best in your future endeavors!</p>
+            
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+            <p style="font-size: 12px; color: #666; text-align: center;">
+                This is an automated notification.<br>
+                Best regards,<br>
+                The Klab Team
+            </p>
+        </div>
+    `;
+
+    const mailOptions = {
+        from: `"Klab Program Manager" <${process.env.EMAIL_USER}>`,
+        to: traineeEmail,
+        subject: subject,
+        html: htmlBody,
+    };
+
+    try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`Certificate issued email sent to ${traineeEmail}: ${info.messageId}`);
+        return true;
+    } catch (error) {
+        console.error(`Error sending certificate issued email to ${traineeEmail}:`, error);
+        return false;
+    }
+};
+
+
 export { 
     sendRegistrationEmail, 
     sendPasswordResetEmail, 
     sendPasswordChangeConfirmationEmail,
-    sendAssignmentNotificationEmail
+    sendAssignmentNotificationEmail,
+    sendCertificateIssuedEmail // Export the new email function
 };
