@@ -36,7 +36,7 @@ export default function ResetPasswordPage() {
   ? 'http://localhost:8000'
   : 'https://program-manager-klab.onrender.com';
 
-const response = await fetch(`${API_URL}/api/v1/auth/reset-password/${token}`, {
+const response = await fetch(`${API_URL}/api/v1/reset-password/${token}`, {
   method: "PUT",
   headers: {
     "Content-Type": "application/json",
@@ -53,7 +53,7 @@ const response = await fetch(`${API_URL}/api/v1/auth/reset-password/${token}`, {
         throw new Error(data.message || "Failed to reset password.");
       }
 
-      setMessage("✅ Password reset successful! Redirecting to login...");
+      setMessage(" Password reset successful! Redirecting to login...");
       setTimeout(() => router.push("/auth/login"), 2000);
     } catch (err: any) {
       setError(err.message || "Something went wrong.");
