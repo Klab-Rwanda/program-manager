@@ -45,8 +45,9 @@ const sendRegistrationEmail = async (to, name, password) => {
 
 const sendPasswordResetEmail = async (email, name, resetToken) => {
     const baseUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://program-manager-klab.onrender.com'
-        : 'http://localhost:3000';
+        ? 'https://program-manager-klab.vercel.app'  
+       : 'http://localhost:3000'; 
+
     
     const resetUrl = `${baseUrl}/auth/reset-password/${resetToken}`;
     const subject = "Password Reset Request - Klab Program Manager";
