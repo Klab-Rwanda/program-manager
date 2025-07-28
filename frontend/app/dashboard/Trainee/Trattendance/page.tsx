@@ -44,23 +44,9 @@ export default function TraineeAttendancePage() {
     setIsProcessing(true);
     toast.info("Getting your location...");
     
-    // DEVELOPMENT ONLY MOCK
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        await new Promise(res => setTimeout(res, 1000));
-        await markGeolocationAttendance(session.sessionId, -1.9441, 30.0619);
-        toast.success("Attendance marked (dev mock)!");
-        setActiveGeoSession(null);
-        fetchData(); // Refetch both sessions and history
-      } catch (err: any) {
-        toast.error(err.response?.data?.message || "Mock attendance failed.");
-      } finally {
-        setIsProcessing(false);
-      }
-      return;
-    }
-    
-    // Production code
+    // *** REMOVED DEVELOPMENT ONLY MOCK BLOCK ***
+    // Now, always execute the production geolocation logic
+
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
@@ -74,8 +60,25 @@ export default function TraineeAttendancePage() {
           setIsProcessing(false);
         }
       },
-      (error) => { toast.error(`Location Error: ${error.message}`); setIsProcessing(false); },
-      { enableHighAccuracy: true }
+      (error) => { 
+        let msg = 'Location Error: ';
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            msg += 'You denied geolocation access. Please enable it in browser settings.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            msg += 'Location information is unavailable.';
+            break;
+          case error.TIMEOUT:
+            msg += 'Location request timed out.';
+            break;
+          default:
+            msg += error.message || 'An unknown error occurred.';
+        }
+        toast.error(msg); 
+        setIsProcessing(false); 
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 } // High accuracy, 10s timeout
     );
   };
 
@@ -160,6 +163,7 @@ export default function TraineeAttendancePage() {
                                     <TableCell>{record.programId?.name || 'N/A'}</TableCell>
                                     <TableCell>{getStatusBadge(record.status)}</TableCell>
                                     <TableCell>{record.checkIn ? new Date(record.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</TableCell>
+                                    <TableCell className="capitalize">{record.method?.replace('_', ' ')}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
