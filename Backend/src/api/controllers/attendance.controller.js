@@ -24,7 +24,7 @@ const buildSessionQuery = (idFromParams, extraConditions = {}) => {
 // ===================================================================
 
 const createSession = asyncHandler(async (req, res) => {
-    const { type, programId, title, description } = req.body;
+    const { type, programId, title, description, latitude, longitude, radius } = req.body; // Added location fields
     if (!type || !programId || !title) {
         throw new ApiError(400, "Type, Program ID, and Title are required.");
     }
@@ -33,14 +33,30 @@ const createSession = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Program not found.");
     }
 
-    const session = await ClassSession.create({
-        type, programId, title, description,
+    const sessionData = {
+        type, 
+        programId, 
+        title, 
+        description,
         facilitatorId: req.user._id,
         sessionId: generateSessionId(),
         startTime: new Date(),
         status: 'scheduled',
         createdBy: req.user._id,
-    });
+    };
+
+    if (type === 'physical' && (latitude === undefined || longitude === undefined)) {
+        throw new ApiError(400, "Location (latitude and longitude) is required for creating a physical session.");
+    }
+    if (type === 'physical') {
+        sessionData.location = {
+            lat: latitude,
+            lng: longitude,
+            radius: radius || 50
+        };
+    }
+
+    const session = await ClassSession.create(sessionData);
     return res.status(201).json(new ApiResponse(201, session, "Session created successfully."));
 });
 
@@ -63,8 +79,8 @@ const startPhysicalSession = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
     const { latitude, longitude, radius = 50 } = req.body; // Facilitator provides their location
 
-    // --- GEOLOCATION FIX ---
-    if (!latitude || !longitude) {
+    // --- GEOLOCATION FIX (This validation is correct and essential) ---
+    if (latitude === undefined || longitude === undefined) {
         throw new ApiError(400, "Your location (latitude and longitude) is required to start a physical session.");
     }
 
@@ -109,12 +125,22 @@ const markPhysicalAttendance = asyncHandler(async (req, res) => {
 
     if (!session) throw new ApiError(404, "Physical session not found for you.");
 
+    const todayDateString = new Date(session.startTime).toISOString().split('T')[0]; // Use session start time for date
+
     const attendance = await Attendance.findOneAndUpdate(
-        { userId: req.user._id, sessionId: session._id },
+        { userId: req.user._id, sessionId: session._id }, // Query by sessionId (unique index)
         {
             $setOnInsert: { userId: req.user._id, sessionId: session._id },
-            $set: { timestamp: new Date(), method: 'geolocation', status: 'Present', location: { lat: latitude, lng: longitude } }
-        }, { upsert: true, new: true }
+            $set: { 
+                programId: session.programId, // Ensure programId and date are set/updated
+                date: todayDateString,
+                timestamp: new Date(), 
+                method: 'geolocation', 
+                status: 'Present', 
+                location: { lat: latitude, lng: longitude } 
+            }
+        }, 
+        { upsert: true, new: true, runValidators: true } // runValidators for enum status
     );
     return res.status(201).json(new ApiResponse(201, { attendance }));
 });
@@ -139,24 +165,21 @@ const markQRAttendance = asyncHandler(async (req, res) => {
         throw new ApiError(403, "You are not enrolled in this program's session.");
     }
 
-    // --- THIS IS THE FIX ---
-    // The query now looks for a record matching the user and the specific session.
-    const query = { userId: req.user._id, sessionId: session._id };
+    const todayDateString = new Date(session.startTime).toISOString().split('T')[0];
 
-    // The data to be inserted or updated.
+    const query = { userId: req.user._id, sessionId: session._id }; // Query by sessionId (unique index)
+
     const update = {
         $set: {
             programId: session.programId,
-            date: new Date(session.startTime).toISOString().split('T')[0],
+            date: todayDateString,
             timestamp: new Date(),
             method: 'qr_code',
             status: 'Present'
         }
     };
     
-    // Using findOneAndUpdate with upsert is atomic and safe.
-    const attendance = await Attendance.findOneAndUpdate(query, update, { upsert: true, new: true });
-    // --- END OF FIX ---
+    const attendance = await Attendance.findOneAndUpdate(query, update, { upsert: true, new: true, runValidators: true });
 
     return res.status(201).json(new ApiResponse(201, { attendance }, "QR attendance marked successfully."));
 });
@@ -165,6 +188,9 @@ const markQRAttendance = asyncHandler(async (req, res) => {
 const markGeolocationAttendance = asyncHandler(async (req, res) => {
     const { sessionId, latitude, longitude } = req.body;
     if (!sessionId) throw new ApiError(400, "Session ID is required.");
+    if (latitude === undefined || longitude === undefined) { // Explicitly check location
+        throw new ApiError(400, "Your location (latitude and longitude) is required for geolocation attendance.");
+    }
 
     const session = await ClassSession.findOne({ sessionId, type: 'physical', status: 'active' });
     if (!session) throw new ApiError(404, "Active physical session not found.");
@@ -174,17 +200,18 @@ const markGeolocationAttendance = asyncHandler(async (req, res) => {
         throw new ApiError(403, "You are not enrolled in this program.");
     }
     
-    const classLocation = session.location || { lat: -1.9441, lng: 30.0619, radius: 100 };
+    const classLocation = session.location || { lat: -1.9441, lng: 30.0619, radius: 100 }; // Fallback location
     if (!isWithinRadius({ lat: latitude, lng: longitude }, classLocation)) {
         throw new ApiError(400, "You are not within the required class location radius.");
     }
 
-    // --- THIS IS THE FIX ---
-    const query = { userId: req.user._id, sessionId: session._id };
+    const todayDateString = new Date(session.startTime).toISOString().split('T')[0];
+
+    const query = { userId: req.user._id, sessionId: session._id }; // Query by sessionId (unique index)
     const update = {
         $set: {
             programId: session.programId,
-            date: new Date(session.startTime).toISOString().split('T')[0],
+            date: todayDateString,
             timestamp: new Date(),
             method: 'geolocation',
             status: 'Present',
@@ -192,8 +219,7 @@ const markGeolocationAttendance = asyncHandler(async (req, res) => {
         }
     };
     
-    const attendance = await Attendance.findOneAndUpdate(query, update, { upsert: true, new: true });
-    // --- END OF FIX ---
+    const attendance = await Attendance.findOneAndUpdate(query, update, { upsert: true, new: true, runValidators: true });
 
     return res.status(201).json(new ApiResponse(201, { attendance }, "Geolocation attendance marked successfully."));
 });
@@ -298,16 +324,12 @@ const getMyAttendanceHistory = asyncHandler(async (req, res) => {
 
     let query = { userId: traineeId };
     if (programId) {
-        // This is a valid query condition because 'programId' is in the schema
         query.programId = programId;
     }
 
-    // --- THIS IS THE FIX ---
-    // The field name in the schema is 'programId', so we must populate 'programId'.
     const attendanceRecords = await Attendance.find(query)
-        .populate('programId', 'name') // Corrected from 'program'
+        .populate('programId', 'name')
         .sort({ date: -1 });
-    // --- END OF FIX ---
     
     return res.status(200).json(new ApiResponse(200, attendanceRecords, "Your attendance history fetched successfully."));
 });
@@ -329,10 +351,6 @@ const endSession = asyncHandler(async (req, res) => {
     session.status = 'completed';
     session.endTime = new Date();
     await session.save();
-
-    // Optional: Notify trainees via WebSocket that the session has ended
-    // You would need to get the 'io' instance here if you want to do this.
-    // For now, we'll keep it simple.
 
     return res.status(200).json(new ApiResponse(200, session, "Session has been ended successfully."));
 });

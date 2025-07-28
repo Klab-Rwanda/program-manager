@@ -79,8 +79,8 @@ export const startOnlineSession = async (sessionId: string): Promise<{ session: 
     return response.data.data;
 };
 
-export const startPhysicalSession = async (sessionId: string): Promise<ClassSession> => {
-    const response = await api.post(`/attendance/sessions/${sessionId}/start-physical`);
+export const startPhysicalSession = async (sessionId: string, latitude: number, longitude: number): Promise<ClassSession> => {
+    const response = await api.post(`/attendance/sessions/${sessionId}/start-physical`, { latitude, longitude });
     return response.data.data;
 };
 
