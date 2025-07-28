@@ -18,16 +18,18 @@ export default function ForgotPasswordPage() {
   setMessage("");
 
   try {
-    const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const API_URL = window.location.hostname === 'localhost'
+  ? 'http://localhost:8000'
+  : 'https://program-manager-klab.onrender.com';
 
-     const res = await fetch(`${API_BASE_URL}/api/v1/auth/forgot-password`, {
-      method: "POST",
-     headers: {
+const res = await fetch(`${API_URL}/api/v1/auth/forgot-password`, {
+  method: "POST",
+  headers: {
     "Content-Type": "application/json",
   },
+  credentials: "include",
   body: JSON.stringify({ email }),
 });
-
     const data = await res.json();
 
     if (!res.ok) throw new Error(data.message || "Failed to send reset link");

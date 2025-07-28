@@ -21,8 +21,19 @@ import {
   Archive,
   Download,
   FileText,
+  BadgeCheck, // Added for 'Mark as Completed' icon
 } from "lucide-react";
-import { Program, getAllPrograms, createProgram, updateProgram, deleteProgram, requestApproval, enrollFacilitator, enrollTrainee } from "@/lib/services/program.service";
+import { 
+  Program, 
+  getAllPrograms, 
+  createProgram, 
+  updateProgram, 
+  deleteProgram, 
+  requestApproval, 
+  enrollFacilitator, 
+  enrollTrainee,
+  markProgramAsCompleted // Imported the new service function
+} from "@/lib/services/program.service";
 import { archiveProgram } from "@/lib/services/archive.service";
 import { exportProgramsPDF, exportProgramsExcel, downloadBlob } from "@/lib/services/export.service";
 import { toast } from "sonner";
@@ -33,7 +44,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUsersByRole } from '@/lib/services/user.service';
 import { User } from "@/lib/services/user.service";
-import api from '@/lib/api'; // Make sure you have your axios instance
+import api from '@/lib/api'; 
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"; // Import the new component
 
 const ProgramsPage: React.FC = () => {
   const { isAuthenticated, user, role } = useAuth();
@@ -74,6 +86,18 @@ const ProgramsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+
+  // Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+    confirmText?: string;
+    destructive?: boolean;
+    isConfirming?: boolean;
+  }>({ open: false, title: '', description: '', onConfirm: () => {} });
+
 
   const fetchPrograms = useCallback(async () => {
     try {
@@ -227,28 +251,24 @@ const ProgramsPage: React.FC = () => {
     }
   };
 
-  const handleDeleteProgram = async () => {
+  const handleDeleteProgram = useCallback(async () => {
     if (!selectedProgram) return;
 
-    if (!confirm(`Are you sure you want to delete "${selectedProgram.name}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    setLoading(true);
+    setConfirmDialog(prev => ({ ...prev, isConfirming: true }));
     try {
       await deleteProgram(selectedProgram._id);
       setPrograms((prev) => prev.filter((program) => program._id !== selectedProgram._id));
-      setShowDeleteModal(false);
-      setSelectedProgram(null);
       toast.success("Program deleted successfully!");
       await refreshCounts();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to delete program.");
       console.error("Error deleting program:", err);
     } finally {
-      setLoading(false);
+      setConfirmDialog(prev => ({ ...prev, open: false, isConfirming: false }));
+      setSelectedProgram(null);
     }
-  };
+  }, [selectedProgram, refreshCounts]);
+
 
   const handleRequestApproval = async (program: Program) => {
     setLoading(true);
@@ -264,12 +284,8 @@ const ProgramsPage: React.FC = () => {
     }
   };
 
-  const handleArchive = async (program: Program) => {
-    if (!confirm(`Are you sure you want to archive "${program.name}"?`)) {
-      return;
-    }
-
-    setLoading(true);
+  const handleArchive = useCallback(async (program: Program) => {
+    setConfirmDialog(prev => ({ ...prev, isConfirming: true }));
     try {
       await archiveProgram(program._id);
       toast.success(`${program.name} has been archived!`);
@@ -279,9 +295,9 @@ const ProgramsPage: React.FC = () => {
       toast.error(err.response?.data?.message || "Failed to archive program.");
       console.error("Error archiving program:", err);
     } finally {
-      setLoading(false);
+      setConfirmDialog(prev => ({ ...prev, open: false, isConfirming: false }));
     }
-  };
+  }, [refreshCounts]);
 
   const handleExportAll = async (format: 'pdf' | 'excel') => {
     setExporting(true);
@@ -359,10 +375,27 @@ const ProgramsPage: React.FC = () => {
       const response = await api.get(`/programs/${program._id}`);
       setPreviewingProgram(response.data.data); // Use the fully populated program
       setShowPreviewModal(true);
-    } catch (err) {
+    }
+    catch (err) {
       toast.error('Failed to load program details.');
     }
   };
+
+  const handleMarkAsCompleted = useCallback(async (program: Program) => {
+    setConfirmDialog(prev => ({ ...prev, isConfirming: true }));
+    try {
+        await markProgramAsCompleted(program._id);
+        toast.success(`Program "${program.name}" successfully marked as COMPLETED!`);
+        fetchPrograms(); // Re-fetch programs to update status on UI
+        await refreshCounts();
+    } catch (err: any) {
+        toast.error(err.response?.data?.message || "Failed to mark program as completed.");
+        console.error("Error marking program as completed:", err);
+    } finally {
+        setConfirmDialog(prev => ({ ...prev, open: false, isConfirming: false }));
+    }
+  }, [refreshCounts, fetchPrograms]);
+
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -591,88 +624,166 @@ const ProgramsPage: React.FC = () => {
           </div>
         ) : (
           sortedPrograms.map((program, idx) => (
-            <div key={program._id || idx} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div key={program._id || idx} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-200 hover:border-gray-300">
+              {/* Header Section */}
               <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">{program.name}</h3>
-                <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(program.status)}`}>
-                  {getStatusIcon(program.status)}
-                  {program.status}
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-xl font-bold text-gray-900 mb-1 truncate">{program.name}</h3>
+                  <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${getStatusColor(program.status)}`}>
+                    {getStatusIcon(program.status)}
+                    <span className="capitalize">{program.status}</span>
+                  </div>
                 </div>
               </div>
 
-              <p className="text-gray-600 text-sm mb-4 line-clamp-2">{program.description}</p>
+              {/* Description */}
+              <p className="text-gray-600 text-sm mb-6 leading-relaxed line-clamp-3">{program.description}</p>
               
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Calendar className="h-4 w-4" />
-                  <span suppressHydrationWarning>{new Date(program.startDate).toLocaleDateString()}</span> - <span suppressHydrationWarning>{new Date(program.endDate).toLocaleDateString()}</span>
+              {/* Program Details */}
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center gap-3 text-sm">
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <Calendar className="h-4 w-4" />
+                    <span className="font-medium text-gray-700">Duration:</span>
+                    <span suppressHydrationWarning>{new Date(program.startDate).toLocaleDateString()}</span>
+                    <span className="text-gray-400">-</span>
+                    <span suppressHydrationWarning>{new Date(program.endDate).toLocaleDateString()}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Users className="h-4 w-4" />
-                  <span>{program.trainees?.length || 0} trainees, {program.facilitators?.length || 0} facilitators</span>
-                  {program.programManager && (
-                    <span className="text-xs text-gray-400">• Managed by {program.programManager.name}</span>
+                
+                <div className="flex items-center gap-3 text-sm">
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <Users className="h-4 w-4" />
+                    <span className="font-medium text-gray-700">Participants:</span>
+                    <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                      {program.trainees?.length || 0} trainees
+                    </span>
+                    <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                      {program.facilitators?.length || 0} facilitators
+                    </span>
+                  </div>
+                </div>
+
+                {program.programManager && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <Award className="h-4 w-4" />
+                      <span className="font-medium text-gray-700">Manager:</span>
+                      <span className="text-gray-600">{program.programManager.name}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                {/* Primary Actions Row */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedProgram(program);
+                      setNewProgram({
+                        name: program.name,
+                        description: program.description,
+                        startDate: program.startDate.split('T')[0],
+                        endDate: program.endDate.split('T')[0],
+                      });
+                      setShowEditModal(true);
+                    }}
+                    className="bg-gray-50 text-gray-700 px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-gray-100 flex items-center justify-center gap-2 transition-colors border border-gray-200"
+                  >
+                    <Edit className="h-3.5 w-3.5" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedProgram(program);
+                      setConfirmDialog({
+                        open: true,
+                        title: `Delete Program: "${program.name}"?`,
+                        description: `Are you absolutely sure you want to permanently delete "${program.name}"? This action cannot be undone.`,
+                        onConfirm: handleDeleteProgram,
+                        confirmText: "Delete",
+                        destructive: true,
+                        isConfirming: false,
+                      });
+                    }}
+                    className="bg-red-50 text-red-700 px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-red-100 flex items-center justify-center gap-2 transition-colors border border-red-200"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+
+                {/* Secondary Actions Row */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedProgram(program);
+                      setConfirmDialog({
+                        open: true,
+                        title: `Archive Program: "${program.name}"?`,
+                        description: `Are you sure you want to archive "${program.name}"? It will no longer be active but can be restored from the archive.`,
+                        onConfirm: () => handleArchive(program),
+                        confirmText: "Archive",
+                        destructive: false,
+                        isConfirming: false,
+                      });
+                    }}
+                    className="bg-orange-50 text-orange-700 px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-orange-100 flex items-center justify-center gap-2 transition-colors border border-orange-200"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    <span>Archive</span>
+                  </button>
+                  {(program.status === 'Draft' || program.status === 'Rejected') ? (
+                    <button
+                      onClick={() => handleRequestApproval(program)}
+                      className="bg-[#1f497d] text-white px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-[#1a3f6b] flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>Submit</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => openPreviewModal(program)}
+                      className="bg-gray-50 text-gray-700 px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-gray-100 flex items-center justify-center gap-2 transition-colors border border-gray-200"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      <span>View Details</span>
+                    </button>
                   )}
                 </div>
-              </div>
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => {
-                    setSelectedProgram(program);
-                    setNewProgram({
-                      name: program.name,
-                      description: program.description,
-                      startDate: program.startDate.split('T')[0],
-                      endDate: program.endDate.split('T')[0],
-                    });
-                    setShowEditModal(true);
-                  }}
-                  className="flex-1 min-w-0 bg-gray-100 text-gray-700 px-2 py-2 rounded-lg text-xs hover:bg-gray-200 flex items-center justify-center gap-1"
-                >
-                  <Edit className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">Edit</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectedProgram(program);
-                    setShowDeleteModal(true);
-                  }}
-                  className="flex-1 min-w-0 bg-red-100 text-red-700 px-2 py-2 rounded-lg text-xs hover:bg-red-200 flex items-center justify-center gap-1"
-                >
-                  <Trash2 className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">Delete</span>
-                </button>
-                <button
-                  onClick={() => handleArchive(program)}
-                  className="flex-1 min-w-0 bg-orange-100 text-orange-700 px-2 py-2 rounded-lg text-xs hover:bg-orange-200 flex items-center justify-center gap-1"
-                >
-                  <Archive className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">Archive</span>
-                </button>
-                {(program.status === 'Draft' || program.status === 'Rejected') && (
+                {/* Full Width Actions */}
+                <div className="space-y-2">
+                  {program.status === 'Active' && ( // Only show 'Mark Completed' for Active programs
+                      <button
+                          onClick={() => {
+                            setSelectedProgram(program);
+                            setConfirmDialog({
+                                open: true,
+                                title: `Mark Program: "${program.name}" as Completed?`,
+                                description: `Are you sure you want to mark this program as COMPLETED? This action is usually irreversible and may affect trainee eligibility for certificates.`,
+                                onConfirm: () => handleMarkAsCompleted(program),
+                                confirmText: "Mark Completed",
+                                destructive: false, // Not destructive action
+                                isConfirming: false,
+                            });
+                          }}
+                          className="w-full bg-purple-50 text-purple-700 px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-purple-100 flex items-center justify-center gap-2 transition-colors border border-purple-200"
+                      >
+                          <BadgeCheck className="h-3.5 w-3.5" />
+                          <span>Mark Completed</span>
+                      </button>
+                  )}
                   <button
-                    onClick={() => handleRequestApproval(program)}
-                    className="flex-1 min-w-0 bg-[#1f497d] text-white px-2 py-2 rounded-lg text-xs hover:bg-[#1a3f6b] flex items-center justify-center gap-1 transition-colors"
+                    onClick={() => openAssignModal(program)}
+                    className="w-full bg-emerald-50 text-emerald-700 px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-emerald-100 flex items-center justify-center gap-2 transition-colors border border-emerald-200"
                   >
-                    <Send className="h-3 w-3 flex-shrink-0" />
-                    <span className="truncate">Submit</span>
+                    <Users className="h-3.5 w-3.5" />
+                    <span>Assign Users</span>
                   </button>
-                )}
-                <button
-                  onClick={() => openAssignModal(program)}
-                  className="flex-1 min-w-0 bg-emerald-100 text-emerald-700 px-2 py-2 rounded-lg text-xs hover:bg-emerald-200 flex items-center justify-center gap-1"
-                >
-                  <Users className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">Assign Facilitators & Trainees</span>
-                </button>
-                <button
-                  onClick={() => openPreviewModal(program)}
-                  className="flex-1 min-w-0 bg-gray-100 text-gray-700 px-2 py-2 rounded-lg text-xs hover:bg-gray-200 flex items-center justify-center gap-1 border border-gray-200"
-                >
-                  <Eye className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">View Details</span>
-                </button>
+                </div>
               </div>
             </div>
           ))
@@ -990,10 +1101,17 @@ const ProgramsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Program Preview Modal */}
       {showPreviewModal && previewingProgram && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-xl flex flex-col justify-center items-center">
+          <div className="bg-white rounded-lg p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-xl flex flex-col justify-center items-center relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowPreviewModal(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
+            >
+              ✕
+            </button>
+            
             <div className="w-full flex flex-col md:flex-row gap-8">
               {/* Program Details */}
               <div className="flex-1">
@@ -1078,6 +1196,17 @@ const ProgramsPage: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Confirm Dialog Component */}
+      <ConfirmDialog 
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        onConfirm={confirmDialog.onConfirm}
+        confirmText={confirmDialog.confirmText}
+        destructive={confirmDialog.destructive}
+        isConfirming={confirmDialog.isConfirming}
+      />
     </div>
   );
 };

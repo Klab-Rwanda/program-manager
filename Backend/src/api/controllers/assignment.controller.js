@@ -6,6 +6,7 @@ import { Course } from '../models/course.model.js';
 import { Program } from '../models/program.model.js';
 import { Roadmap } from '../models/roadmap.model.js';
 import { User } from '../models/user.model.js';
+import { Submission } from '../models/submission.model.js'; // Import Submission model to check status
 import { sendAssignmentNotificationEmail } from '../../services/email.service.js';
 
 // Helper to verify facilitator owns the course/program
@@ -233,6 +234,11 @@ export const deleteAssignment = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, {}, "Assignment deleted successfully."));
 });
 
+/**
+ * @desc    Get assignments available for a trainee to submit (not yet reviewed/graded).
+ * @route   GET /api/v1/assignments/my-available
+ * @access  Private (Trainee)
+ */
 export const getMyAvailableAssignments = asyncHandler(async (req, res) => {
     const traineeId = req.user._id;
 
@@ -243,17 +249,34 @@ export const getMyAvailableAssignments = asyncHandler(async (req, res) => {
     }
     const programIds = userPrograms.map(p => p._id);
 
-    // 2. Find all assignments that belong to any of those programs.
-    const assignments = await Assignment.find({
+    // 2. Find all assignments that belong to any of those programs AND are active.
+    let assignments = await Assignment.find({
         program: { $in: programIds },
-        isActive: true // Only show active assignments
+        isActive: true,
+        dueDate: { $gte: new Date() } // Only include assignments not yet past due
     })
     .populate('program', 'name')
     .populate('course', 'title')
-    .sort({ dueDate: 1 }); // Sort by the nearest due date first
+    .sort({ dueDate: 1 });
 
-    return res.status(200).json(new ApiResponse(200, assignments, "Available assignments fetched successfully."));
+    // 3. Filter out assignments for which the trainee has a 'Reviewed' or 'Graded' submission.
+    //    We need to fetch submissions for these assignments by this trainee.
+    const assignmentIds = assignments.map(a => a._id);
+    const submissions = await Submission.find({
+        trainee: traineeId,
+        assignment: { $in: assignmentIds },
+        status: { $in: ['Reviewed', 'Graded'] }
+    }).select('assignment');
+
+    const reviewedOrGradedAssignmentIds = new Set(submissions.map(s => s.assignment.toString()));
+
+    const availableAssignments = assignments.filter(assignment => 
+        !reviewedOrGradedAssignmentIds.has(assignment._id.toString())
+    );
+
+    return res.status(200).json(new ApiResponse(200, availableAssignments, "Available assignments fetched successfully."));
 });
+
 
 export const getAssignmentsForProgram = asyncHandler(async (req, res) => {
     const { programId } = req.params;
@@ -267,17 +290,9 @@ export const getAssignmentsForProgram = asyncHandler(async (req, res) => {
     const courseIds = approvedCourses.map(c => c._id);
 
     // 2. Find all assignments linked to those approved courses.
-    // This assumes you have an Assignment model with a 'course' field.
-    // For now, we will return mock data.
-    // const assignments = await Assignment.find({ course: { $in: courseIds } });
+    const assignments = await Assignment.find({ course: { $in: courseIds } });
     
-    // MOCK DATA since Assignment model/controller doesn't exist
-    const mockAssignments = [
-        { _id: 'asg1', title: 'E-commerce Website', course: courseIds[0], dueDate: new Date(), status: 'Pending' },
-        { _id: 'asg2', title: 'Data Visualization Dashboard', course: courseIds[0], dueDate: new Date(), status: 'Submitted', grade: 95 }
-    ];
-
-    return res.status(200).json(new ApiResponse(200, mockAssignments, "Assignments fetched successfully."));
+    return res.status(200).json(new ApiResponse(200, assignments, "Assignments fetched successfully."));
 });
 
 /**

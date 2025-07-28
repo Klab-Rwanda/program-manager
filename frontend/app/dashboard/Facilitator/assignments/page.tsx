@@ -53,8 +53,8 @@ export default function AssignmentManagementPage() {
             setFormData({
                 title: assignment.title,
                 description: assignment.description,
-                courseId: typeof assignment.course === 'string' ? assignment.course : assignment.course._id,
-                roadmapId: typeof assignment.roadmap === 'string' ? assignment.roadmap : assignment.roadmap._id,
+                courseId: typeof assignment.course === 'string' ? assignment.course : assignment.course?._id || '',
+                roadmapId: typeof assignment.roadmap === 'string' ? assignment.roadmap : assignment.roadmap?._id || '',
                 dueDate: new Date(assignment.dueDate).toISOString().split('T')[0],
                 maxGrade: assignment.maxGrade,
             });

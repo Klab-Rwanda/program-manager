@@ -212,11 +212,15 @@ export const getRoadmapAssignmentsWithMarks = asyncHandler(async (req, res) => {
     });
 
     // Get all submissions for assignments in this roadmap
+    // Note: Current Submission model is for course submissions, not assignment submissions
+    // TODO: Create AssignmentSubmission model or update Submission model to include assignment field
     const assignmentIds = assignments.map(assignment => assignment._id);
-    const submissions = await Submission.find({ assignment: { $in: assignmentIds } })
-        .populate('trainee', 'name email')
-        .populate('assignment', 'title maxGrade')
-        .sort({ submittedAt: -1 });
+    // const submissions = await Submission.find({ assignment: { $in: assignmentIds } })
+    //     .populate('trainee', 'name email')
+    //     .sort({ submittedAt: -1 });
+    
+    // For now, we'll create empty submissions data since assignment submissions aren't implemented yet
+    const submissions = [];
     
     console.log('📤 Found submissions:', submissions.length);
 
@@ -295,53 +299,38 @@ export const getRoadmapAssignmentsWithMarks = asyncHandler(async (req, res) => {
 
     // Organize data by assignment
     const assignmentsWithMarks = assignments.map(assignment => {
-        const assignmentSubmissions = submissions.filter(sub => 
-            sub.assignment && sub.assignment._id.toString() === assignment._id.toString()
-        );
+        // Since assignment submissions aren't implemented yet, we'll create empty submission data
+        const assignmentSubmissions = []; // submissions.filter(sub => 
+        //     sub.assignment && sub.assignment._id.toString() === assignment._id.toString()
+        // );
 
         // Create a complete list of all trainees with their submission status
         const allTraineesWithSubmissions = allTrainees.map(trainee => {
+
             const submission = assignmentSubmissions.find(sub => 
-                sub.trainee._id.toString() === trainee._id.toString()
+                sub.trainee && sub.trainee._id.toString() === trainee._id.toString() // Ensure submission.trainee is populated
             );
+
             
             const traineeAttendance = attendanceData.find(att => 
                 att.traineeId.toString() === trainee._id.toString()
             );
 
-            if (submission) {
-                // Student has submitted
-                return {
-                    submissionId: submission._id,
-                    traineeName: submission.trainee.name,
-                    traineeEmail: submission.trainee.email,
-                    submittedAt: submission.submittedAt,
-                    status: submission.status,
-                    grade: submission.grade || 'Not graded',
-                    feedback: submission.feedback || '',
-                    attendancePercentage: traineeAttendance ? 
-                        Math.round(traineeAttendance.attendancePercentage) : 0,
-                    totalSessions: traineeAttendance ? traineeAttendance.totalSessions : 0,
-                    presentSessions: traineeAttendance ? traineeAttendance.presentSessions : 0,
-                    hasSubmitted: true
-                };
-            } else {
-                // Student hasn't submitted
-                return {
-                    submissionId: null,
-                    traineeName: trainee.name,
-                    traineeEmail: trainee.email,
-                    submittedAt: null,
-                    status: 'Not Submitted',
-                    grade: 'Not graded',
-                    feedback: '',
-                    attendancePercentage: traineeAttendance ? 
-                        Math.round(traineeAttendance.attendancePercentage) : 0,
-                    totalSessions: traineeAttendance ? traineeAttendance.totalSessions : 0,
-                    presentSessions: traineeAttendance ? traineeAttendance.presentSessions : 0,
-                    hasSubmitted: false
-                };
-            }
+            // For now, all trainees show as not submitted since assignment submissions aren't implemented
+            return {
+                submissionId: null,
+                traineeName: trainee.name,
+                traineeEmail: trainee.email,
+                submittedAt: null,
+                status: 'Not Submitted',
+                grade: 'Not graded',
+                feedback: '',
+                attendancePercentage: traineeAttendance ? 
+                    Math.round(traineeAttendance.attendancePercentage) : 0,
+                totalSessions: traineeAttendance ? traineeAttendance.totalSessions : 0,
+                presentSessions: traineeAttendance ? traineeAttendance.presentSessions : 0,
+                hasSubmitted: false
+            };
         });
 
         return {
