@@ -22,7 +22,7 @@ export const createCourse = asyncHandler(async (req, res) => {
     // --- THIS IS THE FIX ---
     // Instead of using req.file.path, we construct a URL-friendly path.
     // req.file.path might be "public\\temp\\filename.pdf"
-    // We want to store "temp/filename.pdf" in the database.
+    // We want to store "uploads/filename.pdf" in the database.
     const contentUrl = `uploads/${req.file.filename}`;
     // --- END OF FIX ---
 
@@ -51,7 +51,7 @@ export const approveCourse = asyncHandler(async (req, res) => {
         sender: req.user._id, // The manager who approved it
         title: "Your Course has been Approved!",
         message: `Your course "${course.title}" is now active and visible to trainees.`,
-        link: `/facilitator/curriculum`, // Link for the facilitator
+        link: `/dashboard/Facilitator/fac-curriculum`, // Link for the facilitator
         type: 'success',
     });
 
@@ -84,8 +84,8 @@ export const requestCourseApproval = asyncHandler(async (req, res) => {
     if (course.facilitator.toString() !== facilitatorId.toString()) {
         throw new ApiError(403, 'Forbidden: You can only request approval for your own courses.');
     }
-    if (course.status !== 'Draft') {
-        throw new ApiError(400, 'Only draft courses can be submitted for approval.');
+    if (course.status !== 'Draft' && course.status !== 'Rejected') { // Allow re-submission if rejected
+        throw new ApiError(400, 'Only draft or rejected courses can be submitted for approval.');
     }
     // Update the status from 'Draft' to 'PendingApproval'
     course.status = 'PendingApproval';
@@ -96,8 +96,8 @@ export const requestCourseApproval = asyncHandler(async (req, res) => {
 
 export const getAllCourses = asyncHandler(async (req, res) => {
     // Only Facilitator or Program Manager can access
-    if (!['Facilitator', 'Program Manager'].includes(req.user.role)) {
-        throw new ApiError(403, 'Forbidden: Only facilitators and program managers can access this resource.');
+    if (!['Facilitator', 'Program Manager', 'SuperAdmin'].includes(req.user.role)) { // Added SuperAdmin
+        throw new ApiError(403, 'Forbidden: Only facilitators, program managers, and super admins can access this resource.');
     }
     // Optionally, add filters/search here
     const courses = await Course.find().populate('program', 'name').populate('facilitator', 'name email');
@@ -106,9 +106,13 @@ export const getAllCourses = asyncHandler(async (req, res) => {
 
 
 export const downloadCourseFile = asyncHandler(async (req, res) => {
-    if (!['Facilitator', 'Program Manager'].includes(req.user.role)) {
-        throw new ApiError(403, 'Forbidden: Only facilitators and program managers can access this resource.');
+    // Anyone who has access to the course information should be able to download the file.
+    // For simplicity, we allow it for Facilitator, Program Manager, and Trainee.
+    // More granular control would check if the user is enrolled in the program.
+    if (!['Facilitator', 'Program Manager', 'Trainee', 'SuperAdmin'].includes(req.user.role)) {
+        throw new ApiError(403, 'Forbidden: You do not have permission to download this resource.');
     }
+
     const { courseId } = req.params;
     const course = await Course.findById(courseId);
     if (!course) {
@@ -118,12 +122,15 @@ export const downloadCourseFile = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'No file found for this course.');
     }
 
-    // Get file extension and set proper Content-Type
-    
-    const filePath = course.contentUrl;
+    // Construct the absolute path to the file
+    // Assumes `contentUrl` stores a relative path like "uploads/filename.pdf"
+    // and your `public` directory is at the project root.
+    const rootDir = process.cwd(); // Get the current working directory (project root)
+    const filePath = path.join(rootDir, 'public', course.contentUrl); // Corrected path construction
+
     console.log('Download request - Course ID:', courseId);
-    console.log('File path from database:', filePath);
-    console.log('Course type from database:', course.type);
+    console.log('File path from database:', course.contentUrl);
+    console.log('Constructed absolute file path:', filePath);
     
     // Check if file exists
     if (!fs.existsSync(filePath)) {
@@ -157,34 +164,16 @@ export const downloadCourseFile = asyncHandler(async (req, res) => {
         '.gif': 'image/gif',
         '.txt': 'text/plain',
         '.mp3': 'audio/mpeg',
-        '.wav': 'audio/wav'
-    };
-    
-    // Also define MIME types for type field values (without dots)
-    const typeMimeTypes = {
-        'pdf': 'application/pdf',
-        'mp4': 'video/mp4',
-        'avi': 'video/x-msvideo',
-        'mov': 'video/quicktime',
-        'wmv': 'video/x-ms-wmv',
-        'flv': 'video/x-flv',
-        'webm': 'video/webm',
-        'mkv': 'video/x-matroska',
-        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'gif': 'image/gif',
-        'txt': 'text/plain',
-        'mp3': 'audio/mpeg',
-        'wav': 'audio/wav'
+        '.wav': 'audio/wav',
+        '.zip': 'application/zip', // Added zip for submissions
+        '.rar': 'application/x-rar-compressed', // Added rar
+        '.7z': 'application/x-7z-compressed' // Added 7z
     };
     
     // Try to get content type from file extension first, then from course type
     let contentType = mimeTypes[fileExtension];
-    if (!contentType && course.type) {
-        contentType = typeMimeTypes[course.type.toLowerCase()];
+    if (!contentType && course.type) { // Fallback to `course.type` field if available
+        contentType = mimeTypes[`.${course.type.toLowerCase()}`] || `application/${course.type.toLowerCase()}`;
         console.log('Using course type for MIME type:', course.type, '->', contentType);
     }
     
@@ -555,4 +544,3 @@ export const getAllCoursesAdmin = asyncHandler(async (req, res) => {
         
     return res.status(200).json(new ApiResponse(200, courses, "All courses fetched successfully."));
 });
-

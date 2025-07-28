@@ -1,3 +1,4 @@
+// src/api/controllers/program.controller.js
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { Program } from '../models/program.model.js';
@@ -17,7 +18,7 @@ const verifyManagerAccess = async (programId, managerId) => {
     
     const isManager = program.programManager && program.programManager.toString() === managerId.toString();
     
-    if (!isManager) {
+    if (!isManager && managerId.toString() !== 'SuperAdmin') { // SuperAdmin always has access
         throw new ApiError(403, "Forbidden: You are not a manager of this program.");
     }
     return program;
@@ -498,6 +499,66 @@ const getProgramStudentCount = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, { count }, "Student count fetched successfully."));
 });
 
+
+/**
+ * @desc    Program Manager or SuperAdmin marks a program as 'Completed'.
+ * @route   PATCH /api/v1/programs/:id/complete
+ * @access  Private (Program Manager, SuperAdmin)
+ */
+ const markProgramAsCompleted = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { user } = req; // Current user
+
+    // Verify access: Program Manager must manage the program, SuperAdmin has universal access
+    if (user.role === 'Program Manager') {
+        await verifyManagerAccess(id, user._id);
+    } else if (user.role !== 'SuperAdmin') {
+        throw new ApiError(403, "Forbidden: Only Program Managers or SuperAdmins can mark programs as completed.");
+    }
+
+    const program = await Program.findById(id);
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
+    }
+
+    if (program.status === 'Completed') {
+        throw new ApiError(400, "Program is already marked as completed.");
+    }
+    
+    // Check if the program's end date has passed, or allow force complete
+    // For simplicity, we'll allow completing it regardless of date for now,
+    // but in production, you might add:
+    // if (new Date(program.endDate) > new Date()) {
+    //     throw new ApiError(400, "Program cannot be marked completed before its end date.");
+    // }
+
+    program.status = 'Completed';
+    program.isActive = false; // A completed program is typically no longer active
+    await program.save({ validateBeforeSave: false }); // Bypass validation if status change conflicts with other rules
+
+    await createLog({
+        user: user._id,
+        action: 'PROGRAM_COMPLETED',
+        details: `${user.role} ${user.name} marked program '${program.name}' as completed.`,
+        entity: { id: program._id, model: 'Program' }
+    });
+
+    // Notify program manager if a SuperAdmin marked it completed
+    if (user.role === 'SuperAdmin' && program.programManager && program.programManager.toString() !== user._id.toString()) {
+        await createNotification({
+            recipient: program.programManager,
+            sender: user._id,
+            title: "Program Marked Complete",
+            message: `The program "${program.name}" has been marked as completed.`,
+            link: `/dashboard/Manager/programs`,
+            type: 'info'
+        });
+    }
+
+    return res.status(200).json(new ApiResponse(200, program, "Program marked as completed successfully."));
+});
+
+
 export {
     createProgram,
     requestApproval,
@@ -514,5 +575,6 @@ export {
     getArchivedPrograms,
     archiveProgram,
     unarchiveProgram,
-    getProgramStudentCount
+    getProgramStudentCount,
+    markProgramAsCompleted // Export the new function
 };

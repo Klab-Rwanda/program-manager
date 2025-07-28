@@ -1,196 +1,162 @@
 // lib/services/certificates.services.ts
 import api from '../api';
-import { Program, User as BackendUser } from '@/types'; // Assuming Program and User types are correctly defined in '@/types/index.ts'
+import { Program, User as BackendUser } from '@/types'; 
 
 // --- Frontend-specific interfaces for display ---
-// Frontend specific Certificate interface for display (combines backend data with display logic)
-export interface DisplayCertificate {
-    _id: string; // Backend _id
-    trainee: { _id: string; name: string; email: string };
-    program: { _id: string; name: string };
-    issueDate: string; // Date string from backend
-    certificateId: string; // Backend ID
-    status: 'issued' | 'ready' | 'pending'; // Derived on frontend: 'issued' is from backend
-    grade: string; // Mocked
-    finalScore: number; // Mocked
-    attendanceRate: number; // Mocked
-    templateId: number; // Mocked
-    traineeName: string; // From trainee.name
-    traineeEmail: string; // From trainee.email
-    programName: string; // From program.name
+
+// Backend Certificate structure from src/api/models/certificate.model.js
+export interface BackendCertificate {
+    _id: string;
+    trainee: string | { _id: string; name: string; email: string }; // Can be populated or just ID
+    program: string | { _id: string; name: string }; // Can be populated or just ID
+    issueDate: string;
+    certificateId: string;
 }
 
+// Frontend Display Certificate interface
+export interface DisplayCertificate {
+    _id: string;
+    traineeName: string;
+    traineeEmail: string;
+    program: string; // Just program name for display
+    programId: string; // The program's actual ID
+    issueDate: string;
+    certificateId: string;
+    // Mocked/derived fields for display
+    status: 'issued' | 'ready' | 'pending'; 
+    grade: string; 
+    finalScore: number; 
+    attendanceRate: number; 
+    templateId?: string; // ID of the template used (optional, from frontend logic)
+}
+
+// Backend CertificateTemplate structure from src/api/models/certificateTemplate.model.js
 export interface Template {
-    id: number;
+    _id: string; // MongoDB _id
     name: string;
     description: string;
-    isDefault: boolean;
     style: string;
     colorScheme: string;
+    htmlContent?: string; // Optional HTML content for complex templates
+    isDefault: boolean;
+    createdBy?: string | { _id: string; name: string; email: string }; // Populated user or just ID
+    createdAt: string;
+    updatedAt: string;
 }
 
-// Interface for trainees eligible for certificates (includes mock eligibility data)
+// Trainee eligible for certificates (from backend aggregate)
 export interface TraineeForCert {
     _id: string;
     name: string;
     email: string;
-    program: Program; // The full program object the trainee is associated with
-    finalScore: number; // Mocked
-    attendanceRate: number; // Mocked
-    completionDate: string; // Mocked
-    isEligible: boolean; // Derived on frontend
+    program: string; // Program name (from backend aggregation $project)
+    programId: string; // Program ID (from backend aggregation $project)
+    finalScore: number;
+    attendanceRate: number;
+    completionDate: string;
+    isEligible: boolean; // True if passed eligibility criteria
 }
 
 // --- Backend API calls ---
 
 /**
- * Fetches all programs.
- * @returns A promise that resolves to an array of Program objects.
- */
-export const fetchPrograms = async (): Promise<Program[]> => {
-    const response = await api.get('/programs');
-    return response.data.data;
-};
-
-/**
- * Fetches all users with the 'Trainee' role.
- * @returns A promise that resolves to an array of BackendUser objects.
- */
-export const fetchAllTrainees = async (): Promise<BackendUser[]> => {
-    const response = await api.get('/users/manage?role=Trainee');
-    return response.data.data;
-};
-
-/**
  * Fetches certificates based on the user's role.
- * @param userRole - The role of the current user ('trainee', 'program_manager', 'super_admin').
+ * The backend handles role-based filtering automatically.
  * @returns A promise that resolves to an array of DisplayCertificate objects.
  */
-export const fetchCertificates = async (userRole: string | null): Promise<DisplayCertificate[]> => {
-    let certificates: any[] = [];
-    try {
-        if (userRole === 'trainee') {
-            const response = await api.get('/certificates/my-certificates');
-            certificates = response.data.data;
-        } else if (userRole === 'program_manager' || userRole === 'super_admin') {
-            // Backend currently doesn't have a GET /certificates/all endpoint for PM/SA.
-            // For now, we'll return mock data for these roles.
-            // In a real app, you'd implement: GET /certificates (for all) or GET /certificates/program/:programId
-            console.warn("Backend /certificates/all endpoint for PM/SA is not implemented. Returning mock certificates.");
-            certificates = [
-                {
-                    _id: 'mock-cert-pm-1', trainee: { _id: 'mock-trainee-pm-1', name: 'PM Trainee One', email: 'pm.trainee1@example.com' },
-                    program: { _id: 'mock-program-a', name: 'Web Dev Mastery' }, issueDate: '2024-03-01T00:00:00.000Z', certificateId: 'PM-WEB-2024-001',
-                },
-                {
-                    _id: 'mock-cert-pm-2', trainee: { _id: 'mock-trainee-pm-2', name: 'PM Trainee Two', email: 'pm.trainee2@example.com' },
-                    program: { _id: 'mock-program-b', name: 'Data Science Bootcamp' }, issueDate: '2024-03-10T00:00:00.000Z', certificateId: 'PM-DS-2024-002',
-                },
-            ];
-        }
-    } catch (error) {
-        console.error("Error fetching certificates:", error);
-        // Fallback to empty array on error
-        certificates = [];
-    }
+export const fetchCertificates = async (): Promise<DisplayCertificate[]> => {
+    const response = await api.get('/certificates');
+    const backendCerts: BackendCertificate[] = response.data.data;
 
+    // Transform backend certs to DisplayCertificate format
+    const transformedCerts: DisplayCertificate[] = backendCerts.map((cert: BackendCertificate) => {
+        // Ensure trainee and program are objects for safe access
+        const trainee = typeof cert.trainee === 'object' && cert.trainee !== null ? cert.trainee : { _id: '', name: 'Unknown', email: '' };
+        const program = typeof cert.program === 'object' && cert.program !== null ? cert.program : { _id: '', name: 'Unknown' };
 
-    // Transform raw backend certs (or mock data) to DisplayCertificate, adding mocked fields
-    const transformedCerts: DisplayCertificate[] = certificates.map((cert: any) => ({
-        _id: cert._id,
-        trainee: cert.trainee,
-        program: cert.program,
-        issueDate: cert.issueDate,
-        certificateId: cert.certificateId,
-        status: 'issued', // Assuming fetched certs are 'issued'
-        grade: Math.random() > 0.5 ? 'A' : 'B+', // Mocked
-        finalScore: Math.floor(Math.random() * 20) + 80, // Mocked 80-100
-        attendanceRate: Math.floor(Math.random() * 10) + 90, // Mocked 90-100
-        templateId: 1, // Mocked
-        traineeName: cert.trainee?.name || 'Unknown Trainee',
-        traineeEmail: cert.trainee?.email || 'unknown@example.com',
-        programName: cert.program?.name || 'Unknown Program',
-    }));
+        return {
+            _id: cert._id,
+            traineeName: trainee.name,
+            traineeEmail: trainee.email,
+            program: program.name,
+            programId: program._id,
+            issueDate: cert.issueDate,
+            certificateId: cert.certificateId,
+            status: 'issued', // Assuming fetched certs are always 'issued' for now
+            grade: Math.random() > 0.5 ? 'A' : 'B+', // Mocked, would come from a real grading system
+            finalScore: Math.floor(Math.random() * 20) + 80, // Mocked 80-100
+            attendanceRate: Math.floor(Math.random() * 10) + 90, // Mocked 90-100
+        };
+    });
     return transformedCerts;
 };
 
 /**
- * Fetches mock certificate templates.
+ * Fetches certificate templates.
  * @returns A promise that resolves to an array of Template objects.
  */
 export const fetchTemplates = async (): Promise<Template[]> => {
-    // This would be replaced by an API call if you had template management backend
-    return [
-        { id: 1, name: "Professional Certificate", description: "Clean, professional design with company branding", isDefault: true, style: "professional", colorScheme: "blue", },
-        { id: 2, name: "Modern Achievement", description: "Contemporary design with geometric elements", isDefault: false, style: "modern", colorScheme: "gray", },
-    ];
+    const response = await api.get('/certificates/templates');
+    return response.data.data;
 };
 
 /**
- * Calculates and returns a list of trainees eligible for certificates based on mock criteria.
- * @param programs - All available programs.
- * @param allBackendTrainees - All trainees from the backend.
+ * Fetches trainees eligible for certificates (calculated by backend).
  * @returns A promise that resolves to an array of TraineeForCert objects.
  */
-export const fetchEligibleTrainees = async (programs: Program[], allBackendTrainees: BackendUser[]): Promise<TraineeForCert[]> => {
-    // Create a program lookup map for efficient access
-    const programLookup = new Map(programs.map(p => [p._id, p]));
-
-    const eligible: TraineeForCert[] = allBackendTrainees.map(t => {
-        // Find programs this trainee is actually associated with (from program.trainees array)
-        // Note: Your backend's Program model's `trainees` field is an array of populated User objects.
-        // So `p.trainees?.some(pt => pt._id === t._id)` is correct.
-        const associatedProgram = programs.find(p => p.trainees?.some(pt => pt._id === t._id));
-
-        // If no associated program is found, assign a default/unknown program or skip.
-        // For eligibility, a trainee must usually be part of a program.
-        if (!associatedProgram) {
-            // You might choose to skip them if they aren't tied to any program
-            return null; // Filter out later
-        }
-
-        // Mocked eligibility criteria: random score >= 80 and attendance >= 85
-        const mockFinalScore = Math.floor(Math.random() * 20) + 75; // 75-95
-        const mockAttendanceRate = Math.floor(Math.random() * 15) + 80; // 80-95
-
-        return {
-            _id: t._id,
-            name: t.name,
-            email: t.email,
-            program: associatedProgram, // Assign the actual associated program object
-            finalScore: mockFinalScore,
-            attendanceRate: mockAttendanceRate,
-            completionDate: new Date(associatedProgram.endDate || t.createdAt).toISOString().split('T')[0], // Use program end date or trainee creation date
-            isEligible: mockFinalScore >= 80 && mockAttendanceRate >= 85, // Frontend eligibility logic
-        };
-    }).filter((t): t is TraineeForCert => t !== null && t.isEligible); // Filter out nulls and non-eligible trainees
-
-    return eligible;
+export const fetchEligibleTrainees = async (): Promise<TraineeForCert[]> => {
+    const response = await api.get('/certificates/eligible-students');
+    return response.data.data;
 };
 
 /**
  * Issues certificates to a list of trainees.
  * @param traineesToIssue - An array of TraineeForCert objects (containing trainee ID and program ID).
- * @param templateId - The ID of the selected certificate template (frontend mock).
+ * @param templateId - The ID of the selected certificate template (backend may or may not use this yet).
  * @returns A promise that resolves to an array of results from the API calls.
  */
 export const issueCertificatesToTrainees = async (
     traineesToIssue: TraineeForCert[],
-    templateId: string // This templateId is currently unused by the backend /certificates/issue endpoint
+    templateId: string // The ID of the selected template to use (optional for backend, but useful for frontend)
 ): Promise<PromiseSettledResult<any>[]> => {
     const issuePromises = traineesToIssue.map(trainee => {
-        // The backend's /certificates/issue endpoint requires `programId` and `traineeId`.
-        // Ensure `trainee.program._id` is available from the `TraineeForCert` object.
-        if (!trainee.program?._id) {
-            console.error(`Skipping certificate issuance for trainee ${trainee.name}: Program ID is missing.`);
-            return Promise.reject(new Error("Missing program ID for trainee"));
-        }
-
         return api.post('/certificates/issue', {
-            programId: trainee.program._id, // Use the actual program ID
-            traineeId: trainee._id
+            programId: trainee.programId, 
+            traineeId: trainee._id,
+            // You might pass templateId here if your backend's issueCertificate supports it
+            // templateId: templateId 
         });
     });
 
     return Promise.allSettled(issuePromises);
+};
+
+/**
+ * Creates a new certificate template.
+ * @param data The template data.
+ * @returns A promise that resolves to the created Template object.
+ */
+export const createCertificateTemplate = async (data: Partial<Template>): Promise<Template> => {
+    const response = await api.post('/certificates/templates', data);
+    return response.data.data;
+};
+
+/**
+ * Updates an existing certificate template.
+ * @param id The ID of the template to update.
+ * @param data The update data.
+ * @returns A promise that resolves to the updated Template object.
+ */
+export const updateCertificateTemplate = async (id: string, data: Partial<Template>): Promise<Template> => {
+    const response = await api.patch(`/certificates/templates/${id}`, data);
+    return response.data.data;
+};
+
+/**
+ * Deletes a certificate template.
+ * @param id The ID of the template to delete.
+ * @returns A promise that resolves when the template is deleted.
+ */
+export const deleteCertificateTemplate = async (id: string): Promise<void> => {
+    await api.delete(`/certificates/templates/${id}`);
 };

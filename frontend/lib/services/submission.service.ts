@@ -3,14 +3,12 @@ import { Submission } from '@/types';
 
 // --- EXISTING FUNCTIONS (Keep these) ---
 export const createSubmission = async (
-  programId: string,
-  courseId: string,
-  projectFile: File
+  assignmentId: string, // Changed to assignmentId
+  file: File
 ): Promise<Submission> => {
   const formData = new FormData();
-  formData.append('programId', programId);
-  formData.append('courseId', courseId);
-  formData.append('projectFile', projectFile);
+  formData.append('assignmentId', assignmentId); // Changed to assignmentId
+  formData.append('projectFile', file); // Ensure this matches backend multer field name
 
   const response = await api.post('/submissions', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -18,14 +16,16 @@ export const createSubmission = async (
   return response.data.data;
 };
 
-export const getSubmissionsForCourse = async (courseId: string): Promise<Submission[]> => {
-  const response = await api.get(`/submissions/course/${courseId}`);
-  return response.data.data;
+// Renamed from getSubmissionsForCourse, now gets all submissions relevant to a facilitator
+export const getSubmissionsForFacilitator = async (): Promise<Submission[]> => {
+    const response = await api.get('/submissions/facilitator');
+    return response.data.data;
 };
+
 
 export const reviewSubmission = async (
   submissionId: string,
-  reviewData: { status: 'Reviewed' | 'NeedsRevision'; feedback: string; grade: string; }
+  reviewData: { status: 'Reviewed' | 'NeedsRevision'; feedback: string; grade: string | number; } // Allow string or number for grade
 ): Promise<Submission> => {
   const response = await api.patch(`/submissions/${submissionId}/review`, reviewData);
   return response.data.data;
@@ -33,18 +33,12 @@ export const reviewSubmission = async (
 
 export const getMySubmissions = async (): Promise<Submission[]> => {
     // This is for trainees
-    try {
-      const response = await api.get('/submissions/my-submissions');
-      return response.data.data;
-    } catch (e) {
-      console.warn("Backend endpoint /submissions/my-submissions is not yet implemented.");
-      return [];
-    }
+    const response = await api.get('/submissions/my-submissions');
+    return response.data.data;
 };
 
-// --- NEW FUNCTION FOR FACILITATOR DASHBOARD ---
-
-// Fetches all submissions across all of the facilitator's managed courses that are pending.
+// --- Removed functions that are no longer used or replaced ---
+/*
 export const getPendingSubmissionsForFacilitator = async (): Promise<Submission[]> => {
   const response = await api.get('/submissions/facilitator/pending');
   return response.data.data;
@@ -54,3 +48,4 @@ export const getManagedSubmissions = async (): Promise<Submission[]> => {
     const response = await api.get('/submissions/managed-programs');
     return response.data.data;
 };
+*/
