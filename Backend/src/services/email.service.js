@@ -44,10 +44,13 @@ const sendRegistrationEmail = async (to, name, password) => {
 };
 
 const sendPasswordResetEmail = async (email, name, resetToken) => {
-    const resetUrl = `https://program-manager-klab.onrender.com/auth/reset-password/${resetToken}`;
+    const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://program-manager-klab.onrender.com'
+        : 'http://localhost:3000';
+    
+    const resetUrl = `${baseUrl}/auth/reset-password/${resetToken}`;
     const subject = "Password Reset Request - Klab Program Manager";
     
-
     const htmlBody = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="text-align: center; margin-bottom: 30px;">
@@ -59,8 +62,8 @@ const sendPasswordResetEmail = async (email, name, resetToken) => {
             <p>You have requested to reset your password for your Klab Program Manager account. Please click the button below to reset your password:</p>
             
             <div style="text-align: center; margin: 30px 0;">
-                <a href="${resetUrl}" 
-                   style="background-color: #1f497d; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                <a href="${resetUrl}"
+                    style="background-color: #1f497d; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
                     Reset Password
                 </a>
             </div>
@@ -82,7 +85,7 @@ const sendPasswordResetEmail = async (email, name, resetToken) => {
             </p>
         </div>
     `;
-
+    
     const mailOptions = {
         from: `"Klab Program Manager" <${process.env.EMAIL_USER}>`,
         to: email,
