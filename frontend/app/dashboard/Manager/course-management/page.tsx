@@ -924,11 +924,10 @@ export default function CourseManagementPage() {
                                                                     <div className="space-y-1">
                                                                         <div className="font-medium text-sm">{submission.traineeName}</div>
                                                                         <div className="text-xs text-muted-foreground">{submission.traineeEmail}</div>
-                                                                        {!submission.hasSubmitted && (
-                                                                            <Badge variant="outline" className="text-xs mt-1">
-                                                                                Not Enrolled
-                                                                            </Badge>
-                                                                        )}
+                                                                        {/* Show enrollment status based on whether trainee is in the program */}
+                                                                        <Badge variant="outline" className="text-xs mt-1">
+                                                                            {submission.totalSessions > 0 ? 'Enrolled' : 'Not Enrolled'}
+                                                                        </Badge>
                                                                     </div>
                                                                 </TableCell>
                                                                 <TableCell>
@@ -946,7 +945,7 @@ export default function CourseManagementPage() {
                                                                         submission.status === 'NeedsRevision' ? 'destructive' :
                                                                         submission.status === 'Not Submitted' ? 'secondary' : 'outline'
                                                                     } className="text-xs">
-                                                                        {submission.status}
+                                                                        {submission.totalSessions > 0 ? submission.status : 'Not Enrolled'}
                                                                     </Badge>
                                                                 </TableCell>
                                                                 <TableCell className="text-center">
@@ -1039,15 +1038,27 @@ export default function CourseManagementPage() {
                                                             </div>
                                                         </div>
                                                         <div>
+                                                            <div className="text-muted-foreground">Enrolled</div>
+                                                            <div className="font-semibold">
+                                                                {assignment.submissions.filter(s => s.totalSessions > 0).length}/{assignment.submissions.length}
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-muted-foreground">Not Enrolled</div>
+                                                            <div className="font-semibold">
+                                                                {assignment.submissions.filter(s => s.totalSessions === 0).length}/{assignment.submissions.length}
+                                                            </div>
+                                                        </div>
+                                                        <div>
                                                             <div className="text-muted-foreground">Submitted</div>
                                                             <div className="font-semibold">
-                                                                {assignment.submissions.filter(s => s.hasSubmitted).length}/{assignment.submissions.length}
+                                                                {assignment.submissions.filter(s => s.hasSubmitted).length}/{assignment.submissions.filter(s => s.totalSessions > 0).length || 0}
                                                             </div>
                                                         </div>
                                                         <div>
                                                             <div className="text-muted-foreground">Not Submitted</div>
                                                             <div className="font-semibold">
-                                                                {assignment.submissions.filter(s => !s.hasSubmitted).length}/{assignment.submissions.length}
+                                                                {assignment.submissions.filter(s => !s.hasSubmitted && s.totalSessions > 0).length}/{assignment.submissions.filter(s => s.totalSessions > 0).length || 0}
                                                             </div>
                                                         </div>
                                                     </div>
