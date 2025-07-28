@@ -32,11 +32,16 @@ export default function ResetPasswordPage() {
     setIsLoading(true);
 
     try {
-     const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/auth/reset-password/${token}`, {
+     const API_URL = window.location.hostname === 'localhost'
+  ? 'http://localhost:8000'
+  : 'https://program-manager-klab.onrender.com';
+
+const response = await fetch(`${API_URL}/api/v1/auth/reset-password/${token}`, {
   method: "PUT",
   headers: {
     "Content-Type": "application/json",
   },
+  credentials: "include",
   body: JSON.stringify({
     newPassword: password,
     confirm: confirmPassword,

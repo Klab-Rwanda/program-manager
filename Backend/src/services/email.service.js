@@ -44,9 +44,10 @@ const sendRegistrationEmail = async (to, name, password) => {
 };
 
 const sendPasswordResetEmail = async (email, name, resetToken) => {
-    const resetUrl = `http://localhost:3000/auth/reset-password/${resetToken}`;
+    const resetUrl = `https://program-manager-klab.onrender.com/auth/reset-password/${resetToken}`;
     const subject = "Password Reset Request - Klab Program Manager";
     
+
     const htmlBody = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="text-align: center; margin-bottom: 30px;">
