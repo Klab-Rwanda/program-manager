@@ -356,6 +356,115 @@ const endSession = asyncHandler(async (req, res) => {
 });
 
 
+const getProgramAttendanceSummary = asyncHandler(async (req, res) => {
+    const { programId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    if (!programId || !startDate || !endDate) {
+        throw new ApiError(400, "Program ID, start date, and end date are required.");
+    }
+
+    // 1. Find the program and its trainees to ensure we list everyone, even those with 0 attendance
+    const program = await Program.findById(programId).populate('trainees', 'name email role').lean();
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
+    }
+
+    // 2. Count the total number of sessions held within the date range for this program
+    const totalSessions = await ClassSession.countDocuments({
+        programId,
+        startTime: {
+            $gte: new Date(startDate),
+            $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999)) // Include whole end day
+        }
+    });
+
+    // 3. Aggregate attendance data from the database
+    const attendanceSummary = await Attendance.aggregate([
+        // Stage 1: Filter records for the correct program and date range
+        {
+            $match: {
+                programId: new mongoose.Types.ObjectId(programId),
+                date: { $gte: startDate, $lte: endDate }
+            }
+        },
+        // Stage 2: Join with ClassSession to get the session title for context
+        {
+            $lookup: {
+                from: 'classsessions',
+                localField: 'sessionId',
+                foreignField: '_id',
+                as: 'sessionInfo'
+            }
+        },
+        { $unwind: { path: "$sessionInfo", preserveNullAndEmptyArrays: true } },
+        // Stage 3: Group by student (userId)
+        {
+            $group: {
+                _id: "$userId",
+                present: { $sum: { $cond: [{ $in: ["$status", ["Present", "Late"]] }, 1, 0] } },
+                absent: { $sum: { $cond: [{ $eq: ["$status", "Absent"] }, 1, 0] } },
+                late: { $sum: { $cond: [{ $eq: ["$status", "Late"] }, 1, 0] } },
+                excused: { $sum: { $cond: [{ $eq: ["$status", "Excused"] }, 1, 0] } },
+                // Collect all detailed records for the modal view
+                records: {
+                    $push: {
+                        date: "$date",
+                        status: "$status",
+                        timestamp: "$timestamp",
+                        checkIn: "$checkIn",
+                        sessionTitle: "$sessionInfo.title",
+                        method: "$method"
+                    }
+                }
+            }
+        },
+        // Stage 4: Sort records within the modal view by date
+        {
+            $addFields: {
+                records: {
+                    $sortArray: {
+                        input: "$records",
+                        sortBy: { date: -1 }
+                    }
+                }
+            }
+        }
+    ]);
+
+    // 4. Merge program trainees with their attendance data
+    const summaryMap = new Map(attendanceSummary.map(item => [item._id.toString(), item]));
+    
+    const finalReport = program.trainees.map(trainee => {
+        const summary = summaryMap.get(trainee._id.toString());
+        const presentCount = summary ? summary.present : 0;
+        const totalPossible = totalSessions > 0 ? totalSessions : 0;
+        // Avoid division by zero, and don't penalize for excused absences in the rate
+        const attendanceRate = totalPossible - (summary?.excused || 0) > 0 
+            ? Math.round((presentCount / (totalPossible - (summary?.excused || 0))) * 100) 
+            : 0;
+
+        return {
+            userId: trainee._id,
+            name: trainee.name,
+            email: trainee.email,
+            role: trainee.role,
+            present: presentCount,
+            absent: summary ? summary.absent : totalPossible - presentCount, // Calculate absent if no record
+            late: summary ? summary.late : 0,
+            excused: summary ? summary.excused : 0,
+            attendanceRate: attendanceRate < 0 ? 0 : attendanceRate,
+            records: summary ? summary.records : [],
+        };
+    });
+
+    res.status(200).json(new ApiResponse(200, {
+        totalSessions,
+        report: finalReport
+    }));
+});
+
+
 export {
     // Facilitator
     createSession,
@@ -380,5 +489,6 @@ export {
     getSessionQRCode,
     markManualStudentAttendance,
     getProgramAttendanceReport,
-    getMyAttendanceHistory
+    getMyAttendanceHistory,
+    getProgramAttendanceSummary,
 };

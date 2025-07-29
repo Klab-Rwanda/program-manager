@@ -346,3 +346,24 @@ export interface RoadmapAssignmentsData {
     };
     assignments: AssignmentWithMarks[];
 }
+
+
+export interface StudentSummary {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  attendanceRate: number;
+  records: {
+    date: string;
+    status: string;
+    timestamp: string;
+    checkIn?: string;
+    sessionTitle?: string;
+    method: string;
+  }[];
+}

@@ -63,5 +63,8 @@ router.route('/:id/student-count').get(getProgramStudentCount);
 // New route to mark a program as completed
 router.route('/:id/complete').patch(checkRole(['Program Manager', 'SuperAdmin']), programController.markProgramAsCompleted);
 
+router.route('/:id/reactivate')
+      .patch(checkRole(['Program Manager', 'SuperAdmin']), programController.reactivateProgram);
+
 
 export default router;

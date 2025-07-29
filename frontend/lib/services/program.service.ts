@@ -120,3 +120,8 @@ export const markProgramAsCompleted = async (programId: string): Promise<Program
     const response = await api.patch(`/programs/${programId}/complete`);
     return response.data.data;
 };
+
+export const reactivateProgram = async (id: string, newEndDate: string): Promise<Program> => {
+  const response = await api.patch(`/programs/${id}/reactivate`, { newEndDate });
+  return response.data.data;
+};
