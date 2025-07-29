@@ -15,6 +15,9 @@ import assignmentRouter from './assignment.route.js';
 import roadmapRouter from './roadmap.route.js';
 import settingsRouter from './settings.route.js';
 import notificationRouter from './notification.route.js'
+import userTicketRoutes from './userTicket.route.js';
+import itSupportRoutes from './itSupport.route.js';
+
 
 const router = Router();
 
@@ -35,6 +38,9 @@ const defaultRoutes = [
     { path: '/roadmaps', route: roadmapRouter },
     { path: '/settings', route: settingsRouter },
     { path: '/notifications', route: notificationRouter },
+    { path: '/tickets', route: userTicketRoutes },
+    { path: '/it-support/tickets', route: itSupportRoutes },
+
     
 ];
 

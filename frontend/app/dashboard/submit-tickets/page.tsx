@@ -1,186 +1,174 @@
 "use client";
+import { useEffect, useState } from "react";
+import { FaBoxTissue } from "react-icons/fa";
 
-import { useState } from "react";
-import { Paperclip, Send, Loader2 } from "lucide-react";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+type Ticket = {
+  _id: string;
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+  status: string;
+  createdAt: string;
+};
 
-export default function SubmitTicket() {
+export default function MyTickets() {
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+
   const [formData, setFormData] = useState({
-    subject: "",
-    category: "",
+    title: "",
     description: "",
-    priority: "Medium",
-    program: "",
-    file: null as File | null,
+    category: "",
+    priority: "",
   });
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  useEffect(() => {
+    fetchTickets();
+  }, []);
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  const fetchTickets = async () => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) return console.error("No token found.");
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({ ...prev, file: e.target.files?.[0] || null }));
+    try {
+      const res = await fetch("http://localhost:8000/api/v1/tickets", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        const sorted = data.data.sort(
+          (a: Ticket, b: Ticket) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        setTickets(sorted);
+      } else {
+        console.error(data.message || "Failed to fetch tickets");
+      }
+    } catch (err) {
+      console.error("Error fetching tickets:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    setSubmitting(true);
+    setSuccessMessage("");
+    const token = localStorage.getItem("accessToken");
+    if (!token) return alert("You must be logged in");
 
     try {
-      const formPayload = new FormData();
-
-      formPayload.append("subject", formData.subject);
-      formPayload.append("category", formData.category);
-      formPayload.append("priority", formData.priority);
-      formPayload.append("description", formData.description);
-      if (formData.program) {
-        formPayload.append("program", formData.program);
-      }
-      if (formData.file) {
-        formPayload.append("file", formData.file);
-      }
-
-      const response = await fetch("http://localhost:8000/api/v1/tickets", {
+      const res = await fetch("http://localhost:8000/api/v1/tickets", {
         method: "POST",
-        body: formPayload,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(formData),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to submit ticket");
+      const data = await res.json();
+      if (res.ok) {
+        setFormData({ title: "", description: "", category: "", priority: "" });
+        setSuccessMessage(" Ticket submitted successfully!");
+        fetchTickets();
+      } else {
+        alert(data.message || "Ticket submission failed");
       }
-
-      await response.json();
-
-      toast.success("Ticket submitted successfully!");
-
-      setFormData({
-        subject: "",
-        category: "",
-        description: "",
-        priority: "Medium",
-        program: "",
-        file: null,
-      });
-    } catch (error: any) {
-      toast.error(`Error submitting ticket: ${error.message}`);
+    } catch (err) {
+      console.error("Submission error:", err);
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto p-6 rounded-2xl shadow-lg bg-white dark:bg-gray-900">
-      <h2 className="text-2xl font-semibold mb-4">Submit a Support Ticket</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Subject */}
-        <div>
-          <label className="block font-medium mb-1">Subject</label>
-          <input
-            type="text"
-            name="subject"
-            value={formData.subject}
-            onChange={handleChange}
-            required
-            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+    <div className="p-4 max-w-3xl mx-auto">
+      <h2 className="text-2xl font-bold mb-4 text-gray-800">📝 Submit a Ticket</h2>
 
-        {/* Category & Priority */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block font-medium mb-1">Category</label>
-            <select
-              name="category"
-              value={formData.category}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Select Category</option>
-              <option value="bug">Bug Report</option>
-              <option value="question">Question</option>
-              <option value="feature">Feature Request</option>
-              <option value="technical">Technical Issue</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block font-medium mb-1">Priority</label>
-            <select
-              name="priority"
-              value={formData.priority}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-              <option value="Critical">Critical</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Related Program */}
-        <div>
-          <label className="block font-medium mb-1">Related Program (optional)</label>
-          <input
-            type="text"
-            name="program"
-            value={formData.program}
-            onChange={handleChange}
-            placeholder="e.g. UI/UX Design Bootcamp"
-            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {/* Description */}
-        <div>
-          <label className="block font-medium mb-1">Description</label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            required
-            rows={5}
-            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Please describe your issue or request in detail..."
-          />
-        </div>
-
-        {/* File Upload */}
-        <div className="flex items-center gap-3">
-          <label className="block font-medium">Attach File:</label>
-          <input
-            type="file"
-            onChange={handleFileChange}
-            className="file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-          />
-          {formData.file && <span className="text-sm">{formData.file.name}</span>}
-        </div>
-
-        {/* Submit Button */}
+      <form onSubmit={handleSubmit} className="space-y-4 border p-6 rounded-lg shadow bg-white">
+        <input
+          type="text"
+          placeholder="Title"
+          className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={formData.title}
+          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+          required
+        />
+        <textarea
+          placeholder="Description"
+          className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          required
+        />
+        <select
+          className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={formData.category}
+          onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+          required
+        >
+          <option value="">Select Category</option>
+          <option value="Hardware">Hardware</option>
+          <option value="Software">Software</option>
+          <option value="Network">Network</option>
+        </select>
+        <select
+          className="w-full p-3 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          value={formData.priority}
+          onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+          required
+        >
+          <option value="">Select Priority</option>
+          <option value="Low">Low</option>
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+        </select>
         <button
           type="submit"
-          disabled={isSubmitting}
-          className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-white 
-            ${isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-[#1f497d] hover:bg-blue-700"}`}
+          disabled={submitting}
+          className="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 transition"
         >
-          {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
-          Submit Ticket
+          {submitting ? "Submitting..." : "Submit Ticket"}
         </button>
+
+        {successMessage && <p className="text-green-600 mt-2">{successMessage}</p>}
       </form>
 
-      <ToastContainer position="top-right" autoClose={3000} />
+      <h2 className="text-2xl font-bold mt-12 mb-4 text-gray-800"><FaBoxTissue /> My Submitted Tickets</h2>
+
+      {loading ? (
+        <p className="text-gray-600">Loading tickets...</p>
+      ) : tickets.length === 0 ? (
+        <p className="text-gray-500 italic">No tickets submitted yet.</p>
+      ) : (
+        <ul className="space-y-4">
+          {tickets.map((ticket) => (
+            <li
+              key={ticket._id}
+              className="p-5 border rounded-lg shadow-sm bg-gray-50 hover:shadow-md transition"
+            >
+              <h3 className="text-lg font-semibold text-gray-900">{ticket.title}</h3>
+              <p className="text-sm text-gray-700 mt-1">{ticket.description}</p>
+              <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-600">
+                <span><strong>Category:</strong> {ticket.category}</span>
+                <span><strong>Priority:</strong> {ticket.priority}</span>
+                <span><strong>Status:</strong> {ticket.status}</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                Submitted: {new Date(ticket.createdAt).toLocaleString()}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
