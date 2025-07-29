@@ -1,9 +1,9 @@
 import express from 'express';
 import multer from 'multer';
 import {
-  submitTicket,
-  fetchAllTickets,
-  fetchTicketById,
+  createTicket,
+  getAllTickets,
+  getTicketById,
   updateTicket,
   deleteTicket, addCommentToTicket,
   resolveTicket
@@ -23,9 +23,9 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Routes
-router.post('/', upload.single('file'), submitTicket);
-router.get('/', fetchAllTickets);
-router.get('/:id', fetchTicketById);
+router.post('/', upload.single('file'), createTicket);
+router.get('/', getAllTickets);
+router.get('/:id', getTicketById);
 router.put('/:id', updateTicket);
 router.delete('/:id', deleteTicket);
 router.post("/:id/comment", addCommentToTicket);

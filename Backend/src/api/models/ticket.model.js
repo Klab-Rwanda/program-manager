@@ -26,7 +26,7 @@ const ticketSchema = new mongoose.Schema({
     default: 'Open'
   },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // IT Support user
+  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   resolution: { type: String },
   comments: [commentSchema]
 }, { timestamps: true });
