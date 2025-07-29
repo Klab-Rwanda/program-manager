@@ -59,9 +59,10 @@ export const updateTicket = asyncHandler(async (req, res) => {
     if (req.body[key] !== undefined) updates[key] = req.body[key];
   }
 
-  const ticket = await Ticket.findByIdAndUpdate(req.params.id, updates, { new: true })
-    .populate('createdBy', 'name email')
-    .populate('assignedTo', 'name email');
+ const ticket = await Ticket.findByIdAndUpdate(req.params.ticketId, updates, { new: true })
+  .populate('createdBy', 'name email')
+  .populate('assignedTo', 'name email');
+
 
   if (!ticket) {
     throw new ApiError(404, 'Ticket not found.');
@@ -89,7 +90,8 @@ export const addComment = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Comment message is required.');
   }
 
-  const ticket = await Ticket.findById(req.params.id);
+const ticket = await Ticket.findById(req.params.ticketId);
+
 
   if (!ticket) {
     throw new ApiError(404, 'Ticket not found.');

@@ -13,7 +13,7 @@ export default function SupportTicketsPage() {
     const token = localStorage.getItem("accessToken");
 
     try {
-      const res = await fetch("http://localhost:8000/api/v1/tickets", {
+      const res = await fetch("http://localhost:8000/api/v1/it-support/tickets", {
         headers: {
           Authorization: `Bearer ${token}`,
          
@@ -37,7 +37,7 @@ export default function SupportTicketsPage() {
     if (!comment.trim()) return;
     const token = localStorage.getItem("accessToken");
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/it-tickets/${ticketId}/comment`, {
+      const res = await fetch(`http://localhost:8000/api/v1/it-support/tickets/${ticketId}/comment`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -61,7 +61,7 @@ export default function SupportTicketsPage() {
     if (!resolution.trim()) return;
     const token = localStorage.getItem("accessToken");
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/it-tickets/${ticketId}/resolve`, {
+      const res = await fetch(`http://localhost:8000/api/v1/it-support/tickets/${ticketId}/resolve`, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -86,8 +86,11 @@ export default function SupportTicketsPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold mb-4">Support Tickets</h1>
-      <ul className="space-y-3">
+      
+      <h1 className="text-3xl font-bold">Support Tickets</h1>
+      <p className="text-lg text-gray-400 mb-10"> Resolve the Tickets that Users have submitted</p>
+    
+      <ul className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-2 gap-4 mb-6">
         {tickets.map((ticket: any) => (
           <li key={ticket._id} className="border rounded p-4">
             <p><strong>Title:</strong> {ticket.title}</p>
@@ -97,7 +100,7 @@ export default function SupportTicketsPage() {
             <p><strong>Date:</strong> {new Date(ticket.createdAt).toLocaleString()}</p>
 
             <div className="mt-2">
-              <button onClick={() => setSelectedTicketId(ticket._id)} className="mr-2 bg-blue-500 text-white px-2 py-1 rounded">
+              <button onClick={() => setSelectedTicketId(ticket._id)} className="mr-2 bg-blue-900 text-white px-2 py-1 rounded">
                 Add Comment
               </button>
               <button onClick={() => setResolvingTicketId(ticket._id)} className="bg-green-500 text-white px-2 py-1 rounded">
