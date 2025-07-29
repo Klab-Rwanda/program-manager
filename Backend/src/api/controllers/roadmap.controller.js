@@ -306,10 +306,11 @@ export const getRoadmapAssignmentsWithMarks = asyncHandler(async (req, res) => {
 
         // Create a complete list of all trainees with their submission status
         const allTraineesWithSubmissions = allTrainees.map(trainee => {
-            // Since there are no assignment submissions yet, all trainees will show as "Not Submitted"
-            const submission = null; // assignmentSubmissions.find(sub => 
-            //     sub.trainee._id.toString() === trainee._id.toString()
-            // );
+
+            const submission = assignmentSubmissions.find(sub => 
+                sub.trainee && sub.trainee._id.toString() === trainee._id.toString() // Ensure submission.trainee is populated
+            );
+
             
             const traineeAttendance = attendanceData.find(att => 
                 att.traineeId.toString() === trainee._id.toString()

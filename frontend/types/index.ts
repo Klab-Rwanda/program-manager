@@ -188,7 +188,17 @@ export interface CourseAssignmentsData {
  */
 export interface Submission {
     _id: string;
-    // Add other submission properties as needed from your backend model
+    program: string | Program; // Can be ObjectId string or populated object
+    course: string | Course;   // Can be ObjectId string or populated object
+    assignment: string | Assignment; // Can be ObjectId string or populated object
+    trainee: string | User;    // Can be ObjectId string or populated object
+    fileUrl: string;
+    submittedAt: string;
+    status: 'Submitted' | 'Reviewed' | 'NeedsRevision' | 'Graded';
+    feedback?: string;
+    grade?: string | number; // Can be string or number based on backend schema
+    createdAt: string;
+    updatedAt: string;
 }
 
 
@@ -335,4 +345,25 @@ export interface RoadmapAssignmentsData {
         objectives: string[];
     };
     assignments: AssignmentWithMarks[];
+}
+
+
+export interface StudentSummary {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  attendanceRate: number;
+  records: {
+    date: string;
+    status: string;
+    timestamp: string;
+    checkIn?: string;
+    sessionTitle?: string;
+    method: string;
+  }[];
 }

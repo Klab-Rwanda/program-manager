@@ -1,3 +1,4 @@
+// src/api/controllers/program.controller.js
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
 import { Program } from '../models/program.model.js';
@@ -17,7 +18,7 @@ const verifyManagerAccess = async (programId, managerId) => {
     
     const isManager = program.programManager && program.programManager.toString() === managerId.toString();
     
-    if (!isManager) {
+    if (!isManager && managerId.toString() !== 'SuperAdmin') { // SuperAdmin always has access
         throw new ApiError(403, "Forbidden: You are not a manager of this program.");
     }
     return program;
@@ -182,9 +183,11 @@ const getAllPrograms = asyncHandler(async (req, res) => {
         query.programManager = _id;
         console.log('Query for Program Manager:', query);
     } else if (role === 'Facilitator') {
-        query.facilitators = _id;
+        // Facilitators might only see programs they are assigned to, or just active ones
+        query.facilitators = _id; // This is what the frontend expects
         console.log('Query for Facilitator:', query);
     } else if (role === 'Trainee') {
+        // Trainees only see programs they are enrolled in
         query.trainees = _id;
         console.log('Query for Trainee:', query);
     } else if (role === 'SuperAdmin') {
@@ -192,8 +195,13 @@ const getAllPrograms = asyncHandler(async (req, res) => {
         console.log('Query for SuperAdmin: all programs');
     }
     
-    const programs = await Program.find(query).populate('programManager', 'name email');
+    const programs = await Program.find(query)
+        .populate('programManager', 'name email') // Already populated for managers
+        .populate('facilitators', 'name email') // <-- ADD THIS LINE to populate facilitators
+        .populate('trainees', 'name email'); // Already populated for trainees
+
     console.log('Found programs count:', programs.length);
+    // console.log('Sample program (first one):', programs[0]); // Debug populated data
     
     return res.status(200).json(new ApiResponse(200, programs, "Programs fetched successfully."));
 });
@@ -498,6 +506,124 @@ const getProgramStudentCount = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, { count }, "Student count fetched successfully."));
 });
 
+
+/**
+ * @desc    Program Manager or SuperAdmin marks a program as 'Completed'.
+ * @route   PATCH /api/v1/programs/:id/complete
+ * @access  Private (Program Manager, SuperAdmin)
+ */
+ const markProgramAsCompleted = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { user } = req; // Current user
+
+    // Verify access: Program Manager must manage the program, SuperAdmin has universal access
+    if (user.role === 'Program Manager') {
+        await verifyManagerAccess(id, user._id);
+    } else if (user.role !== 'SuperAdmin') {
+        throw new ApiError(403, "Forbidden: Only Program Managers or SuperAdmins can mark programs as completed.");
+    }
+
+    const program = await Program.findById(id);
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
+    }
+
+    if (program.status === 'Completed') {
+        throw new ApiError(400, "Program is already marked as completed.");
+    }
+    
+    // Check if the program's end date has passed, or allow force complete
+    // For simplicity, we'll allow completing it regardless of date for now,
+    // but in production, you might add:
+    // if (new Date(program.endDate) > new Date()) {
+    //     throw new ApiError(400, "Program cannot be marked completed before its end date.");
+    // }
+
+    program.status = 'Completed';
+    program.isActive = false; // A completed program is typically no longer active
+    await program.save({ validateBeforeSave: false }); // Bypass validation if status change conflicts with other rules
+
+    await createLog({
+        user: user._id,
+        action: 'PROGRAM_COMPLETED',
+        details: `${user.role} ${user.name} marked program '${program.name}' as completed.`,
+        entity: { id: program._id, model: 'Program' }
+    });
+
+    // Notify program manager if a SuperAdmin marked it completed
+    if (user.role === 'SuperAdmin' && program.programManager && program.programManager.toString() !== user._id.toString()) {
+        await createNotification({
+            recipient: program.programManager,
+            sender: user._id,
+            title: "Program Marked Complete",
+            message: `The program "${program.name}" has been marked as completed.`,
+            link: `/dashboard/Manager/programs`,
+            type: 'info'
+        });
+    }
+
+    return res.status(200).json(new ApiResponse(200, program, "Program marked as completed successfully."));
+});
+
+
+const reactivateProgram = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { newEndDate } = req.body; // Expecting newEndDate from frontend
+
+    if (!newEndDate) {
+        throw new ApiError(400, "A new end date is required to reactivate the program.");
+    }
+
+    // Validate newEndDate is a valid future date
+    const parsedNewEndDate = new Date(newEndDate);
+    if (isNaN(parsedNewEndDate.getTime())) {
+        throw new ApiError(400, "Invalid new end date provided.");
+    }
+    if (parsedNewEndDate <= new Date()) { // New end date must be strictly in the future
+        throw new ApiError(400, "New end date must be in the future.");
+    }
+
+    // Find the program. Note: The pre('find') middleware might filter it if it's archived/deleted.
+    // If you explicitly want to find archived programs, you'd need to modify the query or the middleware.
+    // For this specific case (reactivating from 'Completed'), it should typically be non-archived.
+    const program = await Program.findById(id); 
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
+    }
+
+    // Verify access: Program Manager owns it OR is SuperAdmin
+    const isManager = program.programManager && program.programManager.toString() === req.user._id.toString();
+    if (!isManager && req.user.role !== 'SuperAdmin') {
+        throw new ApiError(403, "Forbidden: You do not have permission to reactivate this program.");
+    }
+
+    // Only allow reactivation if status is 'Completed'
+    if (program.status !== 'Completed') {
+        throw new ApiError(400, `Program cannot be reactivated from status '${program.status}'. Only 'Completed' programs can be reactivated here.`);
+    }
+
+    // Update program fields
+    program.status = 'Active';
+    program.isActive = true; // Ensure it's active
+    program.endDate = parsedNewEndDate; // Set the new end date
+    // Optionally, if the program was also 'isArchived: true' when completed, you might set isArchived: false here too.
+    // However, the `archiveProgram` controller handles setting isArchived: true, and `unarchiveProgram` handles reversing that.
+    // So, 'Completed' programs usually aren't archived unless explicitly done so by a separate action.
+
+    await program.save({ validateBeforeSave: false }); // Bypass schema validation for status/isActive changes
+
+    await createLog({
+        user: req.user._id,
+        action: 'PROGRAM_REACTIVATED',
+        details: `${req.user.role} ${req.user.name} reactivated program '${program.name}' until ${parsedNewEndDate.toLocaleDateString()}.`,
+        entity: { id: program._id, model: 'Program' }
+    });
+
+    return res.status(200).json(new ApiResponse(200, program, "Program reactivated successfully."));
+});
+
+
+
 export {
     createProgram,
     requestApproval,
@@ -514,5 +640,7 @@ export {
     getArchivedPrograms,
     archiveProgram,
     unarchiveProgram,
-    getProgramStudentCount
+    getProgramStudentCount,
+    markProgramAsCompleted,
+    reactivateProgram,
 };

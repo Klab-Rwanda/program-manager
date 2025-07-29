@@ -23,7 +23,8 @@ import {
     openQrForSession,
     getProgramAttendanceReport,
     getMyAttendanceHistory,
-    endSession
+    endSession,
+    getProgramAttendanceSummary
 } from '../../controllers/attendance.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole as verifyRole } from '../../middlewares/role.middleware.js';
@@ -121,6 +122,11 @@ router.post('/sessions/:sessionId/start-physical',
 router.post('/sessions/:sessionId/open-qr', 
     verifyRole(['Facilitator']), 
     openQrForSession // Add this new route
+);
+
+router.get('/report/program/:programId/summary',
+    verifyRole(['Program Manager', 'SuperAdmin']),
+    getProgramAttendanceSummary // Add this new route
 );
 router.get('/report/program/:programId', 
     verifyRole(['Program Manager', 'SuperAdmin']), 

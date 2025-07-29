@@ -53,7 +53,7 @@ const menuItems = [
     { title: "My Learning", url: "/dashboard/Trainee/my-learning", icon: GraduationCap, roles: ['trainee'] },
     { title: "Submit Projects", url: "/dashboard/Trainee/submit-projects", icon: FileText, roles: ['trainee'] },
     { title: "Attendance", url: "/dashboard/Trainee/Trattendance", icon: Calendar, roles: ['trainee'] },
-    { title: "My Attendance History", url: "/dashboard/Trainee/my-attendance-history", icon: Calendar, roles: ['trainee'] },
+    // { title: "My Attendance History", url: "/dashboard/Trainee/my-attendance-history", icon: Calendar, roles: ['trainee'] },
     // { title: "My Progress", url: "/dashboard/Trainee/my-progress", icon: TrendingUp, roles: ['trainee'] },
     // { title: "Learning Resources", url: "/dashboard/Trainee/resources", icon: FolderOpen, roles: ['trainee'] },
     { title: "Program Roadmap", url: "/dashboard/Trainee/roadmap", icon: CalendarCheck, roles: ['trainee'] },
