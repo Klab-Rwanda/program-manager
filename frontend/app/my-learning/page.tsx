@@ -98,7 +98,7 @@ export default function MyLearningPage() {
   }, [role]); // Depend on role to refetch if role changes
 
   useEffect(() => {
-    if (!authLoading && role === 'trainee') { // Only fetch if authenticated and is a trainee
+    if (!authLoading && role === 'trainee') { 
       fetchMyPrograms();
     }
   }, [authLoading, role, fetchMyPrograms]);

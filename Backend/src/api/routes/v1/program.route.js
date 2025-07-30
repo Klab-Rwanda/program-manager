@@ -1,3 +1,4 @@
+// src/api/routes/v1/program.route.js
 import { Router } from 'express';
 import * as programController from '../../controllers/program.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
@@ -58,5 +59,12 @@ router.route('/:id/archive').patch(checkRole(['SuperAdmin', 'Program Manager']),
 router.route('/:id/unarchive').patch(checkRole(['SuperAdmin', 'Program Manager']), programController.unarchiveProgram);
 
 router.route('/:id/student-count').get(getProgramStudentCount);
+
+// New route to mark a program as completed
+router.route('/:id/complete').patch(checkRole(['Program Manager', 'SuperAdmin']), programController.markProgramAsCompleted);
+
+router.route('/:id/reactivate')
+      .patch(checkRole(['Program Manager', 'SuperAdmin']), programController.reactivateProgram);
+
 
 export default router;

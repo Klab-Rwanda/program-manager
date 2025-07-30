@@ -19,20 +19,15 @@ export const createCourse = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Course content document is required.");
     }
 
-    // --- THIS IS THE FIX ---
-    // Instead of using req.file.path, we construct a URL-friendly path.
-    // req.file.path might be "public\\temp\\filename.pdf"
-    // We want to store "temp/filename.pdf" in the database.
     const contentUrl = `uploads/${req.file.filename}`;
-    // --- END OF FIX ---
 
     const course = await Course.create({
         title,
         description,
         program: programId,
         facilitator: facilitatorId,
-        contentUrl, // Save the corrected, relative URL path
-        status: 'Draft' // Changed from PendingApproval to Draft as per our workflow
+        contentUrl, 
+        status: 'Draft' 
     });
 
     return res.status(201).json(new ApiResponse(201, course, "Course created as Draft successfully."));
@@ -47,11 +42,11 @@ export const approveCourse = asyncHandler(async (req, res) => {
     }
 
      await createNotification({
-        recipient: course.facilitator, // The facilitator who created the course
-        sender: req.user._id, // The manager who approved it
+        recipient: course.facilitator, 
+        sender: req.user._id, 
         title: "Your Course has been Approved!",
         message: `Your course "${course.title}" is now active and visible to trainees.`,
-        link: `/facilitator/curriculum`, // Link for the facilitator
+        link: `/dashboard/Facilitator/fac-curriculum`, 
         type: 'success',
     });
 
@@ -78,16 +73,14 @@ export const verifyFacilitatorAccess = async (courseId, facilitatorId) => {
 export const requestCourseApproval = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     const facilitatorId = req.user._id;
-    // First, verify the facilitator owns this course
     const course = await Course.findById(courseId);
     if (!course) throw new ApiError(404, 'Course not found.');
     if (course.facilitator.toString() !== facilitatorId.toString()) {
         throw new ApiError(403, 'Forbidden: You can only request approval for your own courses.');
     }
-    if (course.status !== 'Draft') {
-        throw new ApiError(400, 'Only draft courses can be submitted for approval.');
+    if (course.status !== 'Draft' && course.status !== 'Rejected') { 
+        throw new ApiError(400, 'Only draft or rejected courses can be submitted for approval.');
     }
-    // Update the status from 'Draft' to 'PendingApproval'
     course.status = 'PendingApproval';
     await course.save();
     return res.status(200).json(new ApiResponse(200, course, 'Course submitted for approval.'));
@@ -95,20 +88,21 @@ export const requestCourseApproval = asyncHandler(async (req, res) => {
 
 
 export const getAllCourses = asyncHandler(async (req, res) => {
-    // Only Facilitator or Program Manager can access
-    if (!['Facilitator', 'Program Manager'].includes(req.user.role)) {
-        throw new ApiError(403, 'Forbidden: Only facilitators and program managers can access this resource.');
+    if (!['Facilitator', 'Program Manager', 'SuperAdmin'].includes(req.user.role)) { 
+        throw new ApiError(403, 'Forbidden: Only facilitators, program managers, and super admins can access this resource.');
     }
-    // Optionally, add filters/search here
     const courses = await Course.find().populate('program', 'name').populate('facilitator', 'name email');
     return res.status(200).json(new ApiResponse(200, courses, 'All courses fetched successfully.'));
 });
 
 
 export const downloadCourseFile = asyncHandler(async (req, res) => {
-    if (!['Facilitator', 'Program Manager'].includes(req.user.role)) {
-        throw new ApiError(403, 'Forbidden: Only facilitators and program managers can access this resource.');
+    // Anyone who has access to the course information should be able to download the file.
+    // For simplicity, we allow it for Facilitator, Program Manager, and Trainee.
+    if (!['Facilitator', 'Program Manager', 'Trainee', 'SuperAdmin'].includes(req.user.role)) {
+        throw new ApiError(403, 'Forbidden: You do not have permission to download this resource.');
     }
+
     const { courseId } = req.params;
     const course = await Course.findById(courseId);
     if (!course) {
@@ -118,12 +112,13 @@ export const downloadCourseFile = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'No file found for this course.');
     }
 
-    // Get file extension and set proper Content-Type
-    
-    const filePath = course.contentUrl;
+    // Construct the absolute path to the file
+    const rootDir = process.cwd(); 
+    const filePath = path.join(rootDir, 'public', course.contentUrl); 
+
     console.log('Download request - Course ID:', courseId);
-    console.log('File path from database:', filePath);
-    console.log('Course type from database:', course.type);
+    console.log('File path from database:', course.contentUrl);
+    console.log('Constructed absolute file path:', filePath);
     
     // Check if file exists
     if (!fs.existsSync(filePath)) {
@@ -157,34 +152,17 @@ export const downloadCourseFile = asyncHandler(async (req, res) => {
         '.gif': 'image/gif',
         '.txt': 'text/plain',
         '.mp3': 'audio/mpeg',
-        '.wav': 'audio/wav'
-    };
-    
-    // Also define MIME types for type field values (without dots)
-    const typeMimeTypes = {
-        'pdf': 'application/pdf',
-        'mp4': 'video/mp4',
-        'avi': 'video/x-msvideo',
-        'mov': 'video/quicktime',
-        'wmv': 'video/x-ms-wmv',
-        'flv': 'video/x-flv',
-        'webm': 'video/webm',
-        'mkv': 'video/x-matroska',
-        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'jpg': 'image/jpeg',
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'gif': 'image/gif',
-        'txt': 'text/plain',
-        'mp3': 'audio/mpeg',
-        'wav': 'audio/wav'
+        '.wav': 'audio/wav',
+        '.zip': 'application/zip', 
+        '.rar': 'application/x-rar-compressed', 
+        '.7z': 'application/x-7z-compressed' 
     };
     
     // Try to get content type from file extension first, then from course type
+    // This is the core part that ensures correct Content-Type for browser preview
     let contentType = mimeTypes[fileExtension];
-    if (!contentType && course.type) {
-        contentType = typeMimeTypes[course.type.toLowerCase()];
+    if (!contentType && course.type) { 
+        contentType = mimeTypes[`.${course.type.toLowerCase()}`] || `application/${course.type.toLowerCase()}`;
         console.log('Using course type for MIME type:', course.type, '->', contentType);
     }
     
@@ -197,9 +175,11 @@ export const downloadCourseFile = asyncHandler(async (req, res) => {
     console.log('Final Content-Type:', contentType);
     
     try {
-        // Set headers for proper download
+        // Set headers for proper download (or direct display if browser supports Content-Type)
         res.setHeader('Content-Type', contentType);
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        // Using `inline` for Content-Disposition encourages browser to display if possible
+        // But the frontend `<a>` tag with `download` attribute or `iframe` handles actual display.
+        res.setHeader('Content-Disposition', `inline; filename="${fileName}"`); 
         
         // Stream the file
         const fileStream = fs.createReadStream(filePath);
@@ -246,21 +226,17 @@ export const getMyCourses = asyncHandler(async (req, res) => {
     }
     const programIds = userPrograms.map(p => p._id);
 
-    // --- THIS IS THE FIX ---
     const courseQuery = { program: { $in: programIds } };
     if (userRole === 'Trainee') {
-        // Trainees ONLY see Approved courses. This is correct.
         courseQuery.status = 'Approved';
     } else if (userRole === 'Facilitator') {
-        // Facilitators need to see ALL courses they created, regardless of status.
         courseQuery.facilitator = userId;
     }
-    // --- END OF FIX ---
 
     const courses = await Course.find(courseQuery)
         .populate('program', 'name')
         .populate('facilitator', 'name')
-        .sort({ createdAt: -1 }); // Sort by newest first
+        .sort({ createdAt: -1 }); 
         
     return res.status(200).json(new ApiResponse(200, courses, "Your courses fetched successfully."));
 });
@@ -273,15 +249,13 @@ export const updateCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     const { title, description } = req.body;
 
-    // Verify ownership and ensure the course is in an editable state ('Draft' or 'Rejected')
     await verifyFacilitatorAccess(courseId, req.user._id);
 
     const updatedCourse = await Course.findByIdAndUpdate(
         courseId,
         {
             $set: { title, description },
-            // If a rejected course is edited, it should go back to Draft status
-            $unset: { rejectionReason: "" }, // Remove rejection reason
+            $unset: { rejectionReason: "" }, 
             status: 'Draft'
         },
         { new: true, runValidators: true }
@@ -295,8 +269,6 @@ export const updateCourse = asyncHandler(async (req, res) => {
 export const deleteCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     
-    // For deletion, we can allow it regardless of status for simplicity,
-    // but we MUST verify ownership.
     const course = await Course.findById(courseId);
     if (!course) {
         throw new ApiError(404, "Course not found.");
@@ -305,10 +277,7 @@ export const deleteCourse = asyncHandler(async (req, res) => {
         throw new ApiError(403, "Forbidden: You do not have permission to delete this course.");
     }
     
-    // In a real app, you would also delete the associated file from storage (e.g., S3).
-    // For local storage, this is more complex, so we'll skip it for now.
-    
-    await Course.findByIdAndDelete(courseId);
+    await course.deleteOne();
 
     return res.status(200).json(new ApiResponse(200, {}, "Course deleted successfully."));
 });
@@ -343,12 +312,6 @@ export const rejectCourse = asyncHandler(async (req, res) => {
 });
 
 
-// --- NEW FUNCTION ---
-/**
- * @desc    Program Manager activates a rejected course.
- * @route   PATCH /api/v1/courses/{courseId}/activate
- * @access  Private (ProgramManager)
- */
 export const activateCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     
@@ -356,7 +319,7 @@ export const activateCourse = asyncHandler(async (req, res) => {
         courseId, 
         { 
             status: 'Approved',
-            $unset: { rejectionReason: "" } // Remove rejection reason when activating
+            $unset: { rejectionReason: "" }
         }, 
         { new: true }
     );
@@ -368,18 +331,8 @@ export const activateCourse = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, course, "Course has been activated."));
 });
 
-// --- NEW FUNCTION ---
-/**
- * @desc    Program Manager gets all courses pending their approval.
- * @route   GET /api/v1/courses/pending
- * @access  Private (ProgramManager)
- */
-
-
 
 export const getPendingCourses = asyncHandler(async (req, res) => {
-    // In a more complex app, you'd filter by programs the manager owns.
-    // For now, any manager can see all pending courses.
     const courses = await Course.find({ status: 'PendingApproval' })
         .populate('facilitator', 'name email')
         .populate('program', 'name');
@@ -388,16 +341,9 @@ export const getPendingCourses = asyncHandler(async (req, res) => {
 });
 
 
-// --- NEW FUNCTION ---
-/**
- * @desc    Program Manager gets courses by status.
- * @route   GET /api/v1/courses/status/:status
- * @access  Private (ProgramManager)
- */
 export const getCoursesByStatus = asyncHandler(async (req, res) => {
     const { status } = req.params;
     
-    // Validate status parameter
     const validStatuses = ['Draft', 'PendingApproval', 'Approved', 'Rejected'];
     if (!validStatuses.includes(status)) {
         throw new ApiError(400, "Invalid status. Must be one of: Draft, PendingApproval, Approved, Rejected");
@@ -406,21 +352,15 @@ export const getCoursesByStatus = asyncHandler(async (req, res) => {
     const courses = await Course.find({ status })
         .populate('facilitator', 'name email')
         .populate('program', 'name')
-        .sort({ createdAt: -1 }); // Sort by newest first
+        .sort({ createdAt: -1 });
         
     return res.status(200).json(new ApiResponse(200, courses, `Courses with status '${status}' fetched successfully.`));
 });
 
-// --- NEW FUNCTION ---
-/**
- * @desc    Program Manager gets assignments with student marks and attendance for a course.
- * @route   GET /api/v1/courses/{courseId}/assignments-with-marks
- * @access  Private (ProgramManager)
- */
+
 export const getCourseAssignmentsWithMarks = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     
-    // Find the course and verify it exists
     const course = await Course.findById(courseId)
         .populate('program', 'name')
         .populate('facilitator', 'name email');
@@ -429,18 +369,15 @@ export const getCourseAssignmentsWithMarks = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Course not found");
     }
 
-    // Get all assignments for this course
     const assignments = await Assignment.find({ course: courseId })
         .populate('facilitator', 'name email')
         .sort({ dueDate: -1 });
 
-    // Get all submissions for this course with trainee info
     const submissions = await Submission.find({ course: courseId })
         .populate('trainee', 'name email')
         .populate('assignment', 'title maxGrade')
         .sort({ submittedAt: -1 });
 
-    // Get attendance data for trainees in this course's program
     const attendanceData = await Attendance.aggregate([
         {
             $match: {
@@ -498,7 +435,6 @@ export const getCourseAssignmentsWithMarks = asyncHandler(async (req, res) => {
         }
     ]);
 
-    // Organize data by assignment
     const assignmentsWithMarks = assignments.map(assignment => {
         const assignmentSubmissions = submissions.filter(sub => 
             sub.assignment && sub.assignment._id.toString() === assignment._id.toString()
@@ -548,11 +484,10 @@ export const getCourseAssignmentsWithMarks = asyncHandler(async (req, res) => {
 
 
 export const getAllCoursesAdmin = asyncHandler(async (req, res) => {
-    const courses = await Course.find({}) // Find all courses, no filter
+    const courses = await Course.find({}) 
         .populate('program', 'name')
         .populate('facilitator', 'name')
         .sort({ createdAt: -1 });
         
     return res.status(200).json(new ApiResponse(200, courses, "All courses fetched successfully."));
 });
-

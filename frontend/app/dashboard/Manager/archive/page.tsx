@@ -1,4 +1,3 @@
-// app/dashboard/Manager/archive/page.tsx
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -14,6 +13,7 @@ import { exportArchivedPDF, exportArchivedExcel, downloadBlob, exportSingleProgr
 import { toast } from "sonner"
 import { Alert, AlertDescription } from "@/components/ui/alert" // For general errors
 import { useAuth } from "@/lib/contexts/RoleContext" // Import useAuth for role check
+import { ConfirmDialog } from "@/components/ui/confirm-dialog" // Import ConfirmDialog
 
 
 // Define the frontend-specific interface for an archived item.
@@ -69,9 +69,21 @@ export default function ArchivePage() {
   const [archivedData, setArchivedData] = useState<ArchiveItem[]>([]) // Stores transformed data for display
   const [loading, setLoading] = useState(true) // General loading state for fetching data
   const [error, setError] = useState<string | null>(null) // General error state
-  const [unarchiving, setUnarchiving] = useState<string | null>(null) // State to track which item is being unarchived
+  
   const [exporting, setExporting] = useState(false) // State to track if an export operation is in progress
   const [showExportModal, setShowExportModal] = useState(false) // Controls the bulk export format selection modal
+
+  // Confirm Dialog State for Unarchive
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+    confirmText?: string;
+    destructive?: boolean;
+    isConfirming?: boolean;
+  }>({ open: false, title: '', description: '', onConfirm: () => {} });
+
 
   // Dynamically generate years for the filter based on current year and a few past years
   const currentYear = new Date().getFullYear();
@@ -140,23 +152,22 @@ export default function ArchivePage() {
   }
 
   // Handler for unarchiving a program
-  const handleUnarchive = async (item: ArchiveItem) => {
-    // Use `confirm` for critical action, as per project instructions. For a real-world app, a custom AlertDialog is better.
-    if (!confirm(`Are you sure you want to unarchive "${item.name}"?`)) {
-      return
-    }
+  const handleUnarchive = useCallback(async () => {
+    if (!selectedItem) return;
 
-    setUnarchiving(item.id) // Set the state to indicate unarchiving is in progress for this specific item
+    setConfirmDialog(prev => ({ ...prev, isConfirming: true }));
     try {
-      await unarchiveProgram(item.id) // Call the backend service to unarchive the program
-      toast.success(`${item.name} has been unarchived successfully.`) // Show success toast
+      await unarchiveProgram(selectedItem.id) // Call the backend service to unarchive the program
+      toast.success(`${selectedItem.name} has been unarchived successfully.`) // Show success toast
       fetchArchivedPrograms() // Re-fetch the list to update the UI
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to unarchive program. Please try again.") // Show error toast
     } finally {
-      setUnarchiving(null) // Reset unarchiving state
+      setConfirmDialog(prev => ({ ...prev, open: false, isConfirming: false })); // Reset unarchiving state
+      setSelectedItem(null); // Clear selected item
     }
-  }
+  }, [selectedItem, fetchArchivedPrograms]); // Depend on selectedItem and fetch function
+
 
   // Handler for exporting data of a single archived item (program)
   const handleExportData = async (item: ArchiveItem) => {
@@ -398,8 +409,18 @@ export default function ArchivePage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleUnarchive(item)}
-                    disabled={unarchiving === item.id} // Disable during unarchive
+                    onClick={() => {
+                        setSelectedItem(item); // Set the item to be unarchived
+                        setConfirmDialog({
+                            open: true,
+                            title: `Unarchive Program: "${item.name}"?`,
+                            description: `Are you sure you want to unarchive "${item.name}"? It will be restored to an active state.`,
+                            onConfirm: handleUnarchive, // Calls the useCallback
+                            confirmText: "Unarchive",
+                            destructive: false,
+                            isConfirming: false,
+                        });
+                    }}
                   >
                     <RotateCcw className="h-4 w-4" />
                   </Button>
@@ -617,8 +638,19 @@ export default function ArchivePage() {
               {selectedItem && (
                 <Button 
                   variant="outline" 
-                  onClick={() => handleUnarchive(selectedItem)}
-                  disabled={unarchiving === selectedItem.id}
+                  onClick={() => {
+                    setSelectedItem(item); // Set the item to be unarchived
+                    setConfirmDialog({
+                        open: true,
+                        title: `Unarchive Program: "${item.name}"?`,
+                        description: `Are you sure you want to unarchive "${item.name}"? It will be restored to an active state.`,
+                        onConfirm: handleUnarchive, // Calls the useCallback
+                        confirmText: "Unarchive",
+                        destructive: false,
+                        isConfirming: false,
+                    });
+                }}
+                  disabled={confirmDialog.isConfirming && confirmDialog.onConfirm === handleUnarchive}
                 >
                   <RotateCcw className="mr-2 h-4 w-4" />
                   Unarchive
@@ -628,41 +660,17 @@ export default function ArchivePage() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Export All Modal (for selecting PDF or Excel) */}
-      <Dialog open={showExportModal} onOpenChange={setShowExportModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-gray-900">Export Archived Programs</DialogTitle>
-            <DialogDescription>
-              Choose the format to export all archived programs
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col space-y-4">
-            <Button
-              onClick={() => handleExportAll('pdf')}
-              disabled={exporting}
-              className="w-full bg-[#1f497d] hover:bg-[#1a3f6b] text-white"
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              Export as PDF
-            </Button>
-            <Button
-              onClick={() => handleExportAll('excel')}
-              disabled={exporting}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Export as Excel
-            </Button>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowExportModal(false)}>
-              Cancel
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Confirm Dialog Component */}
+      <ConfirmDialog 
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        onConfirm={confirmDialog.onConfirm}
+        confirmText={confirmDialog.confirmText}
+        destructive={confirmDialog.destructive}
+        isConfirming={confirmDialog.isConfirming}
+      />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import api from '../api';
 import { Program } from '@/types';
-import { ProgramStats } from './dashboard.service';
+import { ProgramStats } from './dashboard.service'; // Ensure this path is correct if ProgramStats is here
+
 export interface CreateProgramData {
   name: string;
   description: string;
@@ -15,7 +16,7 @@ export interface UpdateProgramData {
   endDate?: string;
 }
 
-// Get all programs for the current user
+// Get all programs for the current user (filtered by backend role)
 export const getAllPrograms = async (): Promise<Program[]> => {
   const response = await api.get('/programs');
   return response.data.data;
@@ -39,12 +40,12 @@ export const updateProgram = async (id: string, data: UpdateProgramData): Promis
   return response.data.data;
 };
 
-// Delete (deactivate) a program
+// Delete (soft-delete) a program
 export const deleteProgram = async (id: string): Promise<void> => {
   console.log("=== API DELETE DEBUG ===");
   console.log("Deleting program with ID:", id);
   console.log("API URL:", `/programs/${id}`);
-  console.log("Full URL:", `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/programs/${id}`);
+  console.log("Full URL:", `${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/programs/${id}`);
   
   try {
     const response = await api.delete(`/programs/${id}`);
@@ -96,20 +97,31 @@ export const generateProgramReport = async (id: string): Promise<Blob> => {
   });
   return response.data;
 }; 
+
+// Get program statistics
 export const getProgramStats = async (id: string): Promise<ProgramStats | null> => {
     try {
         const response = await api.get(`/programs/${id}/stats`);
-        // The backend wraps data in a 'data' property.
         return response.data.data;
     } catch (error) {
-        // If the API call fails (e.g., 404 Not Found), log the error and return null.
         console.error(`Failed to fetch stats for program ${id}:`, error);
         return null;
     }
 };
-export type { Program };
 
+// Assign/Unassign Program Manager
 export const assignManagerToProgram = async (programId: string, managerId: string): Promise<Program> => {
     const response = await api.patch(`/programs/${programId}/assign-manager`, { managerId });
     return response.data.data;
+};
+
+// Mark program as completed
+export const markProgramAsCompleted = async (programId: string): Promise<Program> => {
+    const response = await api.patch(`/programs/${programId}/complete`);
+    return response.data.data;
+};
+
+export const reactivateProgram = async (id: string, newEndDate: string): Promise<Program> => {
+  const response = await api.patch(`/programs/${id}/reactivate`, { newEndDate });
+  return response.data.data;
 };

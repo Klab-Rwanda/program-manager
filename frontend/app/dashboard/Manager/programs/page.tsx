@@ -1,10 +1,10 @@
+// app/dashboard/Manager/programs/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Plus,
   Search,
-  Filter,
   Edit,
   Trash2,
   Eye,
@@ -21,8 +21,21 @@ import {
   Archive,
   Download,
   FileText,
+  RefreshCw, // Added for reactivate button icon
+  ClipboardCheck, // Added for Mark as Complete button icon
 } from "lucide-react";
-import { Program, getAllPrograms, createProgram, updateProgram, deleteProgram, requestApproval, enrollFacilitator, enrollTrainee } from "@/lib/services/program.service";
+import { 
+  Program, 
+  getAllPrograms, 
+  createProgram, 
+  updateProgram, 
+  deleteProgram, 
+  requestApproval, 
+  enrollFacilitator, 
+  enrollTrainee,
+  reactivateProgram, // Import reactivate service
+  markProgramAsCompleted // Import mark complete service
+} from "@/lib/services/program.service";
 import { archiveProgram } from "@/lib/services/archive.service";
 import { exportProgramsPDF, exportProgramsExcel, downloadBlob } from "@/lib/services/export.service";
 import { toast } from "sonner";
@@ -32,8 +45,17 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUsersByRole } from '@/lib/services/user.service';
-import { User } from "@/lib/services/user.service";
-import api from '@/lib/api'; // Make sure you have your axios instance
+import { User } from '@/lib/services/user.service';
+import api from '@/lib/api'; 
+
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle 
+} from "@/components/ui/dialog";
 
 const ProgramsPage: React.FC = () => {
   const { isAuthenticated, user, role } = useAuth();
@@ -74,6 +96,14 @@ const ProgramsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+
+  // --- States for program actions ---
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
+  const [programToReactivate, setProgramToReactivate] = useState<Program | null>(null);
+  const [newReactivateEndDate, setNewReactivateEndDate] = useState<string>('');
+  const [isProcessingProgramAction, setIsProcessingProgramAction] = useState<string | null>(null); // For any program-specific loading state (reactivate, complete)
+  // --- End states for program actions ---
+
 
   const fetchPrograms = useCallback(async () => {
     try {
@@ -332,7 +362,7 @@ const ProgramsPage: React.FC = () => {
       await Promise.all(selectedFacilitators.map(fid => enrollFacilitator(assigningProgram._id, fid)));
       toast.success('Facilitators assigned!');
       fetchPrograms();
-    } catch (err) {
+    } catch (err: any) {
       toast.error('Failed to assign facilitators.');
     } finally {
       setAssignLoading(false);
@@ -346,8 +376,8 @@ const ProgramsPage: React.FC = () => {
       await Promise.all(selectedTrainees.map(tid => enrollTrainee(assigningProgram._id, tid)));
       toast.success('Trainees assigned!');
       fetchPrograms();
-    } catch (err) {
-      toast.error('Failed to assign trainees.');
+    }  catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to assign trainees.');
     } finally {
       setAssignLoading(false);
       setSelectedTrainees([]);
@@ -359,10 +389,68 @@ const ProgramsPage: React.FC = () => {
       const response = await api.get(`/programs/${program._id}`);
       setPreviewingProgram(response.data.data); // Use the fully populated program
       setShowPreviewModal(true);
-    } catch (err) {
-      toast.error('Failed to load program details.');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to load program details.');
     }
   };
+
+  // --- Reactivate Program Logic ---
+  const handleOpenReactivateModal = (program: Program) => {
+      setProgramToReactivate(program);
+      // Pre-fill with a date one month from now
+      const defaultEndDate = new Date();
+      defaultEndDate.setMonth(defaultEndDate.getMonth() + 1);
+      setNewReactivateEndDate(defaultEndDate.toISOString().split('T')[0]);
+      setShowReactivateModal(true);
+  };
+
+  const handleReactivateProgram = async () => {
+      if (!programToReactivate || !newReactivateEndDate) {
+          toast.error("Program and new end date are required.");
+          return;
+      }
+      if (new Date(newReactivateEndDate) <= new Date()) {
+          toast.error("New end date must be in the future.");
+          return;
+      }
+
+      setIsProcessingProgramAction(programToReactivate._id); // Set loading for this specific program
+      try {
+          await reactivateProgram(programToReactivate._id, newReactivateEndDate);
+          toast.success(`Program "${programToReactivate.name}" reactivated successfully!`);
+          setShowReactivateModal(false);
+          setProgramToReactivate(null);
+          setNewReactivateEndDate('');
+          fetchPrograms(); // Re-fetch the list to update UI
+      } catch (err: any) {
+          toast.error(err.response?.data?.message || "Failed to reactivate program.");
+          console.error("Error reactivating program:", err);
+      } finally {
+          setIsProcessingProgramAction(null); // Clear loading state
+      }
+  };
+  // --- End Reactivate Program Logic ---
+
+  // --- Mark Program as Complete Logic ---
+  const handleMarkAsComplete = async (program: Program) => {
+    if (!confirm(`Are you sure you want to mark "${program.name}" as completed? This action will set its end date to today and make it inactive.`)) {
+        return;
+    }
+
+    setIsProcessingProgramAction(program._id); // Set loading for this specific program
+    try {
+        await markProgramAsCompleted(program._id);
+        toast.success(`Program "${program.name}" marked as completed!`);
+        fetchPrograms(); // Re-fetch the list to update UI
+    } catch (err: any) {
+        toast.error(err.response?.data?.message || "Failed to mark program as complete.");
+        console.error("Error marking program as complete:", err);
+    } finally {
+        setIsProcessingProgramAction(null); // Clear loading state
+    }
+  };
+  // --- End Mark Program as Complete Logic ---
+
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -591,127 +679,108 @@ const ProgramsPage: React.FC = () => {
           </div>
         ) : (
           sortedPrograms.map((program, idx) => (
-            <div key={program._id || idx} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-200 hover:border-gray-300">
-              {/* Header Section */}
+            <div key={program._id || idx} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex justify-between items-start mb-4">
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-xl font-bold text-gray-900 mb-1 truncate">{program.name}</h3>
-                  <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${getStatusColor(program.status)}`}>
-                    {getStatusIcon(program.status)}
-                    <span className="capitalize">{program.status}</span>
-                  </div>
+                <h3 className="text-lg font-semibold text-gray-900">{program.name}</h3>
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(program.status)}`}>
+                  {getStatusIcon(program.status)}
+                  {program.status}
                 </div>
               </div>
 
-              {/* Description */}
-              <p className="text-gray-600 text-sm mb-6 leading-relaxed line-clamp-3">{program.description}</p>
+              <p className="text-gray-600 text-sm mb-4 line-clamp-2">{program.description}</p>
               
-              {/* Program Details */}
-              <div className="space-y-3 mb-6">
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="flex items-center gap-2 text-gray-500">
-                    <Calendar className="h-4 w-4 text-gray-400" />
-                    <span className="font-medium text-gray-700">Duration:</span>
-                    <span suppressHydrationWarning>{new Date(program.startDate).toLocaleDateString()}</span>
-                    <span className="text-gray-400">-</span>
-                    <span suppressHydrationWarning>{new Date(program.endDate).toLocaleDateString()}</span>
-                  </div>
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Calendar className="h-4 w-4" />
+                  <span suppressHydrationWarning>{new Date(program.startDate).toLocaleDateString()}</span> - <span suppressHydrationWarning>{new Date(program.endDate).toLocaleDateString()}</span>
                 </div>
-                
-                <div className="flex items-center gap-3 text-sm">
-                  <div className="flex items-center gap-2 text-gray-500">
-                    <Users className="h-4 w-4 text-gray-400" />
-                    <span className="font-medium text-gray-700">Participants:</span>
-                    <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                      {program.trainees?.length || 0} trainees
-                    </span>
-                    <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                      {program.facilitators?.length || 0} facilitators
-                    </span>
-                  </div>
-                </div>
-
-                {program.programManager && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <Award className="h-4 w-4 text-gray-400" />
-                      <span className="font-medium text-gray-700">Manager:</span>
-                      <span className="text-gray-600">{program.programManager.name}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="space-y-3">
-                {/* Primary Actions Row */}
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => {
-                      setSelectedProgram(program);
-                      setNewProgram({
-                        name: program.name,
-                        description: program.description,
-                        startDate: program.startDate.split('T')[0],
-                        endDate: program.endDate.split('T')[0],
-                      });
-                      setShowEditModal(true);
-                    }}
-                    className="bg-gray-50 text-gray-700 px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-gray-100 flex items-center justify-center gap-2 transition-colors border border-gray-200"
-                  >
-                    <Edit className="h-3.5 w-3.5" />
-                    <span>Edit</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedProgram(program);
-                      setShowDeleteModal(true);
-                    }}
-                    className="bg-red-50 text-red-700 px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-red-100 flex items-center justify-center gap-2 transition-colors border border-red-200"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span>Delete</span>
-                  </button>
-                </div>
-
-                {/* Secondary Actions Row */}
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => handleArchive(program)}
-                    className="bg-orange-50 text-orange-700 px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-orange-100 flex items-center justify-center gap-2 transition-colors border border-orange-200"
-                  >
-                    <Archive className="h-3.5 w-3.5" />
-                    <span>Archive</span>
-                  </button>
-                  {(program.status === 'Draft' || program.status === 'Rejected') ? (
-                    <button
-                      onClick={() => handleRequestApproval(program)}
-                      className="bg-[#1f497d] text-white px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-[#1a3f6b] flex items-center justify-center gap-2 transition-colors"
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                      <span>Submit</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => openPreviewModal(program)}
-                      className="bg-gray-50 text-gray-700 px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-gray-100 flex items-center justify-center gap-2 transition-colors border border-gray-200"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                      <span>View Details</span>
-                    </button>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Users className="h-4 w-4" />
+                  <span>{program.trainees?.length || 0} trainees, {program.facilitators?.length || 0} facilitators</span>
+                  {program.programManager && (
+                    <span className="text-xs text-gray-400">• Managed by {program.programManager.name}</span>
                   )}
                 </div>
+              </div>
 
-                {/* Full Width Actions */}
-                <div className="space-y-2">
+              <div className="flex flex-wrap gap-2"> {/* This container handles wrapping */}
+                <button
+                  onClick={() => {
+                    setSelectedProgram(program);
+                    setNewProgram({
+                      name: program.name,
+                      description: program.description,
+                      startDate: program.startDate.split('T')[0],
+                      endDate: program.endDate.split('T')[0],
+                    });
+                    setShowEditModal(true);
+                  }}
+                  className="flex items-center justify-center gap-1 min-w-[90px] px-3 py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                >
+                  <Edit className="h-4 w-4 flex-shrink-0" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedProgram(program);
+                    setShowDeleteModal(true);
+                  }}
+                  className="flex items-center justify-center gap-1 min-w-[90px] px-3 py-2 rounded-lg text-sm bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4 flex-shrink-0" />
+                  <span>Delete</span>
+                </button>
+                <button
+                  onClick={() => handleArchive(program)}
+                  className="flex items-center justify-center gap-1 min-w-[90px] px-3 py-2 rounded-lg text-sm bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors"
+                >
+                  <Archive className="h-4 w-4 flex-shrink-0" />
+                  <span>Archive</span>
+                </button>
+                {(program.status === 'Draft' || program.status === 'Rejected') && (
                   <button
-                    onClick={() => openAssignModal(program)}
-                    className="w-full bg-emerald-50 text-emerald-700 px-3 py-2.5 rounded-lg text-xs font-medium hover:bg-emerald-100 flex items-center justify-center gap-2 transition-colors border border-emerald-200"
+                    onClick={() => handleRequestApproval(program)}
+                    className="flex items-center justify-center gap-1 min-w-[90px] px-3 py-2 rounded-lg text-sm bg-[#1f497d] text-white hover:bg-[#1a3f6b] transition-colors"
                   >
-                    <Users className="h-3.5 w-3.5" />
-                    <span>Assign Facilitators & Trainees</span>
+                    <Send className="h-4 w-4 flex-shrink-0" />
+                    <span>Submit</span>
                   </button>
-                </div>
+                )}
+                {program.status === 'Active' && ( // Mark as Complete button for Active programs
+                    <button
+                        onClick={() => handleMarkAsComplete(program)}
+                        className="flex items-center justify-center gap-1 min-w-[120px] px-3 py-2 rounded-lg text-sm bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
+                        disabled={isProcessingProgramAction === program._id} // Disable if this program is being processed
+                    >
+                        {isProcessingProgramAction === program._id ? <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" /> : <ClipboardCheck className="h-4 w-4 flex-shrink-0" />}
+                        <span>{isProcessingProgramAction === program._id ? "Completing..." : "Complete"}</span>
+                    </button>
+                )}
+                {program.status === 'Completed' && ( // Reactivate button for Completed programs
+                    <button
+                        onClick={() => handleOpenReactivateModal(program)}
+                        className="flex items-center justify-center gap-1 min-w-[120px] px-3 py-2 rounded-lg text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                        disabled={isProcessingProgramAction === program._id} // Disable if this program is being processed
+                    >
+                        {isProcessingProgramAction === program._id ? <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" /> : <RefreshCw className="h-4 w-4 flex-shrink-0" />}
+                        <span>{isProcessingProgramAction === program._id ? "Reactivating..." : "Reactivate"}</span>
+                    </button>
+                )}
+                <button
+                  onClick={() => openAssignModal(program)}
+                  className="flex items-center justify-center gap-1 min-w-[120px] px-3 py-2 rounded-lg text-sm bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
+                >
+                  <Users className="h-4 w-4 flex-shrink-0" />
+                  <span>Assign Users</span>
+                </button>
+                <button
+                  onClick={() => openPreviewModal(program)}
+                  className="flex items-center justify-center gap-1 min-w-[90px] px-3 py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors border border-gray-200"
+                >
+                  <Eye className="h-4 w-4 flex-shrink-0" />
+                  <span>View Details</span>
+                </button>
               </div>
             </div>
           ))
@@ -1029,18 +1098,9 @@ const ProgramsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Program Preview Modal */}
       {showPreviewModal && previewingProgram && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-xl flex flex-col justify-center items-center relative">
-            {/* Close Button */}
-            <button
-              onClick={() => setShowPreviewModal(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-            >
-              ✕
-            </button>
-            
+          <div className="bg-white rounded-lg p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-xl flex flex-col justify-center items-center">
             <div className="w-full flex flex-col md:flex-row gap-8">
               {/* Program Details */}
               <div className="flex-1">
@@ -1125,6 +1185,54 @@ const ProgramsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* --- New Reactivate Program Modal --- */}
+      {showReactivateModal && programToReactivate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold mb-4">Reactivate Program: {programToReactivate.name}</h2>
+            <p className="text-gray-600 mb-4">
+              To reactivate this program, please provide a new end date.
+              The program's status will be set to 'Active'.
+            </p>
+            <div className="space-y-4">
+              <label htmlFor="newEndDate" className="block text-sm font-medium text-gray-700">New End Date</label>
+              <input
+                type="date"
+                id="newEndDate"
+                value={newReactivateEndDate}
+                onChange={(e) => setNewReactivateEndDate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1f497d] focus:border-transparent"
+                required
+              />
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button
+                type="button"
+                onClick={() => { setShowReactivateModal(false); setProgramToReactivate(null); setNewReactivateEndDate(''); }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={isProcessingProgramAction === programToReactivate._id}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleReactivateProgram}
+                className="flex-1 px-4 py-2 bg-[#1f497d] text-white rounded-lg hover:bg-[#1a3f6b] transition-colors disabled:opacity-50"
+                disabled={isProcessingProgramAction === programToReactivate._id}
+              >
+                {isProcessingProgramAction === programToReactivate._id ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Reactivate Program
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* --- End New Reactivate Program Modal --- */}
     </div>
   );
 };

@@ -35,8 +35,7 @@ const attendanceSchema = new mongoose.Schema({
     ipAddress: { type: String }
 }, { timestamps: true });
 
-// --- THIS IS THE CRITICAL FIX ---
-// Ensure a user can only have one attendance record PER SESSION.
+// --- THE CRITICAL FIX: Revert unique index to sessionId ---
 attendanceSchema.index({ userId: 1, sessionId: 1 }, { unique: true });
 // --- END OF FIX ---
 
