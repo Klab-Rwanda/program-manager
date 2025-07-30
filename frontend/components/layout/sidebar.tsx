@@ -17,11 +17,13 @@ import { useAuth } from "@/lib/contexts/RoleContext";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useCounts } from "@/lib/contexts/CountsContext";
 import { useTheme } from "next-themes";
-import { title } from "process";
 
 import { useNotifications } from "@/lib/contexts/NotificationContext";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { Button } from "../ui/button";
+
+// Import the Image component from Next.js for optimized image handling
+import Image from 'next/image'; 
 
 const menuItems = [
     { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee', 'it_support'] },
@@ -106,17 +108,26 @@ export function AppSidebar() {
       >
         <div className="p-4 border-b">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#1f497d] text-white rounded-lg flex items-center justify-center flex-shrink-0">
-                <GraduationCap size={20} />
-              </div>
+            {/* Unified container for the logo and role text */}
+            <div className="flex flex-col items-center gap-1"> {/* Adjusted to flex-col and reduced gap */}
+              {/* THE ONE AND ONLY LOGO IMAGE */}
+              <Image
+                src="/logo.png" // Path to your logo
+                alt="kLab Logo"
+                // Dynamically adjust width and height based on isCollapsed
+                width={isCollapsed ? 40 : 120}  // Smaller when collapsed, larger when expanded
+                height={isCollapsed ? 40 : 40} // Maintain aspect ratio or adjust as needed
+                priority // Load image with high priority
+              />
+              {/* Role text, visible only when not collapsed, positioned below the logo */}
               {!isCollapsed && (
-                <div className="flex flex-col">
-                  <span className="text-lg font-bold leading-tight text-foreground">kLab PMS</span>
-                  <span className="text-xs leading-tight text-muted-foreground">{role?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
-                </div>
+                <span className="text-xs leading-tight text-muted-foreground">
+                  {role?.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </span>
               )}
             </div>
+            
+            {/* Collapse button (remains unchanged) */}
             {!isMobile && (
               <button onClick={toggleSidebar} className="p-2 rounded-lg text-muted-foreground hover:bg-muted">
                 {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -181,7 +192,7 @@ export function AppSidebar() {
             </button>
             {showNotificationsPanel && (
                 <div className="absolute bottom-16 right-0 w-80 bg-card border rounded-lg shadow-2xl z-20 animate-in fade-in-5 slide-in-from-bottom-2 duration-300">
-                    <div className="p-4 border-b"><h3 className="font-semibold">Notifications</h3></div>
+                    <div className="p-4 border-b"><h3 className="semibold">Notifications</h3></div>
                     <div className="max-h-80 overflow-y-auto">
                         {isLoadingNotifs ? <div className="p-4 flex justify-center"><Loader2 className="animate-spin"/></div> 
                         : notifications.length === 0 ? <p className="p-4 text-sm text-center text-muted-foreground">You're all caught up!</p>
