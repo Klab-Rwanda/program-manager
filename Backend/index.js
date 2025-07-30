@@ -25,8 +25,9 @@ const io = new Server(server, {
       'http://localhost:3000',
       'https://program-manager-klab.vercel.app'
     ],
-    methods: ["GET", "POST"],
-    credentials: true
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    credentials: true,
+     allowedHeaders: ['Content-Type', 'Authorization']
   }
 });
 

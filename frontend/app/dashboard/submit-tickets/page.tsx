@@ -34,11 +34,13 @@ export default function MyTickets() {
     if (!token) return console.error("No token found.");
 
     try {
-      const res = await fetch("http://localhost:8000/api/v1/tickets", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api/v1";
+
+const res = await fetch(`${BASE_URL}/tickets`, {
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+});
 
       const data = await res.json();
       if (res.ok) {
@@ -65,7 +67,9 @@ export default function MyTickets() {
     if (!token) return alert("You must be logged in");
 
     try {
-      const res = await fetch("http://localhost:8000/api/v1/tickets", {
+      const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api/v1";
+
+     const res = await fetch(`${BASE_URL}/tickets`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

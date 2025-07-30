@@ -1,27 +1,19 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { getTickets, addCommentToTicket, updateTicket, Ticket } from '@/lib/services/ticket.service';
 
 export default function SupportTicketsPage() {
-  const [tickets, setTickets] = useState([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
-  const [selectedTicketId, setSelectedTicketId] = useState(null);
-  const [resolvingTicketId, setResolvingTicketId] = useState(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [resolvingTicketId, setResolvingTicketId] = useState<string | null>(null);
   const [resolution, setResolution] = useState('');
 
   const fetchTickets = async () => {
-    const token = localStorage.getItem("accessToken");
-
     try {
-      const res = await fetch("http://localhost:8000/api/v1/tickets", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-         
-        },
-      });
-
-      const result = await res.json();
-      setTickets(result.data);
+      const ticketsData = await getTickets();
+      setTickets(ticketsData);
     } catch (err) {
       console.error("Error fetching tickets:", err);
     } finally {
@@ -35,23 +27,12 @@ export default function SupportTicketsPage() {
 
   const handleAddComment = async (ticketId: string) => {
     if (!comment.trim()) return;
-    const token = localStorage.getItem("accessToken");
+    
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/it-tickets/${ticketId}/comment`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message: comment }),
-      });
-      if (res.ok) {
-        setComment('');
-        setSelectedTicketId(null);
-        fetchTickets();
-      } else {
-        console.error("Failed to add comment");
-      }
+      await addCommentToTicket(ticketId, comment);
+      setComment('');
+      setSelectedTicketId(null);
+      fetchTickets();
     } catch (err) {
       console.error("Error adding comment:", err);
     }
@@ -59,23 +40,14 @@ export default function SupportTicketsPage() {
 
   const handleResolveTicket = async (ticketId: string) => {
     if (!resolution.trim()) return;
-    const token = localStorage.getItem("accessToken");
+    
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/it-tickets/${ticketId}/resolve`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ resolution }),
-      });
-      if (res.ok) {
-        setResolution('');
-        setResolvingTicketId(null);
-        fetchTickets();
-      } else {
-        console.error("Failed to resolve ticket");
-      }
+      await updateTicket(ticketId, { status: 'Resolved' });
+      await addCommentToTicket(ticketId, `Ticket resolved: ${resolution}`);
+      
+      setResolution('');
+      setResolvingTicketId(null);
+      fetchTickets();
     } catch (err) {
       console.error("Error resolving ticket:", err);
     }
@@ -88,7 +60,7 @@ export default function SupportTicketsPage() {
     <div>
       <h1 className="text-xl font-bold mb-4">Support Tickets</h1>
       <ul className="space-y-3">
-        {tickets.map((ticket: any) => (
+        {tickets.map((ticket: Ticket) => (
           <li key={ticket._id} className="border rounded p-4">
             <p><strong>Title:</strong> {ticket.title}</p>
             <p><strong>Status:</strong> {ticket.status}</p>

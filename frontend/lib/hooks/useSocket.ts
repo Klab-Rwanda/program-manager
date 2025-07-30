@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:8000';
+const SOCKET_URL = process.env.REACT_APP_API_URL?.replace('/api/v1', '') || 'http://localhost:8000';
 
 // Change the parameter name from userId to roomId for general use, but it will be userId for notifications
 // For personal notifications, `roomId` will be `user._id`
