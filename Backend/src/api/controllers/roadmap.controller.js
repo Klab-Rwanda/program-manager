@@ -8,6 +8,7 @@ import { Assignment } from '../models/assignment.model.js';
 import { Submission } from '../models/submission.model.js';
 import { Attendance } from '../models/attendance.model.js';
 import { Course } from '../models/course.model.js';
+import { createNotification } from '../../services/notification.service.js';
 
 /**
  * @desc    Create a new weekly roadmap with its daily topics.
@@ -105,6 +106,17 @@ export const createOrUpdateRoadmap = asyncHandler(async (req, res) => {
     const message = action === 'submit_for_approval' 
         ? "Roadmap submitted for approval successfully." 
         : "Roadmap saved as draft successfully.";
+
+         if (action === 'submit_for_approval' && programDoc.programManager) {
+        await createNotification({
+            recipient: programDoc.programManager._id,
+            sender: facilitatorId, // The facilitator who submitted
+            title: "Roadmap Submitted for Approval",
+            message: `Facilitator ${req.user.name} submitted Week ${roadmap.weekNumber} roadmap for program "${programDoc.name}" for your approval.`,
+            link: `/dashboard/Manager/course-management`, // Link to PM's course management, assuming roadmap approval is there
+            type: 'approval'
+        });
+    }
     
     return res.status(201).json(new ApiResponse(201, fullRoadmap, message));
 });
@@ -141,29 +153,44 @@ export const getPendingApprovalRoadmaps = asyncHandler(async (req, res) => {
  * @access  Private (Facilitator)
  */
 export const getMyRoadmaps = asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
     let programQuery = {};
-    if (req.user.role === 'Facilitator') {
-        programQuery = { facilitators: req.user._id };
-    } else if (req.user.role === 'Trainee') {
-        programQuery = { trainees: req.user._id };
+    let roadmapQuery = {};
+
+    if (userRole === 'Facilitator') {
+        programQuery = { facilitators: userId };
+    } else if (userRole === 'Trainee') {
+        programQuery = { trainees: userId };
+        roadmapQuery = { status: 'approved' };
+    } else {
+        return res.status(200).json(new ApiResponse(200, [], "No roadmaps applicable for your role via this endpoint."));
     }
 
     const userPrograms = await Program.find(programQuery).select('_id');
     if (userPrograms.length === 0) {
-        return res.status(200).json(new ApiResponse(200, []));
+        return res.status(200).json(new ApiResponse(200, [], "You are not enrolled in any programs."));
     }
     const programIds = userPrograms.map(p => p._id);
 
-    const roadmaps = await Roadmap.find({ program: { $in: programIds } })
-        .populate('program', 'name')
-        .sort({ startDate: 1 });
-        
+    const roadmaps = await Roadmap.find({ 
+        program: { $in: programIds },
+        ...roadmapQuery // Apply the status filter for trainees
+    })
+    .populate('program', 'name')
+    .populate('course', 'title')
+    .populate('facilitator', 'name') // Ensure facilitator is populated
+    .sort({ weekNumber: 1 }); // Sort by week number
+
+    // Get full roadmap details including topics
     const populatedRoadmaps = await Promise.all(
         roadmaps.map(r => getFullRoadmapById(r._id))
     );
 
     return res.status(200).json(new ApiResponse(200, populatedRoadmaps, "Roadmaps fetched successfully."));
 });
+
 
 export const deleteRoadmap = asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -179,11 +206,7 @@ export const deleteRoadmap = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, {}, "Roadmap deleted successfully."));
 });
 
-/**
- * @desc    Program Manager gets assignments with student marks and attendance for a roadmap.
- * @route   GET /api/v1/roadmaps/{roadmapId}/assignments-with-marks
- * @access  Private (ProgramManager)
- */
+
 export const getRoadmapAssignmentsWithMarks = asyncHandler(async (req, res) => {
     const { roadmapId } = req.params;
     
@@ -358,11 +381,7 @@ export const getRoadmapAssignmentsWithMarks = asyncHandler(async (req, res) => {
     }, "Roadmap assignments with marks and attendance fetched successfully."));
 });
 
-/**
- * @desc    Get roadmaps by course ID (for Program Manager)
- * @route   GET /api/v1/roadmaps/course/{courseId}
- * @access  Private (ProgramManager)
- */
+
 export const getRoadmapsByCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     
@@ -395,11 +414,7 @@ export const getRoadmapsByCourse = asyncHandler(async (req, res) => {
     }, "Roadmaps for course fetched successfully."));
 });
 
-/**
- * @desc    Approve a roadmap (Program Manager)
- * @route   PATCH /api/v1/roadmaps/{roadmapId}/approve
- * @access  Private (ProgramManager)
- */
+
 export const approveRoadmap = asyncHandler(async (req, res) => {
     const { roadmapId } = req.params;
     const programManagerId = req.user._id;
@@ -417,6 +432,17 @@ export const approveRoadmap = asyncHandler(async (req, res) => {
     roadmap.approvedBy = programManagerId;
     roadmap.approvedAt = new Date();
     await roadmap.save();
+
+     if (roadmap.facilitator) {
+        await createNotification({
+            recipient: roadmap.facilitator._id,
+            sender: req.user._id, // The Program Manager who approved
+            title: "Roadmap Approved!",
+            message: `Your roadmap for Week ${roadmap.weekNumber} of program "${roadmap.program.name}" has been approved.`,
+            link: `/dashboard/Facilitator/fac-roadmap`, // Link to facilitator's roadmap page
+            type: 'success'
+        });
+    }
 
     return res.status(200).json(new ApiResponse(200, roadmap, "Roadmap approved successfully."));
 });
@@ -455,6 +481,17 @@ export const rejectRoadmap = asyncHandler(async (req, res) => {
     await roadmap.save();
 
     console.log('Roadmap rejected successfully:', { id: roadmap._id, status: roadmap.status, title: roadmap.title });
+
+    if (roadmap.facilitator) {
+        await createNotification({
+            recipient: roadmap.facilitator._id,
+            sender: req.user._id, // The Program Manager who rejected
+            title: "Roadmap Rejected",
+            message: `Your roadmap for Week ${roadmap.weekNumber} of program "${roadmap.program.name}" was rejected. Feedback: "${feedback}".`,
+            link: `/dashboard/Facilitator/fac-roadmap`,
+            type: 'error'
+        });
+    }
 
     return res.status(200).json(new ApiResponse(200, roadmap, "Roadmap rejected successfully."));
 });

@@ -7,6 +7,8 @@ import { Program } from '../models/program.model.js';
 import { generateSessionQRCode, generateSessionId, verifySessionQRCode } from '../../services/qr.service.js';
 import { isWithinRadius } from '../../services/geolocation.service.js';
 import mongoose from 'mongoose';
+import { User } from '../models/user.model.js';
+import { createNotification } from '../../services/notification.service.js';
 
 // A reusable helper function to build robust queries for finding sessions by _id OR sessionId
 const buildSessionQuery = (idFromParams, extraConditions = {}) => {
@@ -45,10 +47,10 @@ const createSession = asyncHandler(async (req, res) => {
         createdBy: req.user._id,
     };
 
-    if (type === 'physical' && (latitude === undefined || longitude === undefined)) {
-        throw new ApiError(400, "Location (latitude and longitude) is required for creating a physical session.");
-    }
     if (type === 'physical') {
+        if (latitude === undefined || longitude === undefined) {
+            throw new ApiError(400, "Location (latitude and longitude) is required for creating a physical session.");
+        }
         sessionData.location = {
             lat: latitude,
             lng: longitude,
@@ -57,13 +59,32 @@ const createSession = asyncHandler(async (req, res) => {
     }
 
     const session = await ClassSession.create(sessionData);
+
+    // MOVE NOTIFICATION BLOCK HERE, AFTER 'session' IS DEFINED
+    // Notify trainees about the new session
+    const trainees = await User.find({ _id: { $in: program.trainees }, role: 'Trainee' }).select('_id');
+    const notificationPromises = trainees.map(trainee =>
+        createNotification({
+            recipient: trainee._id,
+            sender: req.user._id,
+            title: `New Session Scheduled: ${session.title}`, // 'session' is now defined
+            message: `A new ${session.type} class session "${session.title}" has been scheduled for your program "${program.name}". It starts at ${new Date(session.startTime).toLocaleString()}.`, // 'session' is now defined
+            link: `/dashboard/Trainee/Trattendance`, // Link to trainee attendance page
+            type: 'info'
+        })
+    );
+    await Promise.allSettled(notificationPromises);
+    // END OF MOVED NOTIFICATION BLOCK
+
     return res.status(201).json(new ApiResponse(201, session, "Session created successfully."));
 });
 
 const startOnlineSession = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
     const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'online' });
-    const session = await ClassSession.findOne(query);
+    
+    // IMPORTANT: Populate programId for notification.
+    const session = await ClassSession.findOne(query).populate('programId', 'name trainees');
 
     if (!session) throw new ApiError(404, "Online session not found.");
     if (session.status === 'active') return res.status(200).json(new ApiResponse(200, { session }, "Session is already active."));
@@ -72,6 +93,25 @@ const startOnlineSession = asyncHandler(async (req, res) => {
     session.status = 'active';
     session.accessLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/classroom/${session.sessionId}`;
     await session.save();
+
+    // Now, AFTER session is confirmed to exist and is saved, proceed with notifications
+    if (session.programId && session.programId.trainees && session.programId.trainees.length > 0) {
+        const trainees = await User.find({ _id: { $in: session.programId.trainees }, role: 'Trainee' }).select('_id');
+        const notificationPromises = trainees.map(trainee =>
+            createNotification({
+                recipient: trainee._id,
+                sender: req.user._id,
+                title: `Session Started: ${session.title}`,
+                message: `Your online class session "${session.title}" for program "${session.programId.name}" has just started. Join now!`,
+                link: `/dashboard/classroom/${session.sessionId}`, // Link to the live classroom
+                type: 'info'
+            })
+        );
+        await Promise.allSettled(notificationPromises);
+    } else {
+        console.log(`No trainees found in program ${session.programId?.name || session.programId} for session ${session.title}. No notifications sent.`);
+    }
+
     return res.status(200).json(new ApiResponse(200, { session }, "Online session started successfully."));
 });
 
@@ -85,7 +125,8 @@ const startPhysicalSession = asyncHandler(async (req, res) => {
     }
 
     const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'physical' });
-    const session = await ClassSession.findOne(query);
+    // IMPORTANT: Populate programId for notification.
+    const session = await ClassSession.findOne(query).populate('programId', 'name trainees');
 
     if (!session) throw new ApiError(404, "Physical session not found.");
     if (session.status !== 'scheduled') throw new ApiError(400, "Session is already active or completed.");
@@ -98,7 +139,24 @@ const startPhysicalSession = asyncHandler(async (req, res) => {
         radius: radius
     };
     await session.save();
-    // --- END OF FIX ---
+   
+    // Now, AFTER session is confirmed to exist and is saved, proceed with notifications
+    if (session.programId && session.programId.trainees && session.programId.trainees.length > 0) {
+        const trainees = await User.find({ _id: { $in: session.programId.trainees }, role: 'Trainee' }).select('_id');
+        const notificationPromises = trainees.map(trainee =>
+            createNotification({
+                recipient: trainee._id,
+                sender: req.user._id,
+                title: `Session Started: ${session.title}`,
+                message: `Your physical class session "${session.title}" for program "${session.programId.name}" has just started. Remember to mark attendance!`,
+                link: `/dashboard/Trainee/Trattendance`, // Link to trainee attendance page
+                type: 'info'
+            })
+        );
+        await Promise.allSettled(notificationPromises);
+    } else {
+        console.log(`No trainees found in program ${session.programId?.name || session.programId} for session ${session.title}. No notifications sent.`);
+    }
 
     return res.status(200).json(new ApiResponse(200, session, "Physical session started successfully."));
 });
@@ -121,7 +179,8 @@ const markPhysicalAttendance = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
     const { latitude, longitude } = req.body;
     const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'physical' });
-    const session = await ClassSession.findOne(query);
+    // Populate programId for notification
+    const session = await ClassSession.findOne(query).populate('programId', 'name trainees');
 
     if (!session) throw new ApiError(404, "Physical session not found for you.");
 
@@ -132,16 +191,27 @@ const markPhysicalAttendance = asyncHandler(async (req, res) => {
         {
             $setOnInsert: { userId: req.user._id, sessionId: session._id },
             $set: { 
-                programId: session.programId, // Ensure programId and date are set/updated
+                programId: session.programId._id, // Ensure programId is stored as ObjectId
                 date: todayDateString,
                 timestamp: new Date(), 
-                method: 'geolocation', 
+                method: 'geolocation', // This is now 'geolocation' for facilitator-marked as well
                 status: 'Present', 
                 location: { lat: latitude, lng: longitude } 
             }
         }, 
         { upsert: true, new: true, runValidators: true } // runValidators for enum status
     );
+
+    // Notify facilitator about their own attendance marked via geolocation (optional, but consistent)
+    await createNotification({
+        recipient: req.user._id,
+        sender: req.user._id, // Self-notification
+        title: `Your Attendance Marked: ${session.title}`,
+        message: `You marked your attendance for session "${session.title}" in program "${session.programId.name}" via geolocation.`,
+        link: `/dashboard/Facilitator/Fac-attendance`,
+        type: 'info'
+    });
+
     return res.status(201).json(new ApiResponse(201, { attendance }));
 });
 
@@ -157,10 +227,14 @@ const markQRAttendance = asyncHandler(async (req, res) => {
     const qrResult = verifySessionQRCode(qrData);
     if (!qrResult) throw new ApiError(400, "Invalid or expired QR code.");
 
-    const session = await ClassSession.findOne({ sessionId: qrResult.sessionId, status: 'active' });
+    // Populate programId and facilitatorId for notifications
+    const session = await ClassSession.findOne({ sessionId: qrResult.sessionId, status: 'active' })
+                                        .populate('programId', 'name')
+                                        .populate('facilitatorId', 'name email');
+
     if (!session) throw new ApiError(404, "Session not found or not active.");
 
-    const program = await Program.findById(session.programId);
+    const program = await Program.findById(session.programId._id); // Access _id from populated programId
     if (!program || !program.trainees.includes(req.user._id)) {
         throw new ApiError(403, "You are not enrolled in this program's session.");
     }
@@ -171,7 +245,7 @@ const markQRAttendance = asyncHandler(async (req, res) => {
 
     const update = {
         $set: {
-            programId: session.programId,
+            programId: session.programId._id, // Ensure to use _id from populated object
             date: todayDateString,
             timestamp: new Date(),
             method: 'qr_code',
@@ -180,6 +254,18 @@ const markQRAttendance = asyncHandler(async (req, res) => {
     };
     
     const attendance = await Attendance.findOneAndUpdate(query, update, { upsert: true, new: true, runValidators: true });
+
+    // Notify facilitator about trainee attendance
+    if (session.facilitatorId) {
+        await createNotification({
+            recipient: session.facilitatorId._id, // Use _id from populated facilitatorId
+            sender: req.user._id,
+            title: "Trainee Marked Attendance",
+            message: `Trainee ${req.user.name} marked attendance for session "${session.title}" (${session.programId.name}) via QR code.`,
+            link: `/dashboard/Facilitator/Fac-attendance`, // Link to facilitator's attendance report
+            type: 'info'
+        });
+    }
 
     return res.status(201).json(new ApiResponse(201, { attendance }, "QR attendance marked successfully."));
 });
@@ -192,10 +278,14 @@ const markGeolocationAttendance = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Your location (latitude and longitude) is required for geolocation attendance.");
     }
 
-    const session = await ClassSession.findOne({ sessionId, type: 'physical', status: 'active' });
+    // Populate programId and facilitatorId for notifications
+    const session = await ClassSession.findOne({ sessionId, type: 'physical', status: 'active' })
+                                        .populate('programId', 'name')
+                                        .populate('facilitatorId', 'name email');
+
     if (!session) throw new ApiError(404, "Active physical session not found.");
 
-    const program = await Program.findById(session.programId);
+    const program = await Program.findById(session.programId._id); // Access _id from populated programId
     if (!program || !program.trainees.includes(req.user._id)) {
         throw new ApiError(403, "You are not enrolled in this program.");
     }
@@ -210,7 +300,7 @@ const markGeolocationAttendance = asyncHandler(async (req, res) => {
     const query = { userId: req.user._id, sessionId: session._id }; // Query by sessionId (unique index)
     const update = {
         $set: {
-            programId: session.programId,
+            programId: session.programId._id, // Ensure to use _id from populated object
             date: todayDateString,
             timestamp: new Date(),
             method: 'geolocation',
@@ -220,6 +310,18 @@ const markGeolocationAttendance = asyncHandler(async (req, res) => {
     };
     
     const attendance = await Attendance.findOneAndUpdate(query, update, { upsert: true, new: true, runValidators: true });
+
+    // Notify facilitator about trainee attendance
+    if (session.facilitatorId) {
+        await createNotification({
+            recipient: session.facilitatorId._id,
+            sender: req.user._id,
+            title: "Trainee Marked Attendance",
+            message: `Trainee ${req.user.name} marked attendance for session "${session.title}" (${session.programId.name}) via geolocation.`,
+            link: `/dashboard/Facilitator/Fac-attendance`,
+            type: 'info'
+        });
+    }
 
     return res.status(201).json(new ApiResponse(201, { attendance }, "Geolocation attendance marked successfully."));
 });
@@ -267,24 +369,54 @@ const getTraineeSessions = asyncHandler(async (req, res) => {
 
 const markManualStudentAttendance = asyncHandler(async (req, res) => {
     const { sessionId } = req.params;
-    const { userId, status = 'present', reason } = req.body;
+    const { userId, status = 'Present', reason } = req.body;
 
     if (!userId) throw new ApiError(400, "User ID is required.");
-    const session = await ClassSession.findOne({ sessionId });
+    // Populate programId and facilitatorId for validation and notifications
+    const session = await ClassSession.findOne({ sessionId })
+                                        .populate('programId', 'name')
+                                        .populate('facilitatorId', 'name email'); 
     if (!session) throw new ApiError(404, "Session not found.");
+
+    // Verify current user is facilitator of session or Program Manager/SuperAdmin
+    if (req.user.role === 'Facilitator' && session.facilitatorId.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "You are not authorized to mark attendance for this session.");
+    }
+    if (!['Program Manager', 'SuperAdmin', 'Facilitator'].includes(req.user.role)) {
+        throw new ApiError(403, "You do not have permission to manually mark attendance.");
+    }
 
     const todayDateString = new Date(session.startTime).toISOString().split('T')[0];
 
     const attendance = await Attendance.findOneAndUpdate(
-        { userId: userId, programId: session.programId, date: todayDateString },
+        { userId: userId, programId: session.programId._id, date: todayDateString }, // Use _id from populated programId
         { 
-            $set: { status, reason: reason || null, method: 'manual', markedBy: req.user._id, sessionId: session._id },
-            $setOnInsert: { userId: userId, programId: session.programId, date: todayDateString }
+            $set: { 
+                status, 
+                reason: reason || null, 
+                method: 'manual', 
+                markedBy: req.user._id, 
+                sessionId: session._id,
+                programId: session.programId._id // Ensure programId is correctly set
+            },
+            $setOnInsert: { userId: userId, programId: session.programId._id, date: todayDateString }
         },
         { upsert: true, new: true, runValidators: true }
     );
 
-    const message = `Attendance for user ${userId} has been set to ${status}.`;
+    const markedUser = await User.findById(userId).select('name');
+    // Notify the trainee whose attendance was manually marked
+    await createNotification({
+        recipient: userId,
+        sender: req.user._id,
+        title: "Attendance Marked Manually",
+        message: `Your attendance for session "${session.title}" (${session.programId.name}) was manually marked as "${status}" by ${req.user.name}.`,
+        link: `/dashboard/Trainee/Trattendance`,
+        type: (status === 'Absent' || status === 'Late') ? 'warning' : 'info'
+    });
+
+
+    const message = `Attendance for user ${markedUser?.name || userId} has been set to ${status}.`;
     return res.status(200).json(new ApiResponse(200, attendance, message));
 });
 
@@ -342,7 +474,8 @@ const endSession = asyncHandler(async (req, res) => {
         facilitatorId: req.user._id,
         status: 'active' 
     });
-    const session = await ClassSession.findOne(query);
+    // Populate programId for notification
+    const session = await ClassSession.findOne(query).populate('programId', 'name trainees');
 
     if (!session) {
         throw new ApiError(404, "Active session not found or you don't have permission to end it.");
@@ -351,6 +484,24 @@ const endSession = asyncHandler(async (req, res) => {
     session.status = 'completed';
     session.endTime = new Date();
     await session.save();
+
+    // Notify trainees that the session has ended
+    if (session.programId && session.programId.trainees && session.programId.trainees.length > 0) {
+        const trainees = await User.find({ _id: { $in: session.programId.trainees }, role: 'Trainee' }).select('_id');
+        const notificationPromises = trainees.map(trainee =>
+            createNotification({
+                recipient: trainee._id,
+                sender: req.user._id,
+                title: `Session Ended: ${session.title}`,
+                message: `The class session "${session.title}" for program "${session.programId.name}" has ended.`,
+                link: `/dashboard/Trainee/Trattendance`,
+                type: 'info'
+            })
+        );
+        await Promise.allSettled(notificationPromises);
+    } else {
+        console.log(`No trainees found in program ${session.programId?.name || session.programId} for session ${session.title}. No notifications sent.`);
+    }
 
     return res.status(200).json(new ApiResponse(200, session, "Session has been ended successfully."));
 });

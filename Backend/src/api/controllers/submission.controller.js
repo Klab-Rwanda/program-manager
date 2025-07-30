@@ -4,18 +4,27 @@ import { ApiResponse } from '../../utils/ApiResponse.js';
 import { Submission } from '../models/submission.model.js';
 import { Assignment } from '../models/assignment.model.js'; // To link submissions to assignments
 import { Program } from '../models/program.model.js'; // To verify program access
-import { Course } from '../models/course.model.js'; // To verify course/facilitator access
+import { Course } from '../models/course.model.js'; // To verify course/facilitator access (though now primarily populated via Assignment)
+import { createNotification } from '../../services/notification.service.js';
+import { User } from '../models/user.model.js'; // Needed to populate trainee name for notification message
 
 // Helper to verify facilitator owns the course/program for submissions
 const verifyFacilitatorSubmissionAccess = async (submissionId, facilitatorId) => {
-    const submission = await Submission.findById(submissionId).populate('assignment');
+    // Populate assignment and its facilitator/course to check access
+    const submission = await Submission.findById(submissionId)
+                                       .populate({
+                                           path: 'assignment',
+                                           populate: [
+                                               { path: 'facilitator', select: '_id' }, // Only need ID for comparison
+                                               { path: 'course', select: 'title' } // For potential message if needed
+                                           ]
+                                       });
+
     if (!submission) throw new ApiError(404, "Submission not found.");
-    if (!submission.assignment) throw new ApiError(500, "Submission's assignment not found.");
+    if (!submission.assignment) throw new ApiError(500, "Submission's associated assignment not found or was deleted.");
 
-    const assignment = await Assignment.findById(submission.assignment._id);
-    if (!assignment) throw new ApiError(500, "Associated assignment not found.");
-
-    if (assignment.facilitator.toString() !== facilitatorId.toString()) {
+    // Check if the facilitator of the assignment matches the current user
+    if (submission.assignment.facilitator.toString() !== facilitatorId.toString()) {
         throw new ApiError(403, "Forbidden: You are not the facilitator for this assignment.");
     }
     return submission;
@@ -24,7 +33,8 @@ const verifyFacilitatorSubmissionAccess = async (submissionId, facilitatorId) =>
 // Trainee submits a project for an assignment
 const createSubmission = asyncHandler(async (req, res) => {
     const { assignmentId } = req.body;
-    const traineeId = req.user._id;
+    const traineeId = req.user._id; // The logged-in user is the trainee
+    const traineeName = req.user.name; // Get trainee's name from req.user
 
     if (!assignmentId) {
         throw new ApiError(400, "Assignment ID is required.");
@@ -36,9 +46,19 @@ const createSubmission = asyncHandler(async (req, res) => {
     const fileUrl = `uploads/${req.file.filename}`; // Consistent with course upload path
 
     // Verify assignment exists and trainee is in the associated program
-    const assignment = await Assignment.findById(assignmentId);
+    // Crucially, populate 'course' and 'facilitator' here for notification
+    const assignment = await Assignment.findById(assignmentId)
+        .populate('course', 'title') // Get course title for notification message
+        .populate('facilitator', 'name email'); // Get facilitator details for notification recipient
+
     if (!assignment) {
         throw new ApiError(404, "Assignment not found.");
+    }
+    if (!assignment.course) { // Should ideally be populated, but defensive check
+        throw new ApiError(500, "Associated course not found for assignment.");
+    }
+    if (!assignment.facilitator) { // Should ideally be populated, but defensive check
+        throw new ApiError(500, "Facilitator not found for assignment.");
     }
 
     const program = await Program.findById(assignment.program);
@@ -52,6 +72,8 @@ const createSubmission = asyncHandler(async (req, res) => {
         assignment: assignmentId
     });
 
+    let submissionResult; // Declare variable to hold the created or updated submission
+
     if (existingSubmission) {
         // Allow re-submission only if status is 'Submitted' (pending review) or 'NeedsRevision'
         if (existingSubmission.status === 'Reviewed' || existingSubmission.status === 'Graded') {
@@ -62,15 +84,25 @@ const createSubmission = asyncHandler(async (req, res) => {
         existingSubmission.fileUrl = fileUrl;
         existingSubmission.submittedAt = new Date();
         existingSubmission.status = 'Submitted'; // Reset status to submitted for re-submission
-        existingSubmission.feedback = ''; // Clear feedback on resubmission
-        existingSubmission.grade = null; // Clear grade on resubmission (set to null)
-        await existingSubmission.save();
+        existingSubmission.feedback = ''; // Clear feedback on re-submission
+        existingSubmission.grade = null; // Clear grade on re-submission (set to null)
+        submissionResult = await existingSubmission.save();
 
-        return res.status(200).json(new ApiResponse(200, existingSubmission, "Project re-submitted successfully."));
+        // Send notification to facilitator about re-submission
+        await createNotification({
+            recipient: assignment.facilitator._id,
+            sender: traineeId,
+            title: "Assignment Re-Submitted",
+            message: `${traineeName} has re-submitted their assignment for "${assignment.course.title}".`,
+            link: `/dashboard/Facilitator/fac-reviews`, // Link to facilitator's review page
+            type: 'info'
+        });
+
+        return res.status(200).json(new ApiResponse(200, submissionResult, "Project re-submitted successfully."));
 
     } else {
         // Create new submission
-        const submission = await Submission.create({
+        submissionResult = await Submission.create({
             program: assignment.program,
             course: assignment.course,
             assignment: assignmentId, // Link to assignment
@@ -80,7 +112,17 @@ const createSubmission = asyncHandler(async (req, res) => {
             status: 'Submitted' // Default status
         });
 
-        return res.status(201).json(new ApiResponse(201, submission, "Project submitted successfully."));
+        // Send notification to facilitator about new submission
+        await createNotification({
+            recipient: assignment.facilitator._id,
+            sender: traineeId,
+            title: "New Assignment Submission",
+            message: `${traineeName} has submitted an assignment for "${assignment.course.title}".`,
+            link: `/dashboard/Facilitator/fac-reviews`, // Link to facilitator's review page
+            type: 'info'
+        });
+
+        return res.status(201).json(new ApiResponse(201, submissionResult, "Project submitted successfully."));
     }
 });
 
@@ -139,13 +181,53 @@ const reviewSubmission = asyncHandler(async (req, res) => {
 
 
     // Ensure facilitator has permission to review this submission
-    const submission = await verifyFacilitatorSubmissionAccess(submissionId, facilitatorId);
+    // We need to populate trainee, course, and assignment for notification
+    const submission = await Submission.findById(submissionId)
+                                       .populate('trainee', 'name email')
+                                       .populate('course', 'title')
+                                       .populate('assignment', 'facilitator'); // Only need facilitator ID from assignment
+
+    if (!submission) throw new ApiError(404, "Submission not found.");
+    if (!submission.assignment || submission.assignment.facilitator.toString() !== facilitatorId.toString()) {
+        throw new ApiError(403, "Forbidden: You are not the facilitator for this assignment.");
+    }
+    if (!submission.trainee) throw new ApiError(500, "Trainee not found for submission.");
+    if (!submission.course) throw new ApiError(500, "Course not found for submission.");
+
 
     submission.status = status;
     submission.feedback = feedback;
     submission.grade = (status === 'Reviewed' ? grade : null); // Set grade to null if NeedsRevision or invalid
 
     await submission.save();
+
+    // Send notification to trainee
+    let notificationTitle = "Assignment Graded!";
+    let notificationMessage = `Your submission for "${submission.course.title}" has been graded.`;
+    let notificationType= 'success'; // Type for notification service
+
+    if (status === 'NeedsRevision') {
+        notificationTitle = "Assignment Needs Revision";
+        notificationMessage = `Your submission for "${submission.course.title}" requires revisions.`;
+        notificationType = 'warning';
+    }
+    // Add grade to message if available and relevant
+    if (grade && status === 'Reviewed') { 
+        notificationMessage += ` Grade: ${grade}.`;
+    }
+    // Add feedback snippet if available
+    if (feedback) { 
+        notificationMessage += ` Feedback: "${feedback.substring(0, 50)}${feedback.length > 50 ? '...' : ''}"`;
+    }
+
+    await createNotification({
+        recipient: submission.trainee._id,
+        sender: req.user._id, // The facilitator who reviewed it
+        title: notificationTitle,
+        message: notificationMessage,
+        link: `/dashboard/Trainee/my-submissions`, // Link to trainee's submissions
+        type: notificationType
+    });
 
     return res.status(200).json(new ApiResponse(200, submission, "Submission reviewed successfully."));
 });
@@ -166,7 +248,7 @@ const getMySubmissions = asyncHandler(async (req, res) => {
 
 export { 
     createSubmission, 
-    getSubmissionsForFacilitator, // Renamed and adjusted this function for facilitator's view
+    getSubmissionsForFacilitator, 
     reviewSubmission, 
     getMySubmissions 
 };

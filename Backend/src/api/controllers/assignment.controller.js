@@ -8,6 +8,7 @@ import { Roadmap } from '../models/roadmap.model.js';
 import { User } from '../models/user.model.js';
 import { Submission } from '../models/submission.model.js'; // Import Submission model to check status
 import { sendAssignmentNotificationEmail } from '../../services/email.service.js';
+import { createNotification } from '../../services/notification.service.js';
 
 // Helper to verify facilitator owns the course/program
 const verifyFacilitatorAccess = async (courseId, facilitatorId) => {
@@ -48,6 +49,16 @@ const sendAssignmentNotifications = async (assignment, course, program, facilita
             )
         );
 
+          const notificationPromises = trainees.map(trainee =>
+            createNotification({
+                recipient: trainee._id,
+                sender: facilitator._id,
+                title: `New Assignment: ${assignment.title}`,
+                message: `A new assignment "${assignment.title}" has been posted for your course "${course.title}" in program "${program.name}". Due: ${new Date(assignment.dueDate).toLocaleDateString()}.`,
+                link: `/dashboard/Trainee/submit-projects`, // Link to trainee's submission page
+                type: 'info'
+            })
+        );
         const results = await Promise.allSettled(emailPromises);
         const successfulEmails = results.filter(result => result.status === 'fulfilled' && result.value).length;
 
@@ -230,6 +241,19 @@ export const deleteAssignment = asyncHandler(async (req, res) => {
     await verifyFacilitatorAccess(assignment.course, req.user._id);
 
     await assignment.deleteOne();
+
+     const trainees = await User.find({ _id: { $in: assignment.program.trainees }, role: 'Trainee' }).select('_id');
+    const notificationPromises = trainees.map(trainee => 
+        createNotification({
+            recipient: trainee._id,
+            sender: facilitatorId,
+            title: `Assignment Deleted: ${assignment.title}`,
+            message: `The assignment "${assignment.title}" for course "${assignment.course.title}" has been deleted.`,
+            link: `/dashboard/Trainee/submit-projects`, // Link might show nothing now
+            type: 'warning'
+        })
+    );
+     await Promise.allSettled(notificationPromises);
 
     return res.status(200).json(new ApiResponse(200, {}, "Assignment deleted successfully."));
 });

@@ -279,6 +279,29 @@ export const deleteCourse = asyncHandler(async (req, res) => {
     
     await course.deleteOne();
 
+     if (course.program?.programManager) {
+        await createNotification({
+            recipient: course.program.programManager,
+            sender: req.user._id,
+            title: "Course Deleted",
+            message: `The course "${course.title}" by ${course.facilitator.name} for program "${course.program.name}" has been deleted.`,
+            link: `/dashboard/Manager/course-management`,
+            type: 'warning'
+        });
+    }
+    // Also notify the facilitator whose course was deleted, if the deleter is a SuperAdmin.
+    // (If the facilitator deletes their own course, they don't need a notification from the system.)
+    if (req.user.role === 'SuperAdmin' && course.facilitator._id.toString() !== req.user._id.toString()) {
+         await createNotification({
+            recipient: course.facilitator._id,
+            sender: req.user._id,
+            title: "Your Course Was Deleted",
+            message: `Your course "${course.title}" was deleted by a Super Admin.`,
+            link: `/dashboard/Facilitator/fac-curriculum`, // Link to facilitator's curriculum page
+            type: 'error'
+        });
+    }
+
     return res.status(200).json(new ApiResponse(200, {}, "Course deleted successfully."));
 });
 

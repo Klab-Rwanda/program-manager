@@ -58,7 +58,20 @@ const createProgram = asyncHandler(async (req, res) => {
         ? "Program created and is now pending your approval." 
         : "Program created in Draft state.";
 
-    // Step 3: Return the populated program object
+   
+         if (creator.role === 'Program Manager') {
+        const superAdmins = await User.find({ role: 'SuperAdmin' }).select('_id name');
+        for (const admin of superAdmins) {
+            await createNotification({
+                recipient: admin._id,
+                sender: creator._id,
+                title: "New Program Drafted",
+                message: `Program Manager ${creator.name} created program "${populatedProgram.name}" as a draft.`,
+                link: `/dashboard/Manager/programs`, // Link to PM's program list
+                type: 'info'
+            });
+        }
+    }
     return res.status(201).json(new ApiResponse(201, populatedProgram, message));
 });
 
@@ -121,7 +134,7 @@ const rejectProgram = asyncHandler(async (req, res) => {
             recipient: program.programManager._id,
             sender: req.user._id,
             title: "Action Required: Program Rejected",
-            message: `Your program "${program.name}" was rejected. Please review the feedback.`,
+            message: `Your program "${program.name}" was rejected. Reason: ${reason}. Please review the feedback.`,
             link: `/dashboard/Manager/programs`,
             type: 'warning'
         });
@@ -142,13 +155,19 @@ const enrollTrainee = asyncHandler(async (req, res) => {
     const trainee = await User.findById(traineeId);
     if (!trainee || trainee.role !== 'Trainee') throw new ApiError(404, "Trainee not found or user is not a trainee.");
     const program = await Program.findByIdAndUpdate(id, { $addToSet: { trainees: traineeId } }, { new: true });
-     await createNotification({
+      await createNotification({
         recipient: traineeId,
         sender: req.user._id, // The Program Manager who enrolled them
         title: "You've been enrolled!",
         message: `You have been enrolled in the "${program.name}" program.`,
-        link: `/dashboard/Trainee/my-learning`, // Link to their main dashboard
+        link: `/dashboard/Trainee/my-learning`, 
         type: 'info'
+    });
+     await createLog({
+        user: req.user._id,
+        action: 'TRAINEE_ENROLLED',
+        details: `${req.user.name} enrolled trainee '${trainee.name}' into program '${program.name}'.`,
+        entity: { id: program._id, model: 'Program' }
     });
     return res.status(200).json(new ApiResponse(200, program, "Trainee enrolled successfully."));
 });
@@ -160,7 +179,7 @@ const enrollFacilitator = asyncHandler(async (req, res) => {
     const facilitator = await User.findById(facilitatorId);
     if (!facilitator || facilitator.role !== 'Facilitator') throw new ApiError(404, "Facilitator not found or user is not a facilitator.");
     const program = await Program.findByIdAndUpdate(id, { $addToSet: { facilitators: facilitatorId } }, { new: true });
-     await createNotification({
+      await createNotification({
         recipient: facilitatorId,
         sender: req.user._id,
         title: "You've been assigned a program!",
@@ -168,6 +187,13 @@ const enrollFacilitator = asyncHandler(async (req, res) => {
         link: `/dashboard/Facilitator/fac-programs`, // Link to their programs list
         type: 'info'
     });
+     await createLog({
+        user: req.user._id,
+        action: 'FACILITATOR_ENROLLED',
+        details: `${req.user.name} assigned facilitator '${facilitator.name}' to program '${program.name}'.`,
+        entity: { id: program._id, model: 'Program' }
+    });
+
     return res.status(200).json(new ApiResponse(200, program, "Facilitator enrolled successfully."));
 });
 
@@ -344,6 +370,31 @@ const archiveProgram = asyncHandler(async (req, res) => {
         details: `${req.user.role} ${req.user.name} archived program '${program.name}'.`,
         entity: { id: program._id, model: 'Program' }
     });
+
+     if (program.programManager && req.user.role === 'SuperAdmin' && req.user._id.toString() !== program.programManager._id.toString()) {
+        await createNotification({
+            recipient: program.programManager._id,
+            sender: req.user._id, // The SuperAdmin
+            title: "Program Archived",
+            message: `Your program "${program.name}" has been archived by a Super Admin.`,
+            link: `/dashboard/Manager/archive`, // Link to PM's archive page
+            type: 'warning'
+        });
+    }
+    // If a Program Manager archived their own program: Notify SuperAdmins.
+    if (req.user.role === 'Program Manager') {
+        const superAdmins = await User.find({ role: 'SuperAdmin' });
+        for (const admin of superAdmins) {
+            await createNotification({
+                recipient: admin._id,
+                sender: req.user._id,
+                title: "Program Archived by Manager",
+                message: `Program Manager ${req.user.name} archived program "${program.name}".`,
+                link: `/dashboard/Manager/archive`,
+                type: 'info'
+            });
+        }
+    }
     
     return res.status(200).json(new ApiResponse(200, program, "Program has been archived."));
 });
@@ -381,6 +432,31 @@ const unarchiveProgram = asyncHandler(async (req, res) => {
         entity: { id: program._id, model: 'Program' }
     });
     
+     if (program.programManager && req.user.role === 'SuperAdmin' && req.user._id.toString() !== program.programManager._id.toString()) {
+        await createNotification({
+            recipient: program.programManager._id,
+            sender: req.user._id,
+            title: "Program Unarchived",
+            message: `Your program "${program.name}" has been unarchived by a Super Admin and is now active.`,
+            link: `/dashboard/Manager/programs`, // Link to PM's programs list
+            type: 'info'
+        });
+    }
+    // If a Program Manager unarchived their own program: Notify SuperAdmins.
+    if (req.user.role === 'Program Manager') {
+        const superAdmins = await User.find({ role: 'SuperAdmin' });
+        for (const admin of superAdmins) {
+            await createNotification({
+                recipient: admin._id,
+                sender: req.user._id,
+                title: "Program Unarchived by Manager",
+                message: `Program Manager ${req.user.name} unarchived program "${program.name}".`,
+                link: `/dashboard/Manager/programs`,
+                type: 'info'
+            });
+        }
+    }
+
     return res.status(200).json(new ApiResponse(200, program, "Program has been unarchived."));
 });
 
@@ -400,6 +476,25 @@ const updateProgramManagers = asyncHandler(async (req, res) => {
     
     const program = await Program.findByIdAndUpdate(id, updateOperation, { new: true }).populate('programManager', 'name email');
     if (!program) throw new ApiError(404, "Program not found.");
+
+     await createLog({
+        user: currentUserId,
+        action: logAction,
+        details: `${req.user.name} ${action}d Program Manager ${manager ? `'${manager.name}'` : 'N/A'} ${action === 'add' ? 'to' : 'from'} program '${updatedProgram.name}'.`,
+        entity: { id: updatedProgram._id, model: 'Program' }
+    });
+
+    // Send notification to the affected manager
+    if (managerId) { // Only send if a manager was involved (not unsetting empty)
+        await createNotification({
+            recipient: managerId,
+            sender: currentUserId,
+            title: notificationTitle,
+            message: notificationMessage,
+            link: `/dashboard/Manager/programs`,
+            type: 'info'
+        });
+    }
     const message = `Program Manager ${action === 'add' ? 'added' : 'removed'}.`;
     return res.status(200).json(new ApiResponse(200, program, message));
 });
@@ -417,39 +512,77 @@ const generateProgramReport = asyncHandler(async (req, res) => {
 });
 
 export const assignManager = asyncHandler(async (req, res) => {
-    const { id } = req.params; // program id
+    const { id } = req.params
     const { managerId } = req.body;
 
-    // Handle the case where the manager is being unassigned
-    if (!managerId || managerId === 'unassign') {
-        const program = await Program.findByIdAndUpdate(
-            id,
-            { $unset: { programManager: "" } }, // Use $unset to completely remove the field
-            { new: true }
-        ).populate('programManager', 'name email');
-        
-        if (!program) throw new ApiError(404, "Program not found.");
-        return res.status(200).json(new ApiResponse(200, program, "Program Manager unassigned successfully."));
-    }
-
-    // Verify the user being assigned is a valid Program Manager
-    const manager = await User.findOne({ 
-        _id: managerId, 
-        role: 'Program Manager'
-    });
-    if (!manager) {
-        throw new ApiError(404, "The selected user is not a valid Program Manager.");
-    }
-
-    const program = await Program.findByIdAndUpdate(
-        id,
-        { programManager: managerId },
-        { new: true }
-    ).populate('programManager', 'name email');
-    
+    const program = await Program.findById(id).populate('programManager', 'name email'); 
     if (!program) throw new ApiError(404, "Program not found.");
 
-    return res.status(200).json(new ApiResponse(200, program, "Program Manager assigned successfully."));
+    const oldManagerId = program.programManager?._id;
+    let newManager = null;
+    let message = "";
+    let notificationRecipientId = null;
+    let notificationTitle = "";
+    let notificationMessage = "";
+    let notificationType = 'info';
+
+    
+    if (!managerId || managerId === 'unassign') {
+        if (oldManagerId) {
+            program.programManager = undefined; 
+            message = "Program Manager unassigned successfully.";
+            notificationRecipientId = oldManagerId; 
+            notificationTitle = "Program Manager Assignment Removed";
+            notificationMessage = `You have been unassigned as the manager for the program "${program.name}".`;
+            notificationType = 'warning';
+        } else {
+            return res.status(200).json(new ApiResponse(200, program, "No manager was assigned to unassign."));
+        }
+    } else {
+        
+        newManager = await User.findOne({ _id: managerId, role: 'Program Manager' });
+        if (!newManager) {
+            throw new ApiError(404, "The selected user is not a valid Program Manager.");
+        }
+
+        program.programManager = newManager._id;
+        message = "Program Manager assigned successfully.";
+        notificationRecipientId = newManager._id; 
+        notificationTitle = "New Program Manager Assignment";
+        notificationMessage = `You have been assigned as the manager for the program "${program.name}".`;
+        notificationType = 'success';
+    }
+
+    await program.save({ validateBeforeSave: false }); 
+
+    
+    if (notificationRecipientId) {
+        await createNotification({
+            recipient: notificationRecipientId,
+            sender: req.user._id, 
+            title: notificationTitle,
+            message: notificationMessage,
+            link: `/dashboard/Manager/programs`, 
+            type: notificationType
+        });
+    }
+
+
+    if (oldManagerId && managerId && oldManagerId.toString() !== managerId.toString()) {
+        await createNotification({
+            recipient: oldManagerId,
+            sender: req.user._id,
+            title: "Program Manager Assignment Changed",
+            message: `You are no longer the manager for the program "${program.name}". It has been reassigned to ${newManager?.name || 'a new manager'}.`,
+            link: `/dashboard/Manager/programs`,
+            type: 'warning'
+        });
+    }
+    // --- END NEW NOTIFICATION ---
+
+    // Re-populate the programManager for the response, ensuring accurate data is sent back
+    const updatedProgram = await Program.findById(id).populate('programManager', 'name email');
+    return res.status(200).json(new ApiResponse(200, updatedProgram, message));
 });
 
 function getWeekdayCount(startDate, endDate) {

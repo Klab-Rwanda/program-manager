@@ -302,6 +302,15 @@ const changePassword = asyncHandler(async (req, res) => {
     console.error("Password change confirmation email failed:", err)
   );
 
+
+   await createNotification({
+        recipient: user._id,
+        sender: user._id, // Self-notification
+        title: "Password Changed",
+        message: "Your account password has been successfully updated.",
+        link: "/dashboard/profile", // Link to their profile/settings
+        type: 'success'
+    });
   return res
     .status(200)
     .json(
