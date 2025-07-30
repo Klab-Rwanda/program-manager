@@ -680,7 +680,7 @@ function EditFacilitatorForm({ facilitator, onClose, onSave }: EditFacilitatorFo
     phone: facilitator.phone || "",
     rating: facilitator.rating || 0,
     github: facilitator.github || "",
-    type: facilitator.type || "regular",
+    type: facilitator.type as "regular" | "promoted", 
     previousProgram: facilitator.previousProgram || "",
     promotionDate: facilitator.promotionDate || "",
   })
@@ -702,102 +702,142 @@ function EditFacilitatorForm({ facilitator, onClose, onSave }: EditFacilitatorFo
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+ <form onSubmit={handleSubmit} className="space-y-4">
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <Label htmlFor="specialization">Specialization</Label>
+      <Input
+        id="specialization"
+        type="text"
+        value={formData.specialization}
+        onChange={(e) =>
+          setFormData((prev) => ({ ...prev, specialization: e.target.value }))
+        }
+        placeholder="e.g., Web Development, Data Science"
+      />
+    </div>
+
+    <div>
+      <Label htmlFor="experience">Experience</Label>
+      <Input
+        id="experience"
+        type="text"
+        value={formData.experience}
+        onChange={(e) =>
+          setFormData((prev) => ({ ...prev, experience: e.target.value }))
+        }
+        placeholder="e.g., 5 years, 3+ years"
+      />
+    </div>
+
+    <div>
+      <Label htmlFor="phone">Phone</Label>
+      <Input
+        id="phone"
+        type="tel"
+        value={formData.phone}
+        onChange={(e) =>
+          setFormData((prev) => ({ ...prev, phone: e.target.value }))
+        }
+        placeholder="+1234567890"
+      />
+    </div>
+
+    <div>
+      <Label htmlFor="rating">Rating (0-5)</Label>
+      <Input
+        id="rating"
+        type="number"
+        min="0"
+        max="5"
+        step="0.1"
+        value={formData.rating}
+        onChange={(e) =>
+          setFormData((prev) => ({
+            ...prev,
+            rating: parseFloat(e.target.value) || 0,
+          }))
+        }
+      />
+    </div>
+
+    <div>
+      <Label htmlFor="github">GitHub Profile</Label>
+      <Input
+        id="github"
+        type="url"
+        value={formData.github}
+        onChange={(e) =>
+          setFormData((prev) => ({ ...prev, github: e.target.value }))
+        }
+        placeholder="https://github.com/username"
+      />
+    </div>
+
+    <div>
+      <Label htmlFor="type">Type</Label>
+      <Select
+        value={formData.type}
+        onValueChange={(value) =>
+          setFormData((prev) => ({
+            ...prev,
+            type: value as "regular" | "promoted",
+          }))
+        }
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Select type" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="regular">Regular</SelectItem>
+          <SelectItem value="promoted">Promoted</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
+    {formData.type === "promoted" && (
+      <>
         <div>
-          <Label htmlFor="specialization">Specialization</Label>
+          <Label htmlFor="previousProgram">Previous Program</Label>
           <Input
-            id="specialization"
+            id="previousProgram"
             type="text"
-            value={formData.specialization}
-            onChange={(e) => setFormData(prev => ({ ...prev, specialization: e.target.value }))}
-            placeholder="e.g., Web Development, Data Science"
+            value={formData.previousProgram}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                previousProgram: e.target.value,
+              }))
+            }
+            placeholder="Previous program name"
           />
         </div>
         <div>
-          <Label htmlFor="experience">Experience</Label>
+          <Label htmlFor="promotionDate">Promotion Date</Label>
           <Input
-            id="experience"
-            type="text"
-            value={formData.experience}
-            onChange={(e) => setFormData(prev => ({ ...prev, experience: e.target.value }))}
-            placeholder="e.g., 5 years, 3+ years"
+            id="promotionDate"
+            type="date"
+            value={formData.promotionDate}
+            onChange={(e) =>
+              setFormData((prev) => ({
+                ...prev,
+                promotionDate: e.target.value,
+              }))
+            }
           />
         </div>
-        <div>
-          <Label htmlFor="phone">Phone</Label>
-          <Input
-            id="phone"
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-            placeholder="+1234567890"
-          />
-        </div>
-        <div>
-          <Label htmlFor="rating">Rating (0-5)</Label>
-          <Input
-            id="rating"
-            type="number"
-            min="0"
-            max="5"
-            step="0.1"
-            value={formData.rating}
-            onChange={(e) => setFormData(prev => ({ ...prev, rating: parseFloat(e.target.value) || 0 }))}
-          />
-        </div>
-        <div>
-          <Label htmlFor="github">GitHub Profile</Label>
-          <Input
-            id="github"
-            type="url"
-            value={formData.github}
-            onChange={(e) => setFormData(prev => ({ ...prev, github: e.target.value }))}
-            placeholder="https://github.com/username"
-          />
-        </div>
-        <div>
-          <Label htmlFor="type">Type</Label>
-          <Select value={formData.type} onValueChange={(value) => setFormData(prev => ({ ...prev, type: value }))}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="regular">Regular</SelectItem>
-              <SelectItem value="promoted">Promoted</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {formData.type === "promoted" && (
-          <>
-            <div>
-              <Label htmlFor="previousProgram">Previous Program</Label>
-              <Input
-                id="previousProgram"
-                type="text"
-                value={formData.previousProgram}
-                onChange={(e) => setFormData(prev => ({ ...prev, previousProgram: e.target.value }))}
-                placeholder="Previous program name"
-              />
-            </div>
-            <div>
-              <Label htmlFor="promotionDate">Promotion Date</Label>
-              <Input
-                id="promotionDate"
-                type="date"
-                value={formData.promotionDate}
-                onChange={(e) => setFormData(prev => ({ ...prev, promotionDate: e.target.value }))}
-              />
-            </div>
-          </>
-        )}
-      </div>
-      <DialogFooter>
-        <Button type="submit" disabled={loading}>
-          {loading ? "Updating..." : "Update Profile"}
-        </Button>
-        <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
-      </DialogFooter>
-    </form>
+      </>
+    )}
+  </div>
+
+  <DialogFooter>
+    <Button type="submit" disabled={loading}>
+      {loading ? "Updating..." : "Update Profile"}
+    </Button>
+    <Button variant="outline" onClick={onClose} disabled={loading}>
+      Cancel
+    </Button>
+  </DialogFooter>
+</form>
   )
 }

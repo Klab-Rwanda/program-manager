@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { getTickets, addCommentToTicket, updateTicket, Ticket } from '../services/ticketService';
+import { getTickets, addCommentToTicket, updateTicket, Ticket } from '@/lib/services/ticket.service';
 
 export default function SupportTicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
