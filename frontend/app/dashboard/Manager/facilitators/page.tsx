@@ -53,151 +53,112 @@ import {
 import { Facilitator } from "@/types/index"
 import { createUser, getUsersByRole, updateFacilitatorProfile } from "@/lib/services/user.service"
 import { toast } from "sonner"
+import { enrollFacilitator, getAllPrograms } from "@/lib/services/program.service"
 
 export default function FacilitatorsPage() {
-  const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+  const [programs, setPrograms] = useState<{ _id: string; name: string }[]>([])
+  const [selectedProgramId, setSelectedProgramId] = useState<string>("")
+  const [facilitators, setFacilitators] = useState<Facilitator[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
+  const [filterStatus, setFilterStatus] = useState("all")
+  const [showHireModal, setShowHireModal] = useState(false)
+  const [showViewModal, setShowViewModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedFacilitator, setSelectedFacilitator] = useState<Facilitator | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [hireFacilitatorId, setHireFacilitatorId] = useState("")
+  const [availableFacilitators, setAvailableFacilitators] = useState<any[]>([])
+  const [newFacilitatorData, setNewFacilitatorData] = useState({
+    name: "",
+    email: "",
+  })
+  const [hireMethod, setHireMethod] = useState<"existing" | "new">("existing")
 
- const [programs, setPrograms] = useState<{ _id: string; name: string }[]>([])
-const [selectedProgramId, setSelectedProgramId] = useState<string>("")
-const [facilitators, setFacilitators] = useState<Facilitator[]>([])
-const [searchTerm, setSearchTerm] = useState("")
-const [filterStatus, setFilterStatus] = useState("all")
-const [showHireModal, setShowHireModal] = useState(false)
-const [showViewModal, setShowViewModal] = useState(false)
-const [showEditModal, setShowEditModal] = useState(false)
-const [selectedFacilitator, setSelectedFacilitator] = useState<Facilitator | null>(null)
-const [loading, setLoading] = useState(false)
-const [error, setError] = useState<string | null>(null)
-const [hireFacilitatorId, setHireFacilitatorId] = useState("")
-const [availableFacilitators, setAvailableFacilitators] = useState<any[]>([])
-const [newFacilitatorData, setNewFacilitatorData] = useState({
-  name: "",
-  email: "",
-})
-const [hireMethod, setHireMethod] = useState<"existing" | "new">("existing")
-
-// Fetch all programs
-async function fetchPrograms() {
-  if (!token) throw new Error("Missing auth token. Please log in.");
-
-  const res = await fetch("http://localhost:8000/api/v1/programs", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    console.error("Fetch error:", res.status, errorData);
-    throw new Error(errorData.message || "Failed to load programs");
-  }
-
-  const data = await res.json();
-  return data.data;
-}
-
-// Fetch all facilitators (not program-specific)
-async function fetchFacilitators() {
-  if (!token) throw new Error("Missing auth token. Please log in.");
-
-  const res = await fetch("http://localhost:8000/api/v1/users/manage?role=Facilitator", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.message || "Failed to load facilitators");
-  }
-
-  const data = await res.json();
-  return data.data;
-}
-
-// Fetch available facilitators for hiring
-async function fetchAvailableFacilitators() {
-  try {
-    const facilitators = await getUsersByRole("Facilitator");
-    setAvailableFacilitators(facilitators);
-  } catch (error) {
-    console.error("Error fetching available facilitators:", error);
-    toast.error("Failed to load available facilitators");
-  }
-}
-
-// Enroll facilitator to a selected program
-async function enrollFacilitator(programId: string, facilitatorId: string) {
-  if (!token) throw new Error("Missing auth token. Please log in.");
-
-  const res = await fetch(`http://localhost:8000/api/v1/programs/${programId}/enroll-facilitator`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ facilitatorId }),
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    console.error("Enroll failed:", res.status, errorData);
-    throw new Error(errorData.message || "Failed to enroll facilitator");
-  }
-
-  const data = await res.json();
-  return data.data;
-}
-
-// Load programs on mount
-useEffect(() => {
-  async function loadPrograms() {
-    setLoading(true);
+  // Fetch all programs using the service
+  const fetchPrograms = async () => {
     try {
-      const progs = await fetchPrograms();
-      setPrograms(progs);
-      if (progs.length > 0) {
-        setSelectedProgramId(progs[0]._id);
+      const programs = await getAllPrograms()
+      return programs
+    } catch (error: any) {
+      console.error("Error fetching programs:", error)
+      throw new Error(error.response?.data?.message || "Failed to load programs")
+    }
+  }
+
+  // Fetch all facilitators using the service  
+  const fetchFacilitators = async () => {
+    try {
+      const facilitators = await getUsersByRole("Facilitator")
+      return facilitators
+    } catch (error: any) {
+      console.error("Error fetching facilitators:", error)
+      throw new Error(error.response?.data?.message || "Failed to load facilitators")
+    }
+  }
+
+  // Fetch available facilitators for hiring
+  const fetchAvailableFacilitators = async () => {
+    try {
+      const facilitators = await getUsersByRole("Facilitator")
+      setAvailableFacilitators(facilitators)
+    } catch (error) {
+      console.error("Error fetching available facilitators:", error)
+      toast.error("Failed to load available facilitators")
+    }
+  }
+
+  // Load programs on mount
+  useEffect(() => {
+    const loadPrograms = async () => {
+      setLoading(true)
+      try {
+        const progs = await fetchPrograms()
+        setPrograms(progs)
+        if (progs.length > 0) {
+          setSelectedProgramId(progs[0]._id)
+        }
+        setError(null)
+      } catch (err: any) {
+        setError(err.message)
+        toast.error(err.message)
+      } finally {
+        setLoading(false)
       }
-      setError(null);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
     }
-  }
 
-  loadPrograms();
-}, []);
+    loadPrograms()
+  }, [])
 
-// Load all facilitators once (not tied to programId)
-useEffect(() => {
-  async function loadFacilitators() {
-    setLoading(true);
-    try {
-      const facs = await fetchFacilitators();
-      setFacilitators(facs);
-      setError(null);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  // Load all facilitators once (not tied to programId)
+  useEffect(() => {
+    const loadFacilitators = async () => {
+      setLoading(true)
+      try {
+        const facs = await fetchFacilitators()
+        setFacilitators(facs)
+        setError(null)
+      } catch (err: any) {
+        setError(err.message)
+        toast.error(err.message)
+      } finally {
+        setLoading(false)
+      }
     }
+
+    loadFacilitators()
+  }, [])
+
+  // Filter helpers
+  const filteredFacilitators = facilitators.filter((facilitator) => {
+    const matchesSearch = facilitator.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = filterStatus === "all" || facilitator.status === filterStatus
+    return matchesSearch && matchesStatus
+  })
+
+  const handleDeleteFacilitator = (id: string) => {
+    setFacilitators((prev) => prev.filter((f) => f._id !== id))
   }
-
-  loadFacilitators();
-}, []);
-
-// Filter helpers
-const filteredFacilitators = facilitators.filter((facilitator) => {
-  const matchesSearch = facilitator.name.toLowerCase().includes(searchTerm.toLowerCase());
-  const matchesStatus = filterStatus === "all" || facilitator.status === filterStatus;
-  return matchesSearch && matchesStatus;
-});
-
-const handleDeleteFacilitator = (id: string) => {
-  setFacilitators((prev) => prev.filter((f) => f._id !== id))
-}
 
   // UI helpers
   const getStatusBadge = (status: string) => {
@@ -232,58 +193,59 @@ const handleDeleteFacilitator = (id: string) => {
 
   // Handlers
   const handleHireFacilitator = async (e: React.FormEvent) => {
-  e.preventDefault();
-  if (!selectedProgramId) {
-    toast.error("Please select a program first");
-    return;
-  }
-
-  setLoading(true);
-  try {
-    if (hireMethod === "existing") {
-      if (!hireFacilitatorId.trim()) {
-        toast.error("Please select a facilitator");
-        return;
-      }
-      await enrollFacilitator(selectedProgramId, hireFacilitatorId.trim());
-      toast.success("Facilitator hired successfully!");
-    } else {
-      // Create new facilitator
-      if (!newFacilitatorData.name.trim() || !newFacilitatorData.email.trim()) {
-        toast.error("Please fill in all required fields");
-        return;
-      }
-      
-      const newUser = await createUser({
-        name: newFacilitatorData.name.trim(),
-        email: newFacilitatorData.email.trim(),
-        role: "Facilitator"
-      });
-      
-      // Enroll the newly created facilitator
-      await enrollFacilitator(selectedProgramId, newUser._id);
-      toast.success("New facilitator created and hired successfully! Login credentials have been sent to their email.");
+    e.preventDefault()
+    if (!selectedProgramId) {
+      toast.error("Please select a program first")
+      return
     }
 
-    // Fetch all facilitators again
-    const updatedFacilitators = await fetchFacilitators();
-    setFacilitators(updatedFacilitators);
+    setLoading(true)
+    try {
+      if (hireMethod === "existing") {
+        if (!hireFacilitatorId.trim()) {
+          toast.error("Please select a facilitator")
+          return
+        }
+        await enrollFacilitator(selectedProgramId, hireFacilitatorId.trim())
+        toast.success("Facilitator hired successfully!")
+      } else {
+        // Create new facilitator
+        if (!newFacilitatorData.name.trim() || !newFacilitatorData.email.trim()) {
+          toast.error("Please fill in all required fields")
+          return
+        }
+        
+        const newUser = await createUser({
+          name: newFacilitatorData.name.trim(),
+          email: newFacilitatorData.email.trim(),
+          role: "Facilitator"
+        })
+        
+        // Enroll the newly created facilitator
+        await enrollFacilitator(selectedProgramId, newUser._id)
+        toast.success("New facilitator created and hired successfully! Login credentials have been sent to their email.")
+      }
 
-    setShowHireModal(false);
-    setHireFacilitatorId("");
-    setNewFacilitatorData({ name: "", email: "" });
-    setHireMethod("existing");
-  } catch (err: any) {
-    toast.error("Error: " + err.message);
-  } finally {
-    setLoading(false);
+      // Fetch all facilitators again
+      const updatedFacilitators = await fetchFacilitators()
+      setFacilitators(updatedFacilitators)
+
+      setShowHireModal(false)
+      setHireFacilitatorId("")
+      setNewFacilitatorData({ name: "", email: "" })
+      setHireMethod("existing")
+    } catch (err: any) {
+      console.error("Error hiring facilitator:", err)
+      toast.error("Error: " + (err.response?.data?.message || err.message))
+    } finally {
+      setLoading(false)
+    }
   }
-};
 
-const handleOpenHireModal = () => {
-  setShowHireModal(true);
-  fetchAvailableFacilitators();
-};
+  const handleOpenHireModal = () => {
+    setShowHireModal(true)
+    fetchAvailableFacilitators()
+  }
 
   return (
     <div className="space-y-6">
@@ -344,83 +306,83 @@ const handleOpenHireModal = () => {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredFacilitators.map((facilitator) => (
-              <Card key={facilitator._id} className="relative">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg">{facilitator.name || "N/A"}</CardTitle>
-                    {getStatusBadge(facilitator.status || "pending")}
-                  </div>
-                  <CardDescription>{facilitator.specialization || "No specialization"}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {/* Essential contact info */}
-                    <div className="flex items-center space-x-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{facilitator.email || "No email"}</span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{facilitator.phone || "No phone"}</span>
-                    </div>
-                    
-                    {/* Key metrics for management decisions */}
-                    <div className="flex items-center space-x-2">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">
-                        {facilitator.studentsCount ? `${facilitator.studentsCount} students` : "0 students"}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">
-                        Joined: {facilitator.joinDate ? new Date(facilitator.joinDate).toLocaleDateString() : "N/A"}
-                      </span>
-                    </div>
+        {filteredFacilitators.map((facilitator) => (
+          <Card key={facilitator._id} className="relative">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">{facilitator.name || "N/A"}</CardTitle>
+                {getStatusBadge(facilitator.status || "pending")}
+              </div>
+              <CardDescription>{facilitator.specialization || "No specialization"}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {/* Essential contact info */}
+                <div className="flex items-center space-x-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{facilitator.email || "No email"}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{facilitator.phone || "No phone"}</span>
+                </div>
+                
+                {/* Key metrics for management decisions */}
+                <div className="flex items-center space-x-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    {facilitator.studentsCount ? `${facilitator.studentsCount} students` : "0 students"}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    Joined: {facilitator.joinDate ? new Date(facilitator.joinDate).toLocaleDateString() : "N/A"}
+                  </span>
+                </div>
 
-                    {facilitator.type === "promoted" && (
-                      <div className="bg-blue-50 p-2 rounded-md">
-                        <p className="text-xs text-blue-800">
-                          Promoted from {facilitator.previousProgram} on{" "}
-                          {facilitator.promotionDate}
-                        </p>
-                      </div>
-                    )}
+                {facilitator.type === "promoted" && (
+                  <div className="bg-blue-50 p-2 rounded-md">
+                    <p className="text-xs text-blue-800">
+                      Promoted from {facilitator.previousProgram} on{" "}
+                      {facilitator.promotionDate}
+                    </p>
                   </div>
-                  <div className="flex space-x-2 mt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedFacilitator(facilitator)
-                        setShowViewModal(true)
-                      }}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedFacilitator(facilitator)
-                        setShowEditModal(true)
-                      }}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteFacilitator(facilitator._id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                )}
+              </div>
+              <div className="flex space-x-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedFacilitator(facilitator)
+                    setShowViewModal(true)
+                  }}
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedFacilitator(facilitator)
+                    setShowEditModal(true)
+                  }}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDeleteFacilitator(facilitator._id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {/* Hire Facilitator Modal */}
       <Dialog open={showHireModal} onOpenChange={setShowHireModal}>
