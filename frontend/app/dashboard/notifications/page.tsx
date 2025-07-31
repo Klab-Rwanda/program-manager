@@ -1,15 +1,25 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { toast } from "sonner";
-import { Bell, CheckCheck, Loader2, Info, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
+import { Bell, CheckCheck, Loader2, Info, AlertTriangle, CheckCircle, XCircle, Trash2, MailOpen, Mail } from "lucide-react"; // Added Trash2, MailOpen, Mail
 import { useNotifications } from "@/lib/contexts/NotificationContext"; // Use our context
-import { markNotificationAsRead, Notification } from "@/lib/services/notification.service";
+import { Notification } from "@/lib/services/notification.service";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Link from "next/link";
+import { 
+    AlertDialog, 
+    AlertDialogAction, 
+    AlertDialogCancel, 
+    AlertDialogContent, 
+    AlertDialogDescription, 
+    AlertDialogFooter, 
+    AlertDialogHeader, 
+    AlertDialogTitle 
+} from "@/components/ui/alert-dialog"; // For delete confirmation
 
 const NotificationIcon = ({ type }: { type: Notification['type'] }) => {
     switch (type) {
@@ -22,26 +32,24 @@ const NotificationIcon = ({ type }: { type: Notification['type'] }) => {
 };
 
 export default function NotificationsPage() {
-    const { notifications, unreadCount, isLoading, markAllAsRead } = useNotifications();
+    const { notifications, unreadCount, isLoading, markAllAsRead, toggleReadStatus, deleteOneNotification } = useNotifications();
 
-    const handleMarkOneRead = async (notification: Notification) => {
-        if (notification.isRead) return; // Already read
-        try {
-            // Call the service to mark as read
-            await markNotificationAsRead(notification._id);
-            // Optimistically update the UI by mapping over existing notifications
-            // Note: The `useNotifications` context does not currently trigger a refetch of all notifications
-            // when `markNotificationAsRead` is called directly. For a full update without a page reload,
-            // the `NotificationContext` would need to have a `refreshNotifications` function,
-            // or an optimistic update logic inside its state.
-            toast.info("Notification marked as read."); 
-            // The context will eventually update from a new server event or a general refresh.
-        } catch {
-            toast.error("Failed to mark notification as read.");
+    const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
+    const [notificationToDelete, setNotificationToDelete] = React.useState<string | null>(null);
+
+    const handleDeleteClick = (notificationId: string) => {
+        setNotificationToDelete(notificationId);
+        setShowDeleteConfirm(true);
+    };
+
+    const confirmDelete = () => {
+        if (notificationToDelete) {
+            deleteOneNotification(notificationToDelete);
+            setNotificationToDelete(null);
+            setShowDeleteConfirm(false);
         }
     };
 
-    // Filter notifications for display
     const allNotifications = notifications;
     const unreadNotifications = notifications.filter(n => !n.isRead);
 
@@ -72,22 +80,33 @@ export default function NotificationsPage() {
                             : (
                                 <div className="divide-y">
                                     {allNotifications.map(notif => (
-                                        <div 
-                                            key={notif._id} 
-                                            className={`flex items-start gap-4 p-4 cursor-pointer transition-colors ${!notif.isRead ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/50'}`}
-                                            onClick={() => handleMarkOneRead(notif)} // Mark as read on click
-                                        >
+                                        <div key={notif._id} className={`flex items-start gap-4 p-4 ${!notif.isRead ? 'bg-primary/5' : ''}`}>
                                             <NotificationIcon type={notif.type}/>
                                             <div className="flex-1">
                                                 <p className={`font-semibold ${!notif.isRead ? 'text-primary' : ''}`}>{notif.title}</p>
                                                 <p className="text-sm text-muted-foreground">{notif.message}</p>
                                                 <p className="text-xs text-muted-foreground mt-2">{new Date(notif.createdAt).toLocaleString()}</p>
                                             </div>
-                                            {notif.link && (
-                                                <Link href={notif.link} onClick={(e) => e.stopPropagation()}> {/* Prevent parent div click from firing again */}
-                                                    <Button size="sm" variant="outline">View</Button>
-                                                </Link>
-                                            )}
+                                            <div className="flex-col gap-1 inline-flex ml-auto items-end"> {/* Use flex-col and inline-flex for stacking buttons */}
+                                                {notif.link && <Link href={notif.link}><Button size="sm" variant="outline">View</Button></Link>}
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="ghost" 
+                                                    onClick={() => toggleReadStatus(notif._id, notif.isRead)}
+                                                    title={notif.isRead ? 'Mark as Unread' : 'Mark as Read'}
+                                                >
+                                                    {notif.isRead ? <Mail className="h-4 w-4" /> : <MailOpen className="h-4 w-4" />}
+                                                </Button>
+                                                <Button 
+                                                    size="sm" 
+                                                    variant="ghost" 
+                                                    className="text-destructive" 
+                                                    onClick={() => handleDeleteClick(notif._id)}
+                                                    title="Delete Notification"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                             {!notif.isRead && <div className="h-2 w-2 rounded-full bg-blue-500 mt-1"></div>}
                                         </div>
                                     ))}
@@ -104,22 +123,33 @@ export default function NotificationsPage() {
                         : (
                             <div className="divide-y">
                                 {unreadNotifications.map(notif => (
-                                    <div 
-                                        key={notif._id} 
-                                        className="flex items-start gap-4 p-4 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors"
-                                        onClick={() => handleMarkOneRead(notif)}
-                                    >
+                                    <div key={notif._id} className="flex items-start gap-4 p-4 bg-primary/5">
                                         <NotificationIcon type={notif.type}/>
                                         <div className="flex-1">
                                             <p className="font-semibold text-primary">{notif.title}</p>
                                             <p className="text-sm text-muted-foreground">{notif.message}</p>
                                             <p className="text-xs text-muted-foreground mt-2">{new Date(notif.createdAt).toLocaleString()}</p>
                                         </div>
-                                        {notif.link && (
-                                            <Link href={notif.link} onClick={(e) => e.stopPropagation()}>
-                                                <Button size="sm" variant="outline">View</Button>
-                                            </Link>
-                                        )}
+                                        <div className="flex-col gap-1 inline-flex ml-auto items-end">
+                                            {notif.link && <Link href={notif.link}><Button size="sm" variant="outline">View</Button></Link>}
+                                            <Button 
+                                                size="sm" 
+                                                variant="ghost" 
+                                                onClick={() => toggleReadStatus(notif._id, notif.isRead)}
+                                                title={notif.isRead ? 'Mark as Unread' : 'Mark as Read'}
+                                            >
+                                                {notif.isRead ? <Mail className="h-4 w-4" /> : <MailOpen className="h-4 w-4" />}
+                                            </Button>
+                                            <Button 
+                                                size="sm" 
+                                                variant="ghost" 
+                                                className="text-destructive" 
+                                                onClick={() => handleDeleteClick(notif._id)}
+                                                title="Delete Notification"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                         <div className="h-2 w-2 rounded-full bg-blue-500 mt-1"></div>
                                     </div>
                                 ))}
@@ -128,6 +158,22 @@ export default function NotificationsPage() {
                     </CardContent></Card>
                 </TabsContent>
             </Tabs>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete this notification.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

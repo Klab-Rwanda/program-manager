@@ -1,5 +1,10 @@
 import { Router } from 'express';
-import { getMyNotifications, markAllAsRead, markOneAsRead } from '../../controllers/notification.controller.js';
+import { 
+    getMyNotifications, 
+    markAllAsRead, 
+    toggleNotificationReadStatus, // Renamed
+    deleteNotification // New import
+} from '../../controllers/notification.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 
 const router = Router();
@@ -11,7 +16,12 @@ router.route('/')
 router.route('/mark-all-read')
     .post(markAllAsRead);
 
-router.route('/:id/read')
-    .patch(markOneAsRead);
+// Updated route to toggle read status
+router.route('/:id/toggle-read')
+    .patch(toggleNotificationReadStatus);
+    
+// New route to delete a notification
+router.route('/:id')
+    .delete(deleteNotification);
     
 export default router;

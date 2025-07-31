@@ -9,6 +9,7 @@ export interface Notification {
   isRead: boolean;
   link?: string;
   createdAt: string;
+  sender?: { _id: string; name: string }; // Optional, if populated
 }
 
 // This interface matches the paginated response from your backend controller
@@ -40,11 +41,22 @@ export const markAllNotificationsAsRead = async (): Promise<{ unreadCount: numbe
 };
 
 /**
- * Marks a single notification as read by its ID.
- * @param notificationId The ID of the notification to mark as read.
- * @returns A promise that resolves to the updated notification object.
+ * Toggles the read status of a single notification.
+ * @param notificationId The ID of the notification to toggle.
+ * @param isRead Optional: explicitly set to true/false. If omitted, it will flip the current status.
+ * @returns A promise that resolves to the updated notification object and the new unread count.
  */
-export const markNotificationAsRead = async (notificationId: string): Promise<Notification> => {
-    const response = await api.patch(`/notifications/${notificationId}/read`);
+export const toggleNotificationReadStatus = async (notificationId: string, isRead?: boolean): Promise<{ notification: Notification; unreadCount: number }> => {
+    const response = await api.patch(`/notifications/${notificationId}/toggle-read`, { isRead });
+    return response.data.data;
+};
+
+/**
+ * Deletes a single notification.
+ * @param notificationId The ID of the notification to delete.
+ * @returns A promise that resolves with the new unread count.
+ */
+export const deleteNotification = async (notificationId: string): Promise<{ unreadCount: number }> => {
+    const response = await api.delete(`/notifications/${notificationId}`);
     return response.data.data;
 };
