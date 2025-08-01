@@ -2,28 +2,29 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Loader2, QrCode, Play, Eye, Download, StopCircle, UserCheck, Edit, Save } from "lucide-react"; // Added UserCheck, Edit, Save
+import { Plus, Loader2, QrCode, Play, Eye, Download, StopCircle, UserCheck, Edit, Save, Trash2 } from "lucide-react"; 
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui/input"; 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // New import
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"; // New import
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; 
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"; 
 
 import {
   createSession, getFacilitatorSessions, startOnlineSession, startPhysicalSession, endSession, 
-  markManualStudentAttendance, // New import
-  getSessionAttendance, // New import (to get current attendance for manual marking)
+  markManualStudentAttendance, 
+  getSessionAttendance, 
+  deleteSession, 
   ClassSession
 } from "@/lib/services/attendance.service";
-import { Program, User as TraineeUser, AttendanceRecord } from "@/types"; // Import User as TraineeUser (to distinguish from req.user)
-import api from "@/lib/api"; // For fetching program trainees
+import { Program, User as TraineeUser, AttendanceRecord } from "@/types"; 
+import api from "@/lib/api"; 
 
 const initialFormState = { type: 'online' as 'physical' | 'online', programId: '', title: '', description: '', duration: 120 };
 
@@ -33,11 +34,11 @@ export default function FacilitatorAttendancePage() {
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [isQrModalOpen, setQrModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState<string | boolean>(false); // Used for session creation/start/end
-  const [formData, setFormData] = useState(initialFormState);
+  const [isSubmitting, setIsSubmitting] = useState<string | boolean>(false); // Used for session creation/start/end/delete
+  const [formData, setFormData] = useState(initialFormState); // Corrected: Use useState with the object
   const [activeQrCode, setActiveQrCode] = useState<string | null>(null);
   
-  // New state for manual attendance marking
+  // State for manual attendance marking
   const [isManualMarkModalOpen, setManualMarkModalOpen] = useState(false);
   const [selectedSessionForManualMark, setSelectedSessionForManualMark] = useState<ClassSession | null>(null);
   const [traineesForManualMark, setTraineesForManualMark] = useState<
@@ -45,19 +46,25 @@ export default function FacilitatorAttendancePage() {
   >([]);
   const [manualMarkLoading, setManualMarkLoading] = useState(false);
 
+  // State for date filtering
+  const today = new Date();
+  const defaultStartDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]; // Start of current month
+  const defaultEndDate = today.toISOString().split('T')[0]; // Today's date
+  const [filterDates, setFilterDates] = useState({ startDate: defaultStartDate, endDate: defaultEndDate });
+
 
   const fetchSessionsAndPrograms = useCallback(async () => {
     setLoading(true);
     try {
       const [sessionsData, programsData] = await Promise.all([
-        getFacilitatorSessions(),
+        getFacilitatorSessions(filterDates.startDate, filterDates.endDate), // Pass date filters
         api.get('/programs').then(res => res.data.data) // Fetch all programs
       ]);
       setSessions(sessionsData);
       setPrograms(programsData);
     } catch (err) { toast.error("Failed to load data.");
     } finally { setLoading(false); }
-  }, []);
+  }, [filterDates]); // Re-fetch when date filters change
 
   useEffect(() => { fetchSessionsAndPrograms(); }, [fetchSessionsAndPrograms]);
 
@@ -66,10 +73,10 @@ export default function FacilitatorAttendancePage() {
     setIsSubmitting(true);
     try {
       const newSession = await createSession({ ...formData, startTime: new Date().toISOString() });
-      setSessions(prev => [newSession, ...prev]);
       toast.success("Session created successfully!");
       setCreateModalOpen(false);
       setFormData(initialFormState);
+      fetchSessionsAndPrograms(); // Re-fetch all sessions
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to create session.");
     } finally {
@@ -85,14 +92,12 @@ export default function FacilitatorAttendancePage() {
         const result = await startOnlineSession(session.sessionId);
         updatedSession = result.session;
       } else {
-        // For physical sessions, need to provide latitude/longitude.
-        // For demo, we'll use dummy values. In a real app, this comes from facilitator's device.
         const dummyLat = -1.9441; // Example: Kigali
         const dummyLng = 30.0619; // Example: Kigali
         updatedSession = await startPhysicalSession(session.sessionId, { latitude: dummyLat, longitude: dummyLng }); 
       }
       toast.success(`Session "${updatedSession.title}" is now active!`);
-      setSessions(prev => prev.map(s => s._id === updatedSession._id ? updatedSession : s));
+      fetchSessionsAndPrograms(); // Re-fetch all sessions to update status
     } catch (err: any) {
       toast.error(err.response?.data?.message || `Failed to start session.`);
     } finally {
@@ -107,9 +112,9 @@ export default function FacilitatorAttendancePage() {
             onClick: async () => {
                 setIsSubmitting(session.sessionId);
                 try {
-                    const updatedSession = await endSession(session.sessionId);
+                    await endSession(session.sessionId);
                     toast.success("Session has been marked as completed.");
-                    setSessions(prev => prev.map(s => s._id === updatedSession._id ? updatedSession : s));
+                    fetchSessionsAndPrograms(); // Re-fetch all sessions
                 } catch (err: any) {
                     toast.error(err.response?.data?.message || "Failed to end session.");
                 } finally {
@@ -121,26 +126,58 @@ export default function FacilitatorAttendancePage() {
     });
   };
 
+  const handleDeleteSession = (session: ClassSession) => {
+    toast("Are you sure you want to delete this session?", {
+        description: `This action cannot be undone. This will permanently delete the session "${session.title}" and its attendance records.`,
+        action: {
+            label: "Delete",
+            onClick: async () => {
+                setIsSubmitting(session.sessionId);
+                try {
+                    await deleteSession(session.sessionId);
+                    toast.success("Session deleted successfully.");
+                    fetchSessionsAndPrograms(); // Re-fetch sessions
+                }
+                catch (err: any) {
+                    // Check if the error indicates a 400 or 403 response
+                    if (err.response && (err.response.status === 400 || err.response.status === 403)) {
+                        toast.error(err.response.data.message || "Failed to delete session due to a restriction.");
+                    } else {
+                        toast.error("Failed to delete session. An unexpected error occurred.");
+                    }
+                    console.error("Delete session error:", err);
+                }
+                finally {
+                    setIsSubmitting(false);
+                }
+            },
+        },
+        cancel: { label: "Cancel" }
+    });
+  };
+
+
   // Manual marking logic
   const handleOpenManualMarkModal = useCallback(async (session: ClassSession) => {
     setSelectedSessionForManualMark(session);
     setManualMarkModalOpen(true);
     setManualMarkLoading(true);
     try {
-      // Fetch trainees for the session's program
-      const programDetails = await api.get(`/programs/${session.programId._id}`);
-      const programTrainees: TraineeUser[] = programDetails.data.data.trainees || [];
-      
-      // Fetch current attendance for this session
       const { attendance: currentAttendanceRecords } = await getSessionAttendance(session.sessionId);
-      const attendanceMap = new Map(currentAttendanceRecords.map(rec => [rec.userId._id, rec]));
-
-      // Combine trainees with their current attendance status
-      const traineesWithStatus = programTrainees.map(trainee => ({
-        ...trainee,
-        currentAttendance: attendanceMap.get(trainee._id) || null,
-        manualStatus: attendanceMap.get(trainee._id)?.status || 'Absent', // Default to absent if no record
-        manualReason: attendanceMap.get(trainee._id)?.reason || '',
+      
+      const traineesWithStatus = currentAttendanceRecords.map((record: any) => ({
+          _id: record.trainee._id,
+          name: record.trainee.name,
+          email: record.trainee.email,
+          currentAttendance: {
+              status: record.status,
+              method: record.method,
+              timestamp: record.timestamp,
+              reason: record.reason,
+              markedBy: record.markedBy
+          },
+          manualStatus: record.status, // Initialize with current status
+          manualReason: record.reason || '',
       }));
 
       setTraineesForManualMark(traineesWithStatus);
@@ -231,8 +268,17 @@ export default function FacilitatorAttendancePage() {
                             <CardContent className="space-y-3">
                                 {session.status === 'scheduled' && (
                                     <div className="flex gap-2">
-                                        <Button className="w-full" onClick={() => handleStartSession(session)} disabled={!!isSubmitting}>
-                                            {!!isSubmitting && isSubmitting === session.sessionId ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Play className="mr-2 h-4 w-4" />} Start Session
+                                        <Button 
+                                            className="flex-1 min-w-0" 
+                                            onClick={() => handleStartSession(session)} 
+                                            disabled={!!isSubmitting && isSubmitting === session.sessionId}
+                                        >
+                                            {/* UI Fix: Ensure button content doesn't overflow */}
+                                            {!!isSubmitting && isSubmitting === session.sessionId ? 
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : 
+                                                <Play className="mr-2 h-4 w-4" />
+                                            } 
+                                            <span className="truncate">Start Session</span>
                                         </Button>
                                         <Button variant="outline" onClick={() => handleOpenManualMarkModal(session)} disabled={manualMarkLoading}>
                                             <Edit className="h-4 w-4" />
@@ -241,12 +287,16 @@ export default function FacilitatorAttendancePage() {
                                 )}
                                 {session.status === 'active' && (
                                     <div className="flex gap-2">
-                                        {session.type === 'online' && <Link href={`/dashboard/classroom/${session.sessionId}`} className="flex-1"><Button className="w-full"><Eye className="mr-2 h-4 w-4" /> Classroom</Button></Link>}
+                                        <Link href={`/dashboard/classroom/${session.sessionId}`} className="flex-1">
+                                            <Button className="w-full">
+                                                <Eye className="mr-2 h-4 w-4" /> Classroom
+                                            </Button>
+                                        </Link>
                                         <Button variant="outline" onClick={() => handleOpenManualMarkModal(session)} disabled={manualMarkLoading}>
                                             <Edit className="h-4 w-4" />
                                         </Button>
                                         <Button variant="destructive" size={session.type === 'online' ? 'default' : 'lg'} className="flex-1" onClick={() => handleEndSession(session)} disabled={isSubmitting === session.sessionId}>
-                                            {isSubmitting === session.sessionId ? <Loader2 className="h-4 w-4 animate-spin"/> : <StopCircle className="mr-2 h-4 w-4" />} End Session
+                                            {isSubmitting === session.sessionId ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <StopCircle className="mr-2 h-4 w-4" />} End Session
                                         </Button>
                                     </div>
                                 )}
@@ -257,28 +307,60 @@ export default function FacilitatorAttendancePage() {
             ) : <p className="text-center text-muted-foreground py-10">No active or upcoming sessions.</p>}
         </TabsContent>
         <TabsContent value="history" className="mt-4">
-             {loading ? <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div> :
-            completedSessions.length > 0 ? (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {completedSessions.map(session => (
-                        <Card key={session._id} className="opacity-80">
-                            <CardHeader><CardTitle>{session.title}</CardTitle><CardDescription>{session.programId.name}</CardDescription></CardHeader>
-                            <CardContent className="space-y-3">
-                                 <Badge variant="outline">Completed</Badge>
-                                 <p className="text-sm text-muted-foreground">Ended on: {new Date(session.updatedAt).toLocaleDateString()}</p>
-                                 {/* MODIFIED: Link to the new attendance report page */}
-                                 <Link href={`/dashboard/Facilitator/attendance-report/${session.sessionId}`} passHref>
-                                    <Button variant="outline" className="w-full"><Download className="mr-2 h-4 w-4" /> View Report</Button>
-                                 </Link>
-                                 {/* Manual Mark button for completed sessions as well */}
-                                 <Button variant="outline" className="w-full" onClick={() => handleOpenManualMarkModal(session)} disabled={manualMarkLoading}>
-                                     <Edit className="mr-2 h-4 w-4" /> Manual Mark
-                                 </Button>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
-            ) : <p className="text-center text-muted-foreground py-10">No completed sessions found.</p>}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Session History</CardTitle>
+                    <CardDescription>View past sessions for specific dates.</CardDescription>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="historyStartDate">Start Date</Label>
+                            <Input 
+                                id="historyStartDate" 
+                                type="date" 
+                                value={filterDates.startDate} 
+                                onChange={(e) => setFilterDates(prev => ({ ...prev, startDate: e.target.value }))}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="historyEndDate">End Date</Label>
+                            <Input 
+                                id="historyEndDate" 
+                                type="date" 
+                                value={filterDates.endDate} 
+                                onChange={(e) => setFilterDates(prev => ({ ...prev, endDate: e.target.value }))}
+                            />
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {loading ? <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div> :
+                    completedSessions.length > 0 ? (
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            {completedSessions.map(session => (
+                                <Card key={session._id} className="opacity-80">
+                                    <CardHeader><CardTitle>{session.title}</CardTitle><CardDescription>{session.programId.name}</CardDescription></CardHeader>
+                                    <CardContent className="space-y-3">
+                                        <Badge variant="outline">Completed</Badge>
+                                        <p className="text-sm text-muted-foreground">Ended on: {new Date(session.updatedAt).toLocaleDateString()}</p>
+                                        {/* MODIFIED: Link to the new attendance report page */}
+                                        <Link href={`/dashboard/Facilitator/attendance-report/${session.sessionId}`} passHref>
+                                            <Button variant="outline" className="w-full"><Download className="mr-2 h-4 w-4" /> View Report</Button>
+                                        </Link>
+                                        {/* Manual Mark button for completed sessions as well */}
+                                        <Button variant="outline" className="w-full" onClick={() => handleOpenManualMarkModal(session)} disabled={manualMarkLoading}>
+                                            <Edit className="mr-2 h-4 w-4" /> Manual Mark
+                                        </Button>
+                                        {/* Delete Button moved here for completed sessions */}
+                                        <Button variant="destructive" onClick={() => handleDeleteSession(session)} disabled={!!isSubmitting && isSubmitting === session.sessionId} className="w-full">
+                                            {!!isSubmitting && isSubmitting === session.sessionId ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4" />} Delete Session
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    ) : <p className="text-center text-muted-foreground py-10">No completed sessions found for the selected dates.</p>}
+                </CardContent>
+            </Card>
         </TabsContent>
       </Tabs>
 
@@ -301,7 +383,13 @@ export default function FacilitatorAttendancePage() {
 
       {/* Manual Attendance Marking Modal */}
       <Dialog open={isManualMarkModalOpen} onOpenChange={setManualMarkModalOpen}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {/* Modal Alignment Fix: Adjusted left and transform for better centering with sidebar */}
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto 
+              !left-1/2 !-translate-x-1/2 /* Default for mobile/small screens */
+              md:!left-[calc(50%+100px)] md:!top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2 /* Centered in content area for 280px sidebar, 280/2 = 140. Using 100 for some padding*/
+              lg:max-w-3xl /* Keep a reasonable max-width */
+              xl:max-w-4xl /* Or even larger if needed, but not full width */
+          ">
               <DialogHeader>
                   <DialogTitle>Manual Attendance for {selectedSessionForManualMark?.title}</DialogTitle>
                   <DialogDescription>

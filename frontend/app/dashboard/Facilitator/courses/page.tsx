@@ -59,6 +59,23 @@ export default function FacilitatorCourseManagementPage() {
         return (current as string) || 'N/A';
     };
 
+    // Helper to construct the direct URL to the document for viewing
+    const getDocumentDirectUrl = (contentUrl: string): string => {
+        // Assuming NEXT_PUBLIC_API_URL is something like 'http://localhost:8000/api/v1'
+        // We need 'http://localhost:8000/'
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:8000';
+        // Ensure the contentUrl is correctly formatted (replace backslashes for URLs)
+        const cleanContentUrl = contentUrl.replace(/\\/g, '/');
+        
+        // If contentUrl already includes 'uploads/', avoid duplicating it
+        // This check is important as backend might save 'uploads/filename.pdf' or 'filename.pdf'
+        if (cleanContentUrl.startsWith('uploads/')) {
+            return `${baseUrl}/${cleanContentUrl}`;
+        }
+        // Fallback, assuming files are directly in public/uploads (though backend should save 'uploads/filename')
+        return `${baseUrl}/uploads/${cleanContentUrl}`; 
+    };
+
     const fetchData = useCallback(async () => {
         if (!user) {
             setError("User not authenticated.");
@@ -189,7 +206,7 @@ export default function FacilitatorCourseManagementPage() {
     };
 
     const handleIframeError = () => {
-        toast.error("Unable to display document. This might be due to security restrictions or an invalid file format. Try downloading.");
+        toast.error("Unable to display document. This might be due to browser limitations or an invalid file format. Please try downloading the file instead.");
     };
 
     const getStatusBadge = (status: string) => {
@@ -417,21 +434,22 @@ export default function FacilitatorCourseManagementPage() {
                         <DialogDescription className="text-sm text-muted-foreground">
                             {selectedCourse?.contentUrl && (
                                 <a 
-                                    href={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '')}/${selectedCourse.contentUrl.replace(/\\/g, '/')}`} 
+                                    href={getDocumentDirectUrl(selectedCourse.contentUrl)} // Use the direct URL
                                     target="_blank" 
                                     rel="noopener noreferrer" 
                                     className="text-[#1f497d] hover:underline flex items-center gap-1" // Adjusted text color
+                                    download // Suggest download for non-viewable types
                                 >
-                                    Open in new tab <ExternalLink className="h-3 w-3"/>
+                                    Open in new tab / Download <ExternalLink className="h-3 w-3"/>
                                 </a>
                             )}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex-grow overflow-hidden flex items-center justify-center bg-gray-50">
                         {selectedCourse?.contentUrl ? (
-                            // Use Google Docs Viewer for broader compatibility with various document types
+                            // Directly link to your server's file for display within the iframe
                             <iframe
-                                src={`https://docs.google.com/gview?url=${encodeURIComponent(`${process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '')}/${selectedCourse.contentUrl.replace(/\\/g, '/')}`)}&embedded=true`}
+                                src={getDocumentDirectUrl(selectedCourse.contentUrl)}
                                 title={selectedCourse.title}
                                 className="w-full h-full border-none"
                                 onError={handleIframeError}

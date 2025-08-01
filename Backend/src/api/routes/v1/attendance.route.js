@@ -24,7 +24,8 @@ import {
     getProgramAttendanceReport,
     getMyAttendanceHistory,
     endSession,
-    getProgramAttendanceSummary
+    getProgramAttendanceSummary,
+    deleteSession
 } from '../../controllers/attendance.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole as verifyRole } from '../../middlewares/role.middleware.js';
@@ -84,6 +85,10 @@ router.get('/trainee/sessions',
     getTraineeSessions
 );
 
+router.delete('/sessions/:sessionId', 
+    verifyRole(['Facilitator']), 
+    deleteSession
+);
 // ===================================================================
 //   GENERAL ROUTES
 // ===================================================================
