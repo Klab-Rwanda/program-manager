@@ -25,7 +25,8 @@ import {
     getMyAttendanceHistory,
     endSession,
     getProgramAttendanceSummary,
-    deleteSession
+    deleteSession,
+    getProgramSessionCounts
 } from '../../controllers/attendance.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole as verifyRole } from '../../middlewares/role.middleware.js';
@@ -150,5 +151,10 @@ router.post('/sessions/:sessionId/end',
 router.get('/sessions/:sessionId/report', 
     verifyRole(['Facilitator', 'ProgramManager', 'SuperAdmin']), 
     getSessionAttendance 
+);
+
+router.get('/sessions/program/:programId/counts', 
+    verifyRole(['Facilitator', 'ProgramManager', 'SuperAdmin']), 
+    getProgramSessionCounts
 );
 export default router;

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { 
   GraduationCap, 
@@ -13,13 +13,15 @@ import {
   CheckCircle,
   Loader2,
   ExternalLink,
-  CheckSquare
+  CheckSquare,
+  User, // Added User icon for facilitator
+  Award // Added Award icon for attendance/progress if needed
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
+import { Progress } from "@/components/ui/progress" // Keep Progress for other dashboard stats, remove from Learning Path card
 
 // Import your services
 import { getAllPrograms } from "@/lib/services/program.service"
@@ -27,16 +29,15 @@ import { getMyAttendanceHistory } from "@/lib/services/attendance.service"
 import api from "@/lib/api" // For assignments call
 import { Program, AttendanceRecord, Submission, Assignment } from "@/types"
 
-// Extended Program interface with calculated progress
+// Extended Program interface - Removed 'progress'
 interface DashboardProgram extends Program {
-  progress: number
   nextSession?: string
   attendanceRate?: number
 }
 
 interface DashboardStats {
   enrolledPrograms: number
-  overallProgress: number
+  overallProgress: number // This will still exist in overall stats, but not per program card
   nextSession: string
   pendingTasks: number
 }
@@ -58,7 +59,7 @@ export function TraineeDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [stats, setStats] = useState<DashboardStats>({
     enrolledPrograms: 0,
-    overallProgress: 0,
+    overallProgress: 0, 
     nextSession: "No upcoming sessions",
     pendingTasks: 0
   })
@@ -66,30 +67,43 @@ export function TraineeDashboard() {
 
   // Calculate attendance rate for a program
   const calculateAttendanceRate = (programId: string, attendanceRecords: AttendanceRecord[]): number => {
+    // Filter records for the specific program.
+    // Note: The `AttendanceRecord` from `getMyAttendanceHistory` now has `programId` populated, 
+    // so `record.programId._id` is safe if it's an object.
     const programAttendance = attendanceRecords.filter(record => {
-      if (!record.programId) return false
-      // Handle both populated object and string cases
-      const recordProgramId = typeof record.programId === 'object' 
-        ? record.programId._id 
-        : record.programId
-      return recordProgramId === programId
-    })
+      // Ensure record.programId is an object before accessing _id
+      const recordProgramId = typeof record.programId === 'object' && record.programId !== null 
+        ? record.programId._id.toString() 
+        : record.programId?.toString(); // Fallback for string ID or undefined
+      return recordProgramId === programId;
+    });
     
-    if (programAttendance.length === 0) return 100
-    
-    const presentCount = programAttendance.filter(record => 
+    // Count 'Present' or 'Late' records.
+    const presentOrLateCount = programAttendance.filter(record => 
       record.status === 'Present' || record.status === 'Late'
-    ).length
+    ).length;
+
+    // The total sessions in the `programAttendance` array represent only the sessions the student has a record for.
+    // To get a truly accurate attendance rate (present/total_expected_sessions), you'd need the total number of sessions
+    // held for that program. This would require fetching all `ClassSession`s for the program, which is more complex
+    // to integrate into this specific `calculateAttendanceRate` function without a performance hit or a dedicated backend endpoint.
+    // For now, this `attendanceRate` reflects `(attended_sessions / sessions_with_a_record) * 100`.
     
-    return Math.round((presentCount / programAttendance.length) * 100)
+    if (programAttendance.length === 0) {
+        // If there are no attendance records for this program, assume 100% (no sessions yet, or student just enrolled)
+        return 100;
+    }
+    
+    return Math.round((presentOrLateCount / programAttendance.length) * 100);
   }
 
-  // Calculate overall progress based on attendance rate
-  const calculateProgress = (attendanceRate: number): number => {
-    // You can modify this logic based on your requirements
-    // For now, using attendance rate as a proxy for progress
-    return Math.min(attendanceRate, 100)
+  // calculateProgress function is now not used for per-program progress.
+  // It only exists for the overall dashboard stats 'overallProgress'.
+  const calculateOverallProgress = (avgAttendanceRate: number): number => {
+      // This is still a proxy calculation.
+      return Math.min(avgAttendanceRate, 100);
   }
+
 
   // Generate upcoming tasks from assignments and sessions
   const generateUpcomingTasks = (programs: Program[], assignments: Assignment[]): UpcomingTask[] => {
@@ -123,7 +137,7 @@ export function TraineeDashboard() {
       tasks.push({
         id: `session-${program._id}`,
         title: 'Attend Next Session',
-        dueDate: 'Today',
+        dueDate: 'Today', // This is still a generic placeholder for "next session"
         program: program.name,
         status: 'Pending',
         type: 'session'
@@ -133,13 +147,13 @@ export function TraineeDashboard() {
     return tasks.slice(0, 5) // Limit to 5 most recent tasks
   }
 
-  // Find next session
+  // Find next session for overall dashboard stat
   const findNextSession = (programs: DashboardProgram[]): string => {
     const activePrograms = programs.filter(p => p.status === 'Active')
     if (activePrograms.length === 0) return "No upcoming sessions"
     
-    // For now, return a generic next session
-    // You can enhance this by fetching actual session data
+    // This is still a generic placeholder. To get a real "next session", 
+    // you'd need to fetch upcoming ClassSessions sorted by date.
     return "Today, 2:00 PM"
   }
 
@@ -152,14 +166,13 @@ export function TraineeDashboard() {
 
         // Fetch programs and attendance in parallel
         const [programsData, attendanceData] = await Promise.all([
-          getAllPrograms(),
-          getMyAttendanceHistory().catch(() => []), // Don't fail if attendance service fails
+          getAllPrograms(), // Fetches programs where trainee is enrolled
+          getMyAttendanceHistory().catch(() => []), // Fetches trainee's attendance records
         ])
 
         // Fetch assignments for active programs
         let assignmentsData: Assignment[] = []
         try {
-          // Get assignments for all programs the trainee is enrolled in
           const assignmentPromises = programsData
             .filter(p => p.status === 'Active')
             .map(program => 
@@ -174,22 +187,23 @@ export function TraineeDashboard() {
           console.error("Failed to fetch assignments:", error)
         }
 
-        // Filter active programs and calculate progress
+        // Filter active programs and calculate attendanceRate for each
         const activePrograms = programsData.filter(p => p.status === 'Active')
         const enhancedPrograms: DashboardProgram[] = activePrograms.map(program => {
           const attendanceRate = calculateAttendanceRate(program._id, attendanceData)
           return {
             ...program,
-            progress: calculateProgress(attendanceRate),
+            // progress is REMOVED from this per-program card
             attendanceRate,
-            nextSession: "Next session info" // You can enhance this with real session data
+            nextSession: "Next session info" // This is still a mock for now
           }
         })
 
-        // Calculate dashboard stats
-        const overallProgress = enhancedPrograms.length > 0 
-          ? Math.round(enhancedPrograms.reduce((sum, p) => sum + p.progress, 0) / enhancedPrograms.length)
-          : 0
+        // Calculate overall dashboard stats
+        const totalProgramAttendanceRates = enhancedPrograms.reduce((sum, p) => sum + (p.attendanceRate || 0), 0);
+        const averageAttendanceRateAcrossPrograms = enhancedPrograms.length > 0 
+            ? Math.round(totalProgramAttendanceRates / enhancedPrograms.length) 
+            : 0;
 
         const tasks = generateUpcomingTasks(programsData, assignmentsData)
         const pendingTasksCount = tasks.filter(t => t.status === 'Pending').length
@@ -200,7 +214,7 @@ export function TraineeDashboard() {
         setUpcomingTasks(tasks)
         setStats({
           enrolledPrograms: enhancedPrograms.length,
-          overallProgress,
+          overallProgress: calculateOverallProgress(averageAttendanceRateAcrossPrograms), // Overall progress based on overall attendance
           nextSession: findNextSession(enhancedPrograms),
           pendingTasks: pendingTasksCount
         })
@@ -243,7 +257,7 @@ export function TraineeDashboard() {
     },
     {
       title: "Overall Progress",
-      value: `${stats.overallProgress}%`,
+      value: `${stats.overallProgress}%`, // This is the overall progress based on average attendance
       change: "Based on attendance",
       icon: TrendingUp,
       color: "text-custom-blue",
@@ -270,17 +284,17 @@ export function TraineeDashboard() {
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="rounded-lg bg-gradient-to-r from-gray-900 to-gray-800 p-6 text-white">
+      <div className="rounded-lg bg-gradient-to-r from-[#1f497d] to-[#1f497d]/80 p-6 text-white"> {/* Changed from gray-900/800 to custom-blue/80 */}
         <h2 className="text-2xl font-bold mb-2">Welcome back!</h2>
         <p className="text-gray-300 mb-4">
           Continue your learning journey. You have {stats.enrolledPrograms} active program{stats.enrolledPrograms !== 1 ? 's' : ''}.
         </p>
         <div className="flex gap-3">
-          <Button size="lg" className="bg-white text-black hover:bg-gray-100">
+          <Button size="lg" className="bg-white text-[#1f497d] hover:bg-gray-100"> {/* Changed text-black to text-[#1f497d] */}
             <BookOpen className="mr-2 h-4 w-4" />
             Continue Learning
           </Button>
-          <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-black bg-transparent">
+          <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-[#1f497d] bg-transparent"> {/* Changed hover:text-black to hover:text-[#1f497d] */}
             <FileText className="mr-2 h-4 w-4" />
             Submit Assignment
           </Button>
@@ -316,44 +330,60 @@ export function TraineeDashboard() {
           <CardContent className="space-y-4">
             {myPrograms.length > 0 ? (
               myPrograms.map((program) => (
-                <div key={program._id} className="flex items-center justify-between p-4 rounded-lg bg-muted">
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center justify-between">
+                <div key={program._id} className="p-4 rounded-lg border border-border bg-background shadow-sm hover:shadow-md transition-all duration-200">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="space-y-1">
                       <Link 
                         href={`/program-management/${program._id}`} 
-                        className="font-medium text-foreground hover:text-custom-blue transition-colors flex items-center gap-2"
+                        className="font-semibold text-lg text-foreground hover:text-[#1f497d] transition-colors flex items-center gap-2" 
                       >
                         {program.name}
-                        <ExternalLink className="h-3 w-3" />
+                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
                       </Link>
-                      <Badge 
-                        variant={program.status === "Active" ? "default" : "secondary"}
-                        className={program.status === "Active" ? "bg-custom-blue text-white" : ""}
-                      >
-                        {program.status}
-                      </Badge>
+                      <p className="text-sm text-muted-foreground line-clamp-2">{program.description}</p>
                     </div>
-                    <p className="text-sm text-muted-foreground">{program.description}</p>
-                    <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                    <Badge 
+                      variant={program.status === "Active" ? "default" : "secondary"}
+                      className={program.status === "Active" ? "bg-[#1f497d] text-white" : ""} 
+                    >
+                      {program.status}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <User className="h-4 w-4" />
                       <span>Facilitator: {program.facilitators?.[0]?.name || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Clock className="h-4 w-4" />
                       <span>Attendance: {program.attendanceRate || 0}%</span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Progress value={program.progress} className="w-32 [&>*]:bg-custom-blue dark:[&>*]:bg-custom-blue" />
-                      <span className="text-sm text-muted-foreground">{program.progress}%</span>
-                    </div>
                   </div>
-                  <div className="text-right ml-4">
-                    <div className="space-y-2">
-                      <Button variant="outline" size="sm" className="w-full">
-                        <CheckSquare className="h-3 w-3 mr-1" />
-                        Mark Attendance
-                      </Button>
-                      <Button variant="outline" size="sm" className="w-full">
-                        <FileText className="h-3 w-3 mr-1" />
-                        Submit Assignment
-                      </Button>
+
+                  {/* Removed Progress bar and its associated data points */}
+                  {/*
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground font-medium">Overall Progress</span>
+                      <span className="font-bold text-foreground">{program.progress}%</span>
                     </div>
+                    <Progress 
+                      value={program.progress} 
+                      className="h-2 [&>*]:bg-[#1f497d] dark:[&>*]:bg-[#1f497d]" 
+                    />
+                  </div>
+                  */}
+                  
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1">
+                      <BookOpen className="h-4 w-4 mr-1" />
+                      Continue Learning
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1">
+                      <FileText className="h-4 w-4 mr-1" />
+                      Submit Assignment
+                    </Button>
                   </div>
                 </div>
               ))
@@ -387,14 +417,14 @@ export function TraineeDashboard() {
                         task.status === "In Progress" ? "secondary" : "outline"
                       }
                       className={
-                        task.status === "Completed" ? "bg-custom-blue text-white" : 
+                        task.status === "Completed" ? "bg-[#1f497d] text-white" : 
                         task.status === "In Progress" ? "bg-muted/30 text-muted-foreground" : "text-xs"
                       }
                     >
                       {task.status}
                     </Badge>
                   </div>
-                  <p className="text-sm text-custom-blue font-medium">{task.program}</p>
+                  <p className="text-sm text-[#1f497d] font-medium">{task.program}</p>
                   <div className="flex items-center text-xs text-muted-foreground">
                     <Clock className="mr-1 h-3 w-3" />
                     Due: {task.dueDate}

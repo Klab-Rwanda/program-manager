@@ -198,4 +198,27 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
     await api.delete(`/attendance/sessions/${sessionId}`);
 };
 
+export const getProgramSessionCounts = async (programId: string): Promise<{
+    totalSessions: number;
+    completedSessions: number;
+    activeSessions: number;
+    scheduledSessions: number;
+    nextSessionTime: string | null;
+}> => {
+    try {
+        const response = await api.get(`/attendance/sessions/program/${programId}/counts`);
+        return response.data.data;
+    } catch (error) {
+        console.error(`Failed to fetch session counts for program ${programId}:`, error);
+        return {
+            totalSessions: 0,
+            completedSessions: 0,
+            activeSessions: 0,
+            scheduledSessions: 0,
+            nextSessionTime: null,
+        };
+    }
+};
+
+
 

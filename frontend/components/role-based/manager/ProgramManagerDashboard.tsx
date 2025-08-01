@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { BookOpen, Users, TrendingUp, Calendar, Plus, Eye, Edit, Loader2, ExternalLink, Bell, UserPlus, Clock, Award, FileText, GraduationCap } from "lucide-react"
+import { BookOpen, Users, TrendingUp, Calendar, Plus, Eye, Edit, Loader2, ExternalLink, Bell, UserPlus, Clock, Award, FileText, GraduationCap, AlertCircle, ArrowRight, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -26,11 +26,16 @@ interface Program {
   lastActivity?: string
 }
 
+// Update DashboardStats to match the `admin-overview` endpoint's response
 interface DashboardStats {
   totalPrograms: number
-  activeTrainees: number
-  totalUsers: number
-  pendingApprovals: number
+  activePrograms: number 
+  pendingPrograms: number // specific count for pending programs
+  totalTrainees: number
+  totalFacilitators: number
+  pendingCourses: number // specific count for pending courses
+  recentLogs: any[]
+  programsEndingSoon: any[]
 }
 
 interface RecentActivity {
@@ -55,9 +60,7 @@ export function ProgramManagerDashboard() {
       try {
         setLoading(true)
         
-        // Get token from localStorage
         const token = localStorage.getItem('accessToken')
-        
         if (!token) {
           throw new Error("No access token found")
         }
@@ -69,28 +72,23 @@ export function ProgramManagerDashboard() {
 
         const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api/v1";
 
-             const [programsRes, statsRes, activityRes] = await Promise.all([
-           fetch(`${BASE_URL}/programs`, {
-    headers
-  }),
-  fetch(`${BASE_URL}/dashboard/stats`, {
-    headers
-  }),
-  fetch(`${BASE_URL}/dashboard/recent-activity`, {
-    headers
-  })
-]);
+        // Fetch from `admin-overview` which provides more granular stats for PM/SA
+        const [programsRes, overviewStatsRes, activityRes] = await Promise.all([
+           fetch(`${BASE_URL}/programs`, { headers }),
+           fetch(`${BASE_URL}/dashboard/admin-overview`, { headers }), // Changed endpoint
+           fetch(`${BASE_URL}/dashboard/recent-activity`, { headers })
+        ]);
 
-        if (!programsRes.ok || !statsRes.ok) {
+        if (!programsRes.ok || !overviewStatsRes.ok) {
           throw new Error("Failed to fetch dashboard data")
         }
 
         const programsData = await programsRes.json()
-        const statsData = await statsRes.json()
+        const overviewStatsData = await overviewStatsRes.json()
         const activityData = activityRes.ok ? await activityRes.json() : { data: [] }
 
         setMyPrograms(programsData.data || [])
-        setStats(statsData.data)
+        setStats(overviewStatsData.data) // Set the full overview stats
         setRecentActivity(activityData.data || [])
       } catch (error) {
         setError("Could not load your dashboard data.")
@@ -117,33 +115,33 @@ export function ProgramManagerDashboard() {
   const statCards = [
     {
       title: "Active Programs",
-      value: stats?.totalPrograms.toString() || "0",
-      change: "+2 from last month",
+      value: stats?.activePrograms?.toString() || "0", 
+      change: `Total: ${stats?.totalPrograms || 0}`, 
       icon: BookOpen,
       color: "text-custom-blue",
       bgColor: "bg-custom-blue/10",
     },
     {
       title: "Total Trainees",
-      value: stats?.activeTrainees.toString() || "0",
-      change: "+18 from last month",
+      value: stats?.totalTrainees?.toString() || "0",
+      change: "+18 from last month", 
       icon: Users,
       color: "text-website-secondary",
       bgColor: "bg-website-secondary/10",
     },
     {
-      title: "Total Users",
-      value: stats?.totalUsers.toString() || "0",
-      change: "+5 from last month",
-      icon: TrendingUp,
+      title: "Total Facilitators",
+      value: stats?.totalFacilitators?.toString() || "0",
+      change: "+5 from last month", 
+      icon: TrendingUp, 
       color: "text-custom-blue",
       bgColor: "bg-custom-blue/10",
     },
     {
-      title: "Pending Approvals",
-      value: stats?.pendingApprovals.toString() || "0",
-      change: "This month",
-      icon: Calendar,
+      title: "Pending Items",
+      value: ((stats?.pendingPrograms || 0) + (stats?.pendingCourses || 0)).toString(), 
+      change: "Programs & Courses", 
+      icon: Clock,
       color: "text-website-accent",
       bgColor: "bg-website-accent/10",
     },
@@ -237,7 +235,7 @@ export function ProgramManagerDashboard() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8"> {/* Increased spacing */}
       {/* Header Section */}
       <div className="rounded-xl bg-gradient-to-r from-custom-blue to-custom-blue/80 p-8 text-white shadow-lg">
         <h1 className="text-3xl font-bold mb-3">Welcome back, Program Manager!</h1>
@@ -282,10 +280,52 @@ export function ProgramManagerDashboard() {
         ))}
       </div>
 
-      {/* Quick Actions & Recent Activity */}
+      {/* Quick Actions, Action Required, & Recent Activity */}
       <div className="grid gap-6 lg:grid-cols-3">
+        {/* Action Required Card (New) */}
+        <Card className="bg-yellow-50 border-yellow-200 shadow-lg border-none">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-yellow-800 text-xl font-bold">
+              <AlertCircle className="h-6 w-6 text-yellow-800" />
+              Action Required
+            </CardTitle>
+            <CardDescription className="text-yellow-700">
+              Items awaiting your review or approval.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {stats && ((stats.pendingPrograms > 0 || stats.pendingCourses > 0) ? (
+                <>
+                    {stats.pendingPrograms > 0 && (
+                        <Link href="/dashboard/Manager/programs" className="block p-3 rounded-md hover:bg-yellow-100 transition-colors">
+                            <div className="flex justify-between items-center">
+                                <span className="font-semibold text-yellow-900">{stats.pendingPrograms} Programs</span>
+                                <ArrowRight className="h-5 w-5 text-yellow-800"/>
+                            </div>
+                            <p className="text-sm text-yellow-700">Need your approval</p>
+                        </Link>
+                    )}
+                    {stats.pendingCourses > 0 && (
+                        <Link href="/dashboard/Manager/course-management" className="block p-3 rounded-md hover:bg-yellow-100 transition-colors"> 
+                            <div className="flex justify-between items-center">
+                                <span className="font-semibold">{stats.pendingCourses} Courses</span>
+                                <ArrowRight className="h-5 w-5 text-yellow-800"/>
+                            </div>
+                            <p className="text-sm text-yellow-700">Need your approval</p>
+                        </Link>
+                    )}
+                </>
+            ) : (
+                <div className="text-center p-4 text-muted-foreground">
+                    <CheckCircle className="h-10 w-10 mx-auto mb-3 text-green-600" />
+                    <p className="font-medium text-green-700">All clear! No actions currently required.</p>
+                </div>
+            ))}
+          </CardContent>
+        </Card>
+
         {/* Quick Actions */}
-        <Card className="border-0 shadow-md bg-card lg:col-span-1">
+        <Card className="border-0 shadow-md bg-card">
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-card-foreground">Quick Actions</CardTitle>
             <CardDescription className="text-muted-foreground">
@@ -321,7 +361,7 @@ export function ProgramManagerDashboard() {
         </Card>
 
         {/* Recent Activity */}
-        <Card className="border-0 shadow-md bg-card lg:col-span-2">
+        <Card className="border-0 shadow-md bg-card">
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-card-foreground">Recent Activity</CardTitle>
             <CardDescription className="text-muted-foreground">

@@ -173,28 +173,64 @@ const enrollTrainee = asyncHandler(async (req, res) => {
 });
 
 const enrollFacilitator = asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const { facilitatorId } = req.body;
+    const { id } = req.params; // Program ID
+    const { facilitatorId } = req.body; // Facilitator ID
     await verifyManagerAccess(id, req.user._id);
+
     const facilitator = await User.findById(facilitatorId);
-    if (!facilitator || facilitator.role !== 'Facilitator') throw new ApiError(404, "Facilitator not found or user is not a facilitator.");
+    if (!facilitator || facilitator.role !== 'Facilitator') {
+        throw new ApiError(404, "Facilitator not found or user is not a facilitator.");
+    }
+
     const program = await Program.findByIdAndUpdate(id, { $addToSet: { facilitators: facilitatorId } }, { new: true });
-      await createNotification({
+
+    if (!program) throw new ApiError(404, "Program not found.");
+
+    await createNotification({
         recipient: facilitatorId,
         sender: req.user._id,
         title: "You've been assigned a program!",
         message: `You have been assigned as a facilitator for the "${program.name}" program.`,
-        link: `/dashboard/Facilitator/fac-programs`, // Link to their programs list
+        link: `/dashboard/Facilitator/fac-programs`,
         type: 'info'
     });
-     await createLog({
-        user: req.user._id,
-        action: 'FACILITATOR_ENROLLED',
-        details: `${req.user.name} assigned facilitator '${facilitator.name}' to program '${program.name}'.`,
-        entity: { id: program._id, model: 'Program' }
-    });
-
     return res.status(200).json(new ApiResponse(200, program, "Facilitator enrolled successfully."));
+});
+
+// NEW FUNCTION: Unenroll Facilitator from a program
+const unenrollFacilitator = asyncHandler(async (req, res) => {
+    const { id: programId } = req.params;
+    const { facilitatorId } = req.body;
+
+    if (!facilitatorId) {
+        throw new ApiError(400, "Facilitator ID is required.");
+    }
+
+    await verifyManagerAccess(programId, req.user._id); // Ensure PM/SA has access
+
+    const program = await Program.findByIdAndUpdate(
+        programId,
+        { $pull: { facilitators: facilitatorId } }, // Remove facilitator from array
+        { new: true }
+    );
+
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
+    }
+
+    const facilitator = await User.findById(facilitatorId).select('name email');
+    if (facilitator) {
+        await createNotification({
+            recipient: facilitatorId,
+            sender: req.user._id,
+            title: "Facilitator Assignment Removed",
+            message: `You have been unassigned as a facilitator from the "${program.name}" program by ${req.user.name}.`,
+            link: `/dashboard/Facilitator/fac-programs`,
+            type: 'warning'
+        });
+    }
+
+    return res.status(200).json(new ApiResponse(200, program, "Facilitator unassigned successfully."));
 });
 
 const getAllPrograms = asyncHandler(async (req, res) => {
@@ -776,4 +812,5 @@ export {
     getProgramStudentCount,
     markProgramAsCompleted,
     reactivateProgram,
+    unenrollFacilitator,
 };
