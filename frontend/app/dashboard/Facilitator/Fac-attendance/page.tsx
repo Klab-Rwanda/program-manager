@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Loader2, QrCode, Play, Eye, Download, StopCircle, MapPin, Info } from "lucide-react"; 
+import { Plus, Loader2, QrCode, Play, Eye, Download, StopCircle, UserCheck, Edit, Save } from "lucide-react"; // Added UserCheck, Edit, Save
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,12 +13,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert"; 
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"; // New import
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"; // New import
+
 import {
-  createSession, getFacilitatorSessions, startOnlineSession, startPhysicalSession, endSession, ClassSession
+  createSession, getFacilitatorSessions, startOnlineSession, startPhysicalSession, endSession, 
+  markManualStudentAttendance, // New import
+  getSessionAttendance, // New import (to get current attendance for manual marking)
+  ClassSession
 } from "@/lib/services/attendance.service";
-import { Program } from "@/types";
-import api from "@/lib/api";
+import { Program, User as TraineeUser, AttendanceRecord } from "@/types"; // Import User as TraineeUser (to distinguish from req.user)
+import api from "@/lib/api"; // For fetching program trainees
 
 const initialFormState = { type: 'online' as 'physical' | 'online', programId: '', title: '', description: '', duration: 120 };
 
@@ -28,59 +33,25 @@ export default function FacilitatorAttendancePage() {
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
   const [isQrModalOpen, setQrModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState<string | boolean>(false); // Tracks loading per session ID or 'create'
+  const [isSubmitting, setIsSubmitting] = useState<string | boolean>(false); // Used for session creation/start/end
   const [formData, setFormData] = useState(initialFormState);
   const [activeQrCode, setActiveQrCode] = useState<string | null>(null);
-  const [geolocationError, setGeolocationError] = useState<string | null>(null); // State for geolocation errors
-
-  // Helper to get current geolocation
-  const getCurrentLocation = useCallback(() => {
-    console.log("Attempting to get geolocation...");
-    setGeolocationError(null); // Clear previous errors
-    return new Promise<{ lat: number; lng: number }>((resolve, reject) => {
-      if (!navigator.geolocation) {
-        const errorMsg = 'Geolocation is not supported by your browser.';
-        console.error("Geolocation FAILED:", errorMsg);
-        reject(new Error(errorMsg));
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          console.log("Geolocation successful:", position.coords.latitude, position.coords.longitude);
-          resolve({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-        },
-        (error) => {
-          let msg = 'Failed to get location. ';
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              msg += 'Please allow location access in your browser settings.';
-              break;
-            case error.POSITION_UNAVAILABLE:
-              msg += 'Location information is unavailable.';
-              break;
-            case error.TIMEOUT:
-              msg += 'Location request timed out.';
-              break;
-            default:
-              msg += `An unknown error occurred (Code: ${error.code}).`;
-          }
-          console.error("Geolocation FAILED:", msg, error);
-          reject(new Error(msg));
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 } // High accuracy, 10s timeout
-      );
-    });
-  }, []);
   
+  // New state for manual attendance marking
+  const [isManualMarkModalOpen, setManualMarkModalOpen] = useState(false);
+  const [selectedSessionForManualMark, setSelectedSessionForManualMark] = useState<ClassSession | null>(null);
+  const [traineesForManualMark, setTraineesForManualMark] = useState<
+    (TraineeUser & { currentAttendance?: AttendanceRecord | null; manualStatus?: string; manualReason?: string; isSaving?: boolean })[]
+  >([]);
+  const [manualMarkLoading, setManualMarkLoading] = useState(false);
+
+
   const fetchSessionsAndPrograms = useCallback(async () => {
     setLoading(true);
     try {
       const [sessionsData, programsData] = await Promise.all([
         getFacilitatorSessions(),
-        api.get('/programs').then(res => res.data.data)
+        api.get('/programs').then(res => res.data.data) // Fetch all programs
       ]);
       setSessions(sessionsData);
       setPrograms(programsData);
@@ -92,42 +63,14 @@ export default function FacilitatorAttendancePage() {
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting('create'); 
-    setGeolocationError(null); 
-
+    setIsSubmitting(true);
     try {
-      let locationData: { latitude?: number; longitude?: number; } = {};
-      if (formData.type === 'physical') {
-        toast.info("Getting your current location to set as class location for new session...");
-        try {
-          const location = await getCurrentLocation();
-          locationData = { latitude: location.lat, longitude: location.lng };
-          toast.success("Location acquired for new session!");
-        } catch (geoErr: any) {
-          setGeolocationError(geoErr.message);
-          toast.error(geoErr.message);
-          setIsSubmitting(false);
-          return; // Stop the creation if geolocation fails
-        }
-      }
-
-      console.log('Frontend: Sending createSession request with data:', { 
-        ...formData, 
-        startTime: new Date().toISOString(), 
-        ...locationData 
-      });
-
-      const newSession = await createSession({ 
-        ...formData, 
-        startTime: new Date().toISOString(), 
-        ...locationData 
-      });
+      const newSession = await createSession({ ...formData, startTime: new Date().toISOString() });
       setSessions(prev => [newSession, ...prev]);
       toast.success("Session created successfully!");
       setCreateModalOpen(false);
       setFormData(initialFormState);
     } catch (err: any) {
-      console.error('Frontend: Error creating session:', err.response?.data || err.message);
       toast.error(err.response?.data?.message || "Failed to create session.");
     } finally {
       setIsSubmitting(false);
@@ -136,36 +79,21 @@ export default function FacilitatorAttendancePage() {
 
   const handleStartSession = async (session: ClassSession) => {
     setIsSubmitting(session.sessionId);
-    setGeolocationError(null); 
-
     try {
       let updatedSession;
       if (session.type === 'online') {
-        console.log('Frontend: Sending startOnlineSession request for session:', session.sessionId);
         const result = await startOnlineSession(session.sessionId);
         updatedSession = result.session;
-        setActiveQrCode(result.qrCode); 
-        setQrModalOpen(true);
-      } else { // Physical session
-        toast.info("Getting your current location to start the physical session...");
-        let location;
-        try {
-          location = await getCurrentLocation();
-        } catch (geoErr: any) {
-          setGeolocationError(geoErr.message);
-          toast.error(geoErr.message);
-          setIsSubmitting(false);
-          return; // Stop the start action if geolocation fails
-        }
-        
-        console.log('Frontend: Sending startPhysicalSession request for session:', session.sessionId, 'with location:', location);
-        updatedSession = await startPhysicalSession(session.sessionId, location.lat, location.lng);
-        toast.success("Location acquired and session started!");
+      } else {
+        // For physical sessions, need to provide latitude/longitude.
+        // For demo, we'll use dummy values. In a real app, this comes from facilitator's device.
+        const dummyLat = -1.9441; // Example: Kigali
+        const dummyLng = 30.0619; // Example: Kigali
+        updatedSession = await startPhysicalSession(session.sessionId, { latitude: dummyLat, longitude: dummyLng }); 
       }
       toast.success(`Session "${updatedSession.title}" is now active!`);
       setSessions(prev => prev.map(s => s._id === updatedSession._id ? updatedSession : s));
     } catch (err: any) {
-      console.error('Frontend: Error starting session:', err.response?.data || err.message);
       toast.error(err.response?.data?.message || `Failed to start session.`);
     } finally {
       setIsSubmitting(false);
@@ -193,8 +121,84 @@ export default function FacilitatorAttendancePage() {
     });
   };
 
+  // Manual marking logic
+  const handleOpenManualMarkModal = useCallback(async (session: ClassSession) => {
+    setSelectedSessionForManualMark(session);
+    setManualMarkModalOpen(true);
+    setManualMarkLoading(true);
+    try {
+      // Fetch trainees for the session's program
+      const programDetails = await api.get(`/programs/${session.programId._id}`);
+      const programTrainees: TraineeUser[] = programDetails.data.data.trainees || [];
+      
+      // Fetch current attendance for this session
+      const { attendance: currentAttendanceRecords } = await getSessionAttendance(session.sessionId);
+      const attendanceMap = new Map(currentAttendanceRecords.map(rec => [rec.userId._id, rec]));
+
+      // Combine trainees with their current attendance status
+      const traineesWithStatus = programTrainees.map(trainee => ({
+        ...trainee,
+        currentAttendance: attendanceMap.get(trainee._id) || null,
+        manualStatus: attendanceMap.get(trainee._id)?.status || 'Absent', // Default to absent if no record
+        manualReason: attendanceMap.get(trainee._id)?.reason || '',
+      }));
+
+      setTraineesForManualMark(traineesWithStatus);
+
+    } catch (err) {
+      toast.error("Failed to load trainees or attendance for manual marking.");
+      console.error("Manual mark data fetch error:", err);
+    } finally {
+      setManualMarkLoading(false);
+    }
+  }, []);
+
+  const handleManualStatusChange = (userId: string, status: string) => {
+    setTraineesForManualMark(prev => prev.map(t => 
+      t._id === userId ? { ...t, manualStatus: status } : t
+    ));
+  };
+
+  const handleManualReasonChange = (userId: string, reason: string) => {
+    setTraineesForManualMark(prev => prev.map(t => 
+      t._id === userId ? { ...t, manualReason: reason } : t
+    ));
+  };
+
+  const handleSaveManualMark = async (trainee: typeof traineesForManualMark[0]) => {
+    if (!selectedSessionForManualMark) return;
+
+    // Set saving state for the specific trainee
+    setTraineesForManualMark(prev => prev.map(t => 
+      t._id === trainee._id ? { ...t, isSaving: true } : t
+    ));
+
+    try {
+      await markManualStudentAttendance(
+        selectedSessionForManualMark.sessionId,
+        trainee._id,
+        trainee.manualStatus!, // Assumed to be set by dropdown
+        trainee.manualReason!
+      );
+      toast.success(`Attendance for ${trainee.name} updated to ${trainee.manualStatus}.`);
+      // Re-fetch data for the modal to ensure consistency
+      if (selectedSessionForManualMark) {
+        handleOpenManualMarkModal(selectedSessionForManualMark); 
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || `Failed to update attendance for ${trainee.name}.`);
+    } finally {
+      setTraineesForManualMark(prev => prev.map(t => 
+        t._id === trainee._id ? { ...t, isSaving: false } : t
+      ));
+    }
+  };
+
   const activeOrScheduledSessions = useMemo(() => sessions.filter(s => s.status === 'active' || s.status === 'scheduled'), [sessions]);
   const completedSessions = useMemo(() => sessions.filter(s => s.status === 'completed'), [sessions]);
+
+  // Helper to get initials
+  const getInitials = (name: string = "") => name.split(' ').map(n => n[0]).join('').toUpperCase();
 
   return (
     <div className="space-y-6">
@@ -205,15 +209,6 @@ export default function FacilitatorAttendancePage() {
         </div>
         <Button onClick={() => setCreateModalOpen(true)}><Plus className="mr-2 h-4 w-4" /> Create Session</Button>
       </div>
-
-      {geolocationError && (
-        <Alert variant="destructive">
-          <Info className="h-4 w-4" />
-          <AlertDescription>
-            {geolocationError}
-          </AlertDescription>
-        </Alert>
-      )}
 
       <Tabs defaultValue="active">
         <TabsList className="grid w-full grid-cols-2">
@@ -235,18 +230,21 @@ export default function FacilitatorAttendancePage() {
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 {session.status === 'scheduled' && (
-                                    <Button 
-                                        className="w-full" 
-                                        onClick={() => handleStartSession(session)} 
-                                        disabled={isSubmitting === session.sessionId}
-                                    >
-                                        {isSubmitting === session.sessionId ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Play className="mr-2 h-4 w-4" />} 
-                                        Start Session
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        <Button className="w-full" onClick={() => handleStartSession(session)} disabled={!!isSubmitting}>
+                                            {!!isSubmitting && isSubmitting === session.sessionId ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Play className="mr-2 h-4 w-4" />} Start Session
+                                        </Button>
+                                        <Button variant="outline" onClick={() => handleOpenManualMarkModal(session)} disabled={manualMarkLoading}>
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 )}
                                 {session.status === 'active' && (
                                     <div className="flex gap-2">
                                         {session.type === 'online' && <Link href={`/dashboard/classroom/${session.sessionId}`} className="flex-1"><Button className="w-full"><Eye className="mr-2 h-4 w-4" /> Classroom</Button></Link>}
+                                        <Button variant="outline" onClick={() => handleOpenManualMarkModal(session)} disabled={manualMarkLoading}>
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
                                         <Button variant="destructive" size={session.type === 'online' ? 'default' : 'lg'} className="flex-1" onClick={() => handleEndSession(session)} disabled={isSubmitting === session.sessionId}>
                                             {isSubmitting === session.sessionId ? <Loader2 className="h-4 w-4 animate-spin"/> : <StopCircle className="mr-2 h-4 w-4" />} End Session
                                         </Button>
@@ -268,7 +266,14 @@ export default function FacilitatorAttendancePage() {
                             <CardContent className="space-y-3">
                                  <Badge variant="outline">Completed</Badge>
                                  <p className="text-sm text-muted-foreground">Ended on: {new Date(session.updatedAt).toLocaleDateString()}</p>
-                                 <Button variant="outline" className="w-full"><Download className="mr-2 h-4 w-4" /> View Report</Button>
+                                 {/* MODIFIED: Link to the new attendance report page */}
+                                 <Link href={`/dashboard/Facilitator/attendance-report/${session.sessionId}`} passHref>
+                                    <Button variant="outline" className="w-full"><Download className="mr-2 h-4 w-4" /> View Report</Button>
+                                 </Link>
+                                 {/* Manual Mark button for completed sessions as well */}
+                                 <Button variant="outline" className="w-full" onClick={() => handleOpenManualMarkModal(session)} disabled={manualMarkLoading}>
+                                     <Edit className="mr-2 h-4 w-4" /> Manual Mark
+                                 </Button>
                             </CardContent>
                         </Card>
                     ))}
@@ -286,12 +291,109 @@ export default function FacilitatorAttendancePage() {
                  <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData(f => ({...f, title: e.target.value}))} required/></div>
                  <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData(f => ({...f, description: e.target.value}))} /></div>
                  <div className="space-y-2"><Label>Duration (minutes)</Label><Input type="number" value={formData.duration} onChange={(e) => setFormData(f => ({...f, duration: parseInt(e.target.value)}))} required/></div>
-                 <DialogFooter><Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>Cancel</Button><Button type="submit" disabled={isSubmitting === 'create'}>{isSubmitting === 'create' && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Create Session</Button></DialogFooter>
+                 <DialogFooter><Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>Cancel</Button><Button type="submit" disabled={!!isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Create Session</Button></DialogFooter>
             </form>
         </DialogContent>
       </Dialog>
       <Dialog open={isQrModalOpen} onOpenChange={setQrModalOpen}>
         <DialogContent><DialogHeader><DialogTitle>Session QR Code</DialogTitle></DialogHeader><div className="flex justify-center p-4">{activeQrCode ? <img src={activeQrCode} alt="QR Code" /> : <Loader2 className="h-16 w-16 animate-spin"/>}</div></DialogContent>
+      </Dialog>
+
+      {/* Manual Attendance Marking Modal */}
+      <Dialog open={isManualMarkModalOpen} onOpenChange={setManualMarkModalOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                  <DialogTitle>Manual Attendance for {selectedSessionForManualMark?.title}</DialogTitle>
+                  <DialogDescription>
+                      Mark or adjust attendance for individual students in this session.
+                      {selectedSessionForManualMark?.programId?.name && (
+                          <span className="block mt-1">Program: {selectedSessionForManualMark.programId.name}</span>
+                      )}
+                  </DialogDescription>
+              </DialogHeader>
+              {manualMarkLoading ? (
+                  <div className="py-8 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div>
+              ) : (
+                  <Table>
+                      <TableHeader>
+                          <TableRow>
+                              <TableHead>Student</TableHead>
+                              <TableHead>Current Status</TableHead>
+                              <TableHead>Mark As</TableHead>
+                              <TableHead>Reason (Optional)</TableHead>
+                              <TableHead>Actions</TableHead>
+                          </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                          {traineesForManualMark.length === 0 ? (
+                              <TableRow><TableCell colSpan={5} className="text-center py-6">No trainees found for this program.</TableCell></TableRow>
+                          ) : (
+                              traineesForManualMark.map(trainee => (
+                                  <TableRow key={trainee._id}>
+                                      <TableCell>
+                                          <div className="flex items-center gap-2">
+                                              <Avatar className="h-8 w-8">
+                                                  <AvatarFallback>{getInitials(trainee.name)}</AvatarFallback>
+                                              </Avatar>
+                                              <div>
+                                                  <div className="font-medium">{trainee.name}</div>
+                                                  <div className="text-sm text-muted-foreground">{trainee.email}</div>
+                                              </div>
+                                          </div>
+                                      </TableCell>
+                                      <TableCell>
+                                          {trainee.currentAttendance ? (
+                                              <Badge variant={
+                                                  trainee.currentAttendance.status === 'Present' ? 'default' :
+                                                  trainee.currentAttendance.status === 'Late' ? 'outline' :
+                                                  trainee.currentAttendance.status === 'Absent' ? 'destructive' : 'secondary'
+                                              }>
+                                                  {trainee.currentAttendance.status}
+                                              </Badge>
+                                          ) : (
+                                              <Badge variant="outline">No Record</Badge>
+                                          )}
+                                      </TableCell>
+                                      <TableCell>
+                                          <Select value={trainee.manualStatus} onValueChange={(val) => handleManualStatusChange(trainee._id, val)}>
+                                              <SelectTrigger className="w-32 h-9">
+                                                  <SelectValue placeholder="Select Status" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                  <SelectItem value="Present">Present</SelectItem>
+                                                  <SelectItem value="Absent">Absent</SelectItem>
+                                                  <SelectItem value="Late">Late</SelectItem>
+                                                  <SelectItem value="Excused">Excused</SelectItem>
+                                              </SelectContent>
+                                          </Select>
+                                      </TableCell>
+                                      <TableCell>
+                                          <Input 
+                                              value={trainee.manualReason} 
+                                              onChange={(e) => handleManualReasonChange(trainee._id, e.target.value)} 
+                                              placeholder="Reason..." 
+                                              className="h-9"
+                                          />
+                                      </TableCell>
+                                      <TableCell>
+                                          <Button 
+                                              size="sm" 
+                                              onClick={() => handleSaveManualMark(trainee)} 
+                                              disabled={trainee.isSaving}
+                                          >
+                                              {trainee.isSaving ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>}
+                                          </Button>
+                                      </TableCell>
+                                  </TableRow>
+                              ))
+                          )}
+                      </TableBody>
+                  </Table>
+              )}
+              <DialogFooter>
+                  <Button variant="outline" onClick={() => setManualMarkModalOpen(false)}>Close</Button>
+              </DialogFooter>
+          </DialogContent>
       </Dialog>
     </div>
   );

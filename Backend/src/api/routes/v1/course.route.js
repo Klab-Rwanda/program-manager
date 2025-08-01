@@ -3,7 +3,9 @@ import * as courseController from '../../controllers/course.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole } from '../../middlewares/role.middleware.js';
 import { upload } from '../../middlewares/upload.middleware.js';
-
+import { generateSignedFileUrl } from './public-files.route.js';
+import { Course } from '../../models/course.model.js';
+import { asyncHandler } from '../../../utils/asyncHandler.js';
 const router = Router();
 router.use(verifyJWT);
 
@@ -243,5 +245,36 @@ router.route('/:courseId')
     router.route('/all').get(
     checkRole(['SuperAdmin']),
     courseController.getAllCoursesAdmin
+);
+
+router.route('/:courseId/file-access').get(
+    verifyJWT, 
+    checkRole(['SuperAdmin', 'ProgramManager', 'Facilitator', 'Trainee']), 
+    asyncHandler(async (req, res) => {
+        const { courseId } = req.params;
+        
+        // Fetch the course to get the file path
+        const course = await Course.findById(courseId);
+        if (!course) {
+            throw new ApiError(404, "Course not found");
+        }
+
+        // Additional authorization checks can go here
+        // For example, check if user has access to this specific course
+        
+        // Generate signed URL for the course file
+        const signedToken = generateSignedFileUrl(course.contentUrl, 60); // Valid for 1 hour
+        
+        const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000';
+        const signedUrl = `${API_BASE_URL}/api/v1/public-files/serve?token=${signedToken}`;
+        
+        res.status(200).json({
+            success: true,
+            data: {
+                fileUrl: signedUrl,
+                expiresIn: 3600 // 1 hour in seconds
+            }
+        });
+    })
 );
 export default router;
