@@ -926,6 +926,46 @@ const getProgramAttendanceSummary = asyncHandler(async (req, res) => {
 });
 
 
+const getProgramSessionCounts = asyncHandler(async (req, res) => {
+    const { programId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(programId)) {
+        throw new ApiError(400, "Invalid Program ID.");
+    }
+
+    const program = await Program.findById(programId);
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
+    }
+
+    // Ensure the requesting facilitator is associated with this program
+    if (req.user.role === 'Facilitator' && !program.facilitators.includes(req.user._id)) {
+        throw new ApiError(403, "Forbidden: You are not a facilitator for this program.");
+    }
+
+    const totalSessions = await ClassSession.countDocuments({ programId });
+    const completedSessions = await ClassSession.countDocuments({ programId, status: 'completed' });
+    const activeSessions = await ClassSession.countDocuments({ programId, status: 'active' });
+    const scheduledSessions = await ClassSession.countDocuments({ programId, status: 'scheduled' });
+
+    // Find the next upcoming session that is scheduled or active
+    const nextSession = await ClassSession.findOne({
+        programId,
+        status: { $in: ['scheduled', 'active'] },
+        startTime: { $gte: new Date() } // Future sessions
+    }).sort({ startTime: 1 }) // Closest first
+      .select('startTime');
+
+    return res.status(200).json(new ApiResponse(200, {
+        totalSessions,
+        completedSessions,
+        activeSessions,
+        scheduledSessions,
+        nextSessionTime: nextSession ? nextSession.startTime : null,
+    }, "Program session counts fetched successfully."));
+});
+
+
 export {
     // Facilitator
     createSession,
@@ -952,5 +992,6 @@ export {
     markManualStudentAttendance,
     getProgramAttendanceReport,
     getMyAttendanceHistory,
+    getProgramSessionCounts,
     getProgramAttendanceSummary,
 };

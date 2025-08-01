@@ -71,9 +71,14 @@ export const getFacilitatorDashboardStats = asyncHandler(async (req, res) => {
 });
 
 export const getAdminOverview = asyncHandler(async (req, res) => {
-    // Determine if the user is a manager to filter some stats
     const isManager = req.user.role === 'Program Manager' ;
     const managerQuery = isManager ? { programManager: req.user._id } : {};
+
+    // Get IDs of programs managed by the current PM, if applicable
+    let managedProgramIds = [];
+    if (isManager) {
+        managedProgramIds = (await Program.find({ programManager: req.user._id }).select('_id')).map(p => p._id);
+    }
 
     const [
         totalPrograms,
@@ -81,7 +86,7 @@ export const getAdminOverview = asyncHandler(async (req, res) => {
         pendingPrograms,
         totalTrainees,
         totalFacilitators,
-        pendingCourses,
+        pendingCourses, // This will now be specific to managed programs for PMs
         recentLogs,
         programsEndingSoon,
     ] = await Promise.all([
@@ -90,7 +95,11 @@ export const getAdminOverview = asyncHandler(async (req, res) => {
         Program.countDocuments({ ...managerQuery, status: 'PendingApproval' }),
         User.countDocuments({ role: 'Trainee', isActive: true }), // System-wide for now
         User.countDocuments({ role: 'Facilitator', isActive: true }), // System-wide for now
-        Course.countDocuments({ status: 'PendingApproval' }), // System-wide for now
+        // For Program Manager, filter pending courses by programs they manage
+        // For SuperAdmin, managedProgramIds will be empty, so it will count all pending courses.
+        isManager 
+            ? Course.countDocuments({ program: { $in: managedProgramIds }, status: 'PendingApproval' }) 
+            : Course.countDocuments({ status: 'PendingApproval' }),
         Log.find({}).sort({ createdAt: -1 }).limit(5).populate('user', 'name role'),
         Program.find({
             ...managerQuery,
@@ -112,6 +121,8 @@ export const getAdminOverview = asyncHandler(async (req, res) => {
     
     return res.status(200).json(new ApiResponse(200, stats, "Admin overview fetched successfully."));
 });
+
+
 
 /**
  * @desc    Get recent activity for dashboard.
