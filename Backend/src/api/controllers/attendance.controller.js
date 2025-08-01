@@ -210,6 +210,50 @@ const markPhysicalAttendance = asyncHandler(async (req, res) => {
     return res.status(201).json(new ApiResponse(201, { attendance }));
 });
 
+/**
+ * @desc    Delete a session.
+ * @route   DELETE /api/v1/attendance/sessions/:sessionId
+ * @access  Private (Facilitator)
+ */
+ const deleteSession = asyncHandler(async (req, res) => {
+    const { sessionId: idFromParams } = req.params;
+    const facilitatorId = req.user._id;
+
+    // Build query to find the session and ensure facilitator owns it
+    const query = buildSessionQuery(idFromParams, { facilitatorId: facilitatorId });
+    const session = await ClassSession.findOne(query).populate('programId', 'name');
+
+    if (!session) {
+        throw new ApiError(404, "Session not found or you are not authorized to delete it.");
+    }
+
+    // --- REVISED LOGIC FOR DELETION ---
+    // Only allow deletion if the session is NOT 'active'.
+    // This allows 'scheduled', 'completed', and 'cancelled' sessions to be deleted.
+    if (session.status === 'active') {
+        throw new ApiError(400, "Cannot delete an active session. Please end it first.");
+    }
+    // You could add a specific check here if you ONLY want 'completed' sessions to be deletable:
+    // if (session.status !== 'completed') {
+    //     throw new ApiError(400, "Only completed sessions can be deleted from history.");
+    // }
+    // Based on your latest request ("I want to be able to delete the session created in the past so that i can only delete the completed session"),
+    // let's explicitly allow ONLY 'completed' sessions for deletion here:
+    if (session.status !== 'completed') {
+        throw new ApiError(400, `Session with status '${session.status}' cannot be deleted. Only completed sessions can be deleted.`);
+    }
+    // --- END REVISED LOGIC ---
+
+    // Delete associated attendance records (optional, depending on data retention policy)
+    // In a real system, you might want to consider soft-deletes or archiving for audit trails.
+    await Attendance.deleteMany({ sessionId: session._id });
+
+    // Delete the session itself
+    await session.deleteOne();
+
+    return res.status(200).json(new ApiResponse(200, {}, "Session deleted successfully."));
+});
+
 
 // ===================================================================
 //   TRAINEE ENDPOINTS
@@ -337,28 +381,86 @@ const getSessionAttendance = asyncHandler(async (req, res) => {
     const query = buildSessionQuery(idFromParams);
     
     const session = await ClassSession.findOne(query)
-        .populate('programId', 'name')
+        .populate('programId', 'name trainees') // Populate trainees in the program
         .populate('facilitatorId', 'name email');
 
     if (!session) throw new ApiError(404, "Session not found.");
     
-    const attendance = await Attendance.find({ sessionId: session._id })
+    // Fetch all current attendance records for this session
+    const currentAttendanceRecords = await Attendance.find({ sessionId: session._id })
         .populate('userId', 'name email')
         .populate('markedBy', 'name')
         .sort({ timestamp: -1 });
 
-    return res.status(200).json(new ApiResponse(200, { session, attendance }, "Attendance report retrieved successfully."));
+    const attendanceMap = new Map();
+    currentAttendanceRecords.forEach(record => {
+        // Only keep the latest status for a user for this session
+        // This ensures if someone was marked 'Absent' then 'Present', 'Present' is kept.
+        if (!attendanceMap.has(record.userId._id.toString()) || new Date(record.timestamp) > new Date(attendanceMap.get(record.userId._id.toString()).timestamp)) {
+            attendanceMap.set(record.userId._id.toString(), record);
+        }
+    });
+
+    const populatedTrainees = await User.find({ 
+        _id: { $in: session.programId.trainees },
+        role: 'Trainee'
+    }).select('name email');
+
+
+    // Prepare a comprehensive list of all trainees and their status for this session
+    const detailedAttendance = populatedTrainees.map(trainee => {
+        const record = attendanceMap.get(trainee._id.toString());
+        return {
+            trainee: {
+                _id: trainee._id,
+                name: trainee.name,
+                email: trainee.email
+            },
+            status: record ? record.status : 'Absent', // Default to 'Absent' if no record
+            method: record ? record.method : 'N/A',
+            timestamp: record ? record.timestamp : null,
+            reason: record ? record.reason : null,
+            markedBy: record?.markedBy ? record.markedBy.name : (record?.method === 'qr_code' || record?.method === 'geolocation' ? 'Self' : 'N/A')
+        };
+    });
+
+
+    return res.status(200).json(new ApiResponse(200, { session, attendance: detailedAttendance }, "Attendance report retrieved successfully."));
 });
 
 const getFacilitatorSessions = asyncHandler(async (req, res) => {
-    const sessions = await ClassSession.find({ facilitatorId: req.user._id }).sort({ startTime: -1 }).populate('programId', 'name');
+    const { startDate, endDate } = req.query;
+    let query = { facilitatorId: req.user._id };
+
+    if (startDate && endDate) {
+        const start = new Date(startDate);
+        start.setUTCHours(0, 0, 0, 0); // Ensure start of day UTC
+        const end = new Date(endDate);
+        end.setUTCHours(23, 59, 59, 999); // Ensure end of day UTC
+        query.startTime = { $gte: start, $lte: end };
+    }
+
+    const sessions = await ClassSession.find(query).sort({ startTime: -1 }).populate('programId', 'name');
     return res.status(200).json(new ApiResponse(200, sessions, "Sessions retrieved successfully."));
 });
 
 const getTraineeSessions = asyncHandler(async (req, res) => {
+    const { startDate, endDate } = req.query;
+    
     const programs = await Program.find({ trainees: req.user._id });
     const programIds = programs.map(p => p._id);
-    const sessions = await ClassSession.find({ programId: { $in: programIds } }).sort({ startTime: -1 }).populate('programId', 'name');
+    
+    let query = { programId: { $in: programIds } };
+
+    if (startDate && endDate) {
+        const start = new Date(startDate);
+        start.setUTCHours(0, 0, 0, 0); // Ensure start of day UTC
+        const end = new Date(endDate);
+        end.setUTCHours(23, 59, 59, 999); // Ensure end of day UTC
+        query.startTime = { $gte: start, $lte: end };
+    }
+
+    const sessions = await ClassSession.find(query).sort({ startTime: -1 }).populate('programId', 'name');
     return res.status(200).json(new ApiResponse(200, sessions, "Your sessions retrieved successfully."));
 });
 
@@ -374,7 +476,7 @@ const markManualStudentAttendance = asyncHandler(async (req, res) => {
     if (!userId) throw new ApiError(400, "User ID is required.");
     // Populate programId and facilitatorId for validation and notifications
     const session = await ClassSession.findOne({ sessionId })
-                                        .populate('programId', 'name trainees') // Added trainees to populate
+                                        .populate('programId', 'name trainees programManager') // Added programManager
                                         .populate('facilitatorId', 'name email'); 
     if (!session) throw new ApiError(404, "Session not found.");
     
@@ -384,12 +486,12 @@ const markManualStudentAttendance = asyncHandler(async (req, res) => {
     if (req.user.role === 'SuperAdmin') {
         authorized = true;
     } 
-    
+    // Program Manager can mark for sessions in programs they manage
     else if (req.user.role === 'Program Manager' && session.programId && session.programId.programManager?.toString() === req.user._id.toString()) {
         authorized = true;
     }
-   
-    else if (req.user.role === 'Facilitator' && session.facilitatorId?.toString() === req.user._id.toString()) {
+    // Facilitator can mark for sessions they created
+    else if (req.user.role === 'Facilitator' && session.facilitatorId?._id.toString() === req.user._id.toString()) {
         authorized = true;
     }
 
@@ -397,25 +499,28 @@ const markManualStudentAttendance = asyncHandler(async (req, res) => {
         throw new ApiError(403, "You are not authorized to manually mark attendance for this session.");
     }
     
+    // Ensure the user being marked is actually enrolled in the program
     const isTraineeEnrolledInProgram = session.programId.trainees.some(t => t.toString() === userId);
     if (!isTraineeEnrolledInProgram) {
         throw new ApiError(400, "The specified user is not enrolled in this session's program.");
     }
 
-    const todayDateString = new Date(session.startTime).toISOString().split('T')[0];
+    const sessionStartDateString = new Date(session.startTime).toISOString().split('T')[0];
 
     const attendance = await Attendance.findOneAndUpdate(
-        { userId: userId, sessionId: session._id }, // Query by sessionId (unique index)
+        { userId: userId, sessionId: session._id }, // Query fields (define uniqueness)
         { 
             $set: { 
                 status, 
                 reason: reason || null, 
                 method: 'manual', 
                 markedBy: req.user._id, 
-                sessionId: session._id,
-                programId: session.programId._id // Ensure programId is correctly set
+                timestamp: new Date() // Update timestamp whenever record is modified
             },
-            $setOnInsert: { userId: userId, programId: session.programId._id, date: todayDateString }
+            $setOnInsert: { // These fields are only set if a new document is inserted
+                programId: session.programId._id, 
+                date: sessionStartDateString // Date of the session, not necessarily 'today'
+            }
         },
         { upsert: true, new: true, runValidators: true } // runValidators for enum status
     );
@@ -605,24 +710,93 @@ const getMyAttendanceHistory = asyncHandler(async (req, res) => {
     const traineeId = req.user._id;
     const { programId, startDate, endDate } = req.query; 
 
-    let query = { userId: traineeId };
-    if (programId && programId !== 'all') { 
-        query.programId = programId;
-    }
-    if (startDate && endDate) {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        query.timestamp = { $gte: start, $lte: end }; 
+    // 1. Determine the programs the trainee is enrolled in
+    const enrolledPrograms = await Program.find({ trainees: traineeId }).select('_id name');
+    const enrolledProgramIds = enrolledPrograms.map(p => p._id);
+
+    // Filter by specific program if provided
+    let programFilterQuery = { $in: enrolledProgramIds };
+    if (programId && programId !== 'all') {
+        if (!enrolledProgramIds.some(id => id.toString() === programId)) {
+            // If the trainee is not enrolled in the requested program, return empty.
+            return res.status(200).json(new ApiResponse(200, [], "Not enrolled in the specified program."));
+        }
+        programFilterQuery = new mongoose.Types.ObjectId(programId);
     }
 
-    const attendanceRecords = await Attendance.find(query)
-        .populate('programId', 'name')
-        .sort({ timestamp: -1 }); 
+    // 2. Determine date range for sessions
+    const queryStartDate = startDate ? new Date(startDate) : new Date(0); // Epoch for very old dates
+    queryStartDate.setUTCHours(0, 0, 0, 0);
+
+    const queryEndDate = endDate ? new Date(endDate) : new Date(); // Today/now
+    queryEndDate.setUTCHours(23, 59, 59, 999);
+
+    // 3. Find all relevant sessions (active or completed in the past) for the trainee's programs within the date range
+    const relevantSessions = await ClassSession.find({
+        programId: programFilterQuery,
+        startTime: { $gte: queryStartDate, $lte: queryEndDate },
+        status: { $in: ['active', 'completed'] } // Include active and completed sessions
+    }).populate('programId', 'name') // Populate program name for display
+      .sort({ startTime: 1 }); // Sort by start time ascending
+
+    // 4. Fetch all attendance records for the trainee for these relevant sessions
+    const attendanceRecords = await Attendance.find({
+        userId: traineeId,
+        sessionId: { $in: relevantSessions.map(s => s._id) }
+    }).sort({ timestamp: -1 }); // Get latest records first if duplicates (though unique index prevents this)
+
+    // 5. Create a map for quick lookup of attendance by session ID
+    const attendanceMap = new Map();
+    attendanceRecords.forEach(record => {
+        attendanceMap.set(record.sessionId.toString(), record);
+    });
+
+    // 6. Construct the final history by iterating through sessions and inferring status
+    const traineeHistory = relevantSessions.map(session => {
+        const record = attendanceMap.get(session._id.toString());
+        
+        // Default to 'Absent' if no record found for the session
+        let status = 'Absent';
+        let method = 'N/A';
+        let timestamp = null;
+        let checkIn = null;
+        let reason = null;
+        let markedBy = null;
+
+        if (record) {
+            status = record.status;
+            method = record.method;
+            timestamp = record.timestamp;
+            checkIn = record.checkIn;
+            reason = record.reason;
+            markedBy = record.markedBy;
+        }
+
+        return {
+            _id: record?._id || new mongoose.Types.ObjectId(), // Use existing _id or generate new for mock records
+            userId: traineeId,
+            sessionId: session._id,
+            programId: session.programId, // Already populated
+            date: new Date(session.startTime).toISOString().split('T')[0], // Date of the session
+            timestamp: timestamp,
+            checkIn: checkIn,
+            location: record?.location || undefined,
+            method: method,
+            status: status,
+            reason: reason,
+            markedBy: markedBy,
+            sessionTitle: session.title, // Add session title for display
+            sessionType: session.type,   // Add session type for display
+            sessionTime: session.startTime // Add session start time for display
+        };
+    });
     
-    return res.status(200).json(new ApiResponse(200, attendanceRecords, "Your attendance history fetched successfully."));
+    // Sort the final history by session date (descending)
+    traineeHistory.sort((a, b) => new Date(b.sessionTime).getTime() - new Date(a.sessionTime).getTime());
+
+    return res.status(200).json(new ApiResponse(200, traineeHistory, "Your attendance history fetched successfully."));
 });
+
 
 
 const endSession = asyncHandler(async (req, res) => {
@@ -676,12 +850,14 @@ const getProgramAttendanceSummary = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Program not found.");
     }
 
+    // Determine the relevant sessions for this period to get total possible attendance days
     const totalSessions = await ClassSession.countDocuments({
         programId: new mongoose.Types.ObjectId(programId),
         startTime: {
             $gte: new Date(startDate),
             $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999)) 
-        }
+        },
+        status: { $in: ['active', 'completed'] } // Only count active/completed sessions
     });
 
     const attendanceSummary = await Attendance.aggregate([
@@ -691,42 +867,23 @@ const getProgramAttendanceSummary = asyncHandler(async (req, res) => {
                 timestamp: { $gte: new Date(startDate), $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999)) } 
             }
         },
-        {
-            $lookup: {
-                from: 'classsessions',
-                localField: 'sessionId',
-                foreignField: '_id',
-                as: 'sessionInfo'
-            }
-        },
-        { $unwind: { path: "$sessionInfo", preserveNullAndEmptyArrays: true } },
+        // Group by user and status to count each status type
         {
             $group: {
-                _id: "$userId",
-                present: { $sum: { $cond: [{ $in: ["$status", ["Present", "Late"]] }, 1, 0] } },
-                absent: { $sum: { $cond: [{ $eq: ["$status", "Absent"] }, 1, 0] } },
-                late: { $sum: { $cond: [{ $eq: ["$status", "Late"] }, 1, 0] } },
-                excused: { $sum: { $cond: [{ $eq: ["$status", "Excused"] }, 1, 0] } },
-                records: {
-                    $push: {
-                        date: "$date",
-                        status: "$status",
-                        timestamp: "$timestamp",
-                        checkIn: "$checkIn",
-                        sessionTitle: "$sessionInfo.title",
-                        method: "$method"
-                    }
-                }
+                _id: { userId: "$userId", status: "$status" },
+                count: { $sum: 1 }
             }
         },
+        // Re-group by user to consolidate all statuses
         {
-            $addFields: {
-                records: {
-                    $sortArray: {
-                        input: "$records",
-                        sortBy: { timestamp: -1 } 
-                    }
-                }
+            $group: {
+                _id: "$_id.userId",
+                present: { $sum: { $cond: [{ $in: ["$_id.status", ["Present", "Late"]] }, "$count", 0] } },
+                absent: { $sum: { $cond: [{ $eq: ["$_id.status", "Absent"] }, "$count", 0] } },
+                late: { $sum: { $cond: [{ $eq: ["$_id.status", "Late"] }, "$count", 0] } },
+                excused: { $sum: { $cond: [{ $eq: ["$_id.status", "Excused"] }, "$count", 0] } },
+                // Store all unique records for detailed view later (optional, might need a different aggregation if performance is an issue)
+                // For this summary, we only need counts, not full records.
             }
         }
     ]);
@@ -736,13 +893,17 @@ const getProgramAttendanceSummary = asyncHandler(async (req, res) => {
     const finalReport = program.trainees.map(trainee => {
         const summary = summaryMap.get(trainee._id.toString());
         const presentCount = summary ? summary.present : 0;
-        const totalPossible = totalSessions > 0 ? totalSessions : 0;
         const excusedCount = summary?.excused || 0;
-        const actualTotalForRate = totalPossible - excusedCount;
+        
+        // Total possible attendance days is based on actual sessions held in the period
+        const totalPossibleAttendanceDays = totalSessions; 
+        
+        // Calculate attendance rate, excluding excused days from the denominator
+        const actualTotalForRate = totalPossibleAttendanceDays - excusedCount;
 
         const attendanceRate = actualTotalForRate > 0 
             ? Math.round((presentCount / actualTotalForRate) * 100) 
-            : 0;
+            : 0; // If no actual days, rate is 0
 
         return {
             userId: trainee._id,
@@ -750,16 +911,16 @@ const getProgramAttendanceSummary = asyncHandler(async (req, res) => {
             email: trainee.email,
             role: trainee.role,
             present: presentCount,
-            absent: summary ? summary.absent : totalPossible - presentCount, 
+            absent: summary ? summary.absent : (totalPossibleAttendanceDays - presentCount - excusedCount), // Default to actual possible absent count
             late: summary ? summary.late : 0,
             excused: excusedCount,
             attendanceRate: attendanceRate < 0 ? 0 : attendanceRate, 
-            records: summary ? summary.records : [],
+            totalPossibleSessions: totalPossibleAttendanceDays // Include this for clarity
         };
     });
 
     res.status(200).json(new ApiResponse(200, {
-        totalSessions,
+        totalSessions, // Total number of sessions in the selected period for the program
         report: finalReport
     }));
 });
@@ -772,6 +933,7 @@ export {
     startPhysicalSession,
     markPhysicalAttendance,
     openQrForSession,
+    deleteSession, // Added deleteSession
     
     // Trainee
     markQRAttendance,

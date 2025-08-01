@@ -385,24 +385,28 @@ export const getRoadmapAssignmentsWithMarks = asyncHandler(async (req, res) => {
 export const getRoadmapsByCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     
-    console.log('getRoadmapsByCourse called with courseId:', courseId);
-    console.log('User:', req.user);
-    
     // Find the course and get its program
     const course = await Course.findById(courseId).populate('program', 'name');
     if (!course) {
-        console.log('Course not found for ID:', courseId);
-        throw new ApiError(404, "Course not found");
+        throw new ApiError(404, "Course not found.");
     }
 
-    console.log('Found course:', course.title, 'Program:', course.program.name);
-
     // Get all roadmaps for this course's program
+    // Populate relevant fields and use .lean() for efficiency before manual topic population
     const roadmaps = await Roadmap.find({ program: course.program._id })
         .populate('facilitator', 'name email')
-        .sort({ weekNumber: 1 });
+        .populate('course', 'title') // Populate course title for convenience
+        .populate('program', 'name') // Populate program name for convenience
+        .sort({ weekNumber: 1 })
+        .lean();
 
-    console.log('Found roadmaps:', roadmaps.length);
+    // Manually populate topics for each roadmap
+    const populatedRoadmaps = await Promise.all(
+        roadmaps.map(async (roadmap) => {
+            const topics = await Topic.find({ roadmap: roadmap._id }).sort({ createdAt: 1 });
+            return { ...roadmap, topics };
+        })
+    );
 
     return res.status(200).json(new ApiResponse(200, {
         course: {
@@ -410,10 +414,9 @@ export const getRoadmapsByCourse = asyncHandler(async (req, res) => {
             title: course.title,
             program: course.program.name
         },
-        roadmaps: roadmaps
+        roadmaps: populatedRoadmaps
     }, "Roadmaps for course fetched successfully."));
 });
-
 
 export const approveRoadmap = asyncHandler(async (req, res) => {
     const { roadmapId } = req.params;

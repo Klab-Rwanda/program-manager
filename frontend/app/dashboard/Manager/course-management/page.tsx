@@ -11,18 +11,13 @@ import {
     User, 
     BookOpen, 
     Inbox,
-    Filter,
     Search,
     AlertCircle,
     Clock,
     CheckCircle,
     XCircle,
-    GraduationCap, // Not used, but was in original
-    Calendar, // Not used, but was in original
-    BarChart3, // Not used, but was in original
-    Map, // Not used, but was in original
-    Target, // Not used, but was in original
-    RefreshCw
+    RefreshCw,
+    Eye // Added Eye icon for View Details
 } from "lucide-react";
 import { 
     getAllRoadmaps, 
@@ -30,7 +25,7 @@ import {
     getRoadmapAssignmentsWithMarks,
     approveRoadmap,
     rejectRoadmap,
-    getPendingApprovalRoadmaps // Not used in this specific file, but imported
+    // getPendingApprovalRoadmaps is imported but not used directly here
 } from "@/lib/services/roadmap.service";
 import { Course, Roadmap, RoadmapAssignmentsData, Program, User as UserType } from "@/types"; // Import necessary types
 import { Button } from "@/components/ui/button";
@@ -52,41 +47,47 @@ import {
     approveCourse,
     rejectCourse
 } from "@/lib/services/course.service";
+// Removed import for getProgramById from program.service as it's not directly needed here
+import { getMyRoadmaps } from "@/lib/services/roadmap.service"; // Re-using this to get a single full roadmap
 
 export default function CourseManagementPage() {
     const { user, loading: authLoading } = useAuth();
-    const [courses, setCourses] = useState<Course[]>([]);
-    const [allRoadmaps, setAllRoadmaps] = useState<Roadmap[]>([]);
+    // Courses displayed in the "Course Management" tab
+    const [coursesForManagement, setCoursesForManagement] = useState<Course[]>([]);
+    // All relevant courses (especially "Approved" ones) for Assignment tab dropdowns
+    const [allApprovedCourses, setAllApprovedCourses] = useState<Course[]>([]); 
+    const [allRoadmaps, setAllRoadmaps] = useState<Roadmap[]>([]); // All roadmaps accessible to manager
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     // Course management states
-    const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-    const [isRejectCourseModalOpen, setRejectCourseModalOpen] = useState(false); // Renamed to avoid clash
+    const [selectedCourseForAction, setSelectedCourseForAction] = useState<Course | null>(null);
+    const [isRejectCourseModalOpen, setRejectCourseModalOpen] = useState(false);
     const [rejectionReason, setRejectionReason] = useState("");
-    const [isProcessingCourseAction, setIsProcessingCourseAction] = useState<string | null>(null); // For per-button loading state
+    const [isProcessingCourseAction, setIsProcessingCourseAction] = useState<string | null>(null);
 
     // Roadmap management states
-    const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null); // Renamed to avoid clash
-    const [isRejectRoadmapModalOpen, setRejectRoadmapModalOpen] = useState(false); // Renamed to avoid clash
+    const [selectedRoadmapForAction, setSelectedRoadmapForAction] = useState<Roadmap | null>(null); // To store full roadmap object for action
+    const [isRejectRoadmapModalOpen, setRejectRoadmapModalOpen] = useState(false);
     const [roadmapRejectionReason, setRoadmapRejectionReason] = useState("");
-    const [isProcessingRoadmapAction, setIsProcessingRoadmapAction] = useState<string | null>(null); // For per-button loading state
+    const [isProcessingRoadmapAction, setIsProcessingRoadmapAction] = useState<string | null>(null);
     const [isRefreshingRoadmaps, setIsRefreshingRoadmaps] = useState(false);
+    const [isViewRoadmapModalOpen, setViewRoadmapModalOpen] = useState(false); // New state for roadmap view modal
 
     // Assignments states
     const [selectedCourseForAssignments, setSelectedCourseForAssignments] = useState<Course | null>(null);
-    const [courseRoadmaps, setCourseRoadmaps] = useState<Roadmap[]>([]);
+    const [courseRoadmapsForAssignments, setCourseRoadmapsForAssignments] = useState<Roadmap[]>([]); // Roadmaps filtered by selectedCourseForAssignments
     const [selectedRoadmapForAssignments, setSelectedRoadmapForAssignments] = useState<Roadmap | null>(null);
     const [roadmapAssignmentsData, setRoadmapAssignmentsData] = useState<RoadmapAssignmentsData | null>(null);
     const [loadingAssignments, setLoadingAssignments] = useState(false);
 
     // Filter states
-    const [courseStatusFilter, setCourseStatusFilter] = useState<string>("all"); // Renamed
+    const [courseStatusFilter, setCourseStatusFilter] = useState<string>("all");
     const [roadmapStatusFilter, setRoadmapStatusFilter] = useState<string>("all");
-    const [courseSearchTerm, setCourseSearchTerm] = useState<string>(""); // Renamed
+    const [courseSearchTerm, setCourseSearchTerm] = useState<string>("");
     const [roadmapSearchTerm, setRoadmapSearchTerm] = useState<string>("");
     const [assignmentFilter, setAssignmentFilter] = useState<string>("all");
-    const [assignmentSearchTerm, setAssignmentSearchTerm] = useState<string>(""); // Added for assignment search
+    const [assignmentSearchTerm, setAssignmentSearchTerm] = useState<string>("");
 
     // Helper to get nested properties safely (e.g., course.facilitator.name)
     const getNestedName = (obj: any, path: string): string => {
@@ -102,53 +103,85 @@ export default function CourseManagementPage() {
         return (current as string) || 'N/A';
     };
 
-    const fetchCourses = useCallback(async () => {
+    // --- Main Data Fetching Logic for Courses (Course Management Tab) ---
+    const fetchCoursesForManagementTab = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            let data: Course[];
-            if (courseStatusFilter === "all") {
-                data = await getAllCourses();
-            } else {
-                data = await getCoursesByStatus(courseStatusFilter);
+            // Fetch all courses relevant to the manager (backend handles role-based filtering)
+            const allCourses = await getAllCourses(); // This gets ALL courses the manager can see
+
+            // Apply filter for the Course Management tab based on its filter state
+            const filteredForManagementTab = allCourses.filter(course => 
+                courseStatusFilter === "all" || course.status === courseStatusFilter
+            );
+            setCoursesForManagement(filteredForManagementTab);
+
+            // Also, update the list of approved courses for the Assignments tab dropdown
+            const approvedCourses = allCourses.filter(course => course.status === 'Approved');
+            setAllApprovedCourses(approvedCourses);
+
+            // If the Assignments tab course is not yet selected or no longer approved, reset.
+            if (selectedCourseForAssignments && !approvedCourses.some(c => c._id === selectedCourseForAssignments._id)) {
+                 setSelectedCourseForAssignments(null);
             }
-            setCourses(data);
+            // Attempt to pre-select for Assignments tab if approved courses exist
+            if (approvedCourses.length > 0 && !selectedCourseForAssignments) {
+                const firstApprovedCourse = approvedCourses[0];
+                setSelectedCourseForAssignments(firstApprovedCourse);
+                // Call fetchCourseRoadmapsForAssignments here to pre-populate assignments tab
+                await fetchCourseRoadmapsForAssignments(firstApprovedCourse._id);
+            } else if (approvedCourses.length === 0) {
+                // If no approved courses, clear assignments tab data
+                setSelectedCourseForAssignments(null);
+                setCourseRoadmapsForAssignments([]);
+                setSelectedRoadmapForAssignments(null);
+                setRoadmapAssignmentsData(null);
+                setLoadingAssignments(false);
+            }
+
+
         } catch (err: any) {
-            const message = err.response?.data?.message || "Failed to load courses.";
+            const message = err.response?.data?.message || "Failed to load curriculum data.";
             setError(message);
             toast.error(message);
+            setCoursesForManagement([]);
+            setAllApprovedCourses([]);
         } finally {
             setLoading(false);
         }
-    }, [courseStatusFilter]); // Depend on courseStatusFilter
+    }, [courseStatusFilter, selectedCourseForAssignments]);
 
-    const fetchAllRoadmaps = useCallback(async () => {
-        setIsRefreshingRoadmaps(true); // Set refreshing state
+
+    // --- Main Data Fetching Logic for Roadmaps (Roadmap Management Tab) ---
+    const fetchAllRoadmapsForManagementTab = useCallback(async () => {
+        setIsRefreshingRoadmaps(true);
         try {
-            const data = await getAllRoadmaps();
+            const data = await getAllRoadmaps(); // This gets ALL roadmaps the manager can see
             setAllRoadmaps(data);
         } catch (err: any) {
             console.error('Error fetching roadmaps:', err);
             toast.error(err.response?.data?.message || "Failed to load roadmaps.");
         } finally {
-            setIsRefreshingRoadmaps(false); // Clear refreshing state
+            setIsRefreshingRoadmaps(false);
         }
     }, []);
 
     useEffect(() => {
-        if (!authLoading) { // Only fetch data once authentication status is known
-            fetchCourses();
-            fetchAllRoadmaps();
+        if (!authLoading) {
+            fetchCoursesForManagementTab(); // Initial fetch for Course Management tab
+            fetchAllRoadmapsForManagementTab(); // Initial fetch for Roadmap Management tab
         }
-    }, [authLoading, fetchCourses, fetchAllRoadmaps]); // Add fetchCourses, fetchAllRoadmaps to dependencies
+    }, [authLoading, fetchCoursesForManagementTab, fetchAllRoadmapsForManagementTab]);
 
-    // Course management functions
+    // --- Course Management Tab Functions ---
     const handleApproveCourse = async (courseId: string) => {
         setIsProcessingCourseAction(courseId);
         try {
             await approveCourse(courseId);
             toast.success("Course approved successfully!");
-            fetchCourses(); // Re-fetch all courses to update status
+            // Refresh all data to ensure consistency across tabs
+            fetchCoursesForManagementTab(); 
         } catch (err: any) {
             toast.error(err.response?.data?.message || "Failed to approve course.");
         } finally {
@@ -161,7 +194,8 @@ export default function CourseManagementPage() {
         try {
             await activateCourse(courseId);
             toast.success("Course activated successfully!");
-            fetchCourses(); // Re-fetch all courses to update status
+            // Refresh all data to ensure consistency across tabs
+            fetchCoursesForManagementTab(); 
         } catch (err: any) {
             toast.error(err.response?.data?.message || "Failed to activate course.");
         } finally {
@@ -170,36 +204,38 @@ export default function CourseManagementPage() {
     };
 
     const handleOpenRejectCourseModal = (course: Course) => {
-        setSelectedCourse(course);
+        setSelectedCourseForAction(course);
         setRejectionReason("");
         setRejectCourseModalOpen(true);
     };
 
     const handleRejectCourse = async () => {
-        if (!selectedCourse || !rejectionReason.trim()) {
+        if (!selectedCourseForAction || !rejectionReason.trim()) {
             return toast.error("Rejection reason cannot be empty.");
         }
-        setIsProcessingCourseAction(selectedCourse._id);
+        setIsProcessingCourseAction(selectedCourseForAction._id);
         try {
-            await rejectCourse(selectedCourse._id, rejectionReason);
+            await rejectCourse(selectedCourseForAction._id, rejectionReason);
             toast.success("Course rejected successfully.");
             setRejectCourseModalOpen(false);
-            fetchCourses(); // Re-fetch all courses to update status
-        } catch (err: any) {
+            // Refresh all data to ensure consistency across tabs
+            fetchCoursesForManagementTab(); 
+        } 
+        catch (err: any) {
             toast.error(err.response?.data?.message || "Failed to reject course.");
         } finally {
             setIsProcessingCourseAction(null);
-            setSelectedCourse(null);
+            setSelectedCourseForAction(null);
         }
     };
 
-    // Roadmap functions
+    // --- Weekly Roadmap Management Tab Functions ---
     const handleApproveRoadmap = async (roadmapId: string) => {
         setIsProcessingRoadmapAction(roadmapId);
         try {
             await approveRoadmap(roadmapId);
             toast.success("Roadmap approved successfully!");
-            fetchAllRoadmaps(); // Re-fetch all roadmaps to update status
+            fetchAllRoadmapsForManagementTab(); // Refresh roadmaps specifically
         } catch (err: any) {
             toast.error(err.response?.data?.message || "Failed to approve roadmap.");
         } finally {
@@ -207,26 +243,26 @@ export default function CourseManagementPage() {
         }
     };
 
-    const handleOpenRejectRoadmapModal = (roadmapId: string) => {
-        setSelectedRoadmapId(roadmapId);
+    const handleOpenRejectRoadmapModal = (roadmap: Roadmap) => {
+        setSelectedRoadmapForAction(roadmap); // Store the full roadmap
         setRoadmapRejectionReason("");
         setRejectRoadmapModalOpen(true);
     };
 
     const handleRejectRoadmap = async () => {
-        if (!selectedRoadmapId || !roadmapRejectionReason.trim()) {
+        if (!selectedRoadmapForAction || !roadmapRejectionReason.trim()) {
             toast.error("Please provide rejection feedback.");
             return;
         }
 
-        setIsProcessingRoadmapAction(selectedRoadmapId);
+        setIsProcessingRoadmapAction(selectedRoadmapForAction._id);
         try {
-            await rejectRoadmap(selectedRoadmapId, roadmapRejectionReason);
+            await rejectRoadmap(selectedRoadmapForAction._id, roadmapRejectionReason);
             toast.success("Roadmap rejected successfully!");
             setRejectRoadmapModalOpen(false);
             setRoadmapRejectionReason("");
-            setSelectedRoadmapId(null);
-            fetchAllRoadmaps(); // Re-fetch all roadmaps to update status
+            setSelectedRoadmapForAction(null);
+            fetchAllRoadmapsForManagementTab(); // Refresh roadmaps specifically
         } catch (err: any) {
             toast.error(err.response?.data?.message || "Failed to reject roadmap.");
         } finally {
@@ -234,26 +270,36 @@ export default function CourseManagementPage() {
         }
     };
 
-    // Assignments functions
-    const fetchCourseRoadmaps = useCallback(async (courseId: string) => {
-        setCourseRoadmaps([]); // Clear previous roadmaps
+    const handleOpenViewRoadmapModal = useCallback(async (roadmap: Roadmap) => {
+        setSelectedRoadmapForAction(roadmap); // Use this state to store the roadmap to view
+        setViewRoadmapModalOpen(true);
+    }, []);
+
+    // --- Assignments & Performance Tab Functions ---
+    const fetchCourseRoadmapsForAssignments = useCallback(async (courseId: string) => {
+        setCourseRoadmapsForAssignments([]);
         setSelectedRoadmapForAssignments(null);
         setRoadmapAssignmentsData(null);
         setLoadingAssignments(true);
 
         try {
             const data = await getRoadmapsByCourse(courseId);
-            const populatedCourseRoadmaps = data.roadmaps; // Assuming this is an array of Roadmap objects
-            setCourseRoadmaps(populatedCourseRoadmaps);
+            // Roadmaps for assignments should also be approved or pending?
+            // The `getRoadmapsByCourse` backend endpoint gets all roadmaps for a course.
+            // Let's filter here for 'approved' or 'pending_approval' roadmaps.
+            const filteredRoadmaps = data.roadmaps.filter((r: Roadmap) => 
+                r.status === 'approved' || r.status === 'pending_approval'
+            );
+            setCourseRoadmapsForAssignments(filteredRoadmaps);
 
-            if (populatedCourseRoadmaps.length > 0) {
-                const firstRoadmap = populatedCourseRoadmaps[0];
+            if (filteredRoadmaps.length > 0) {
+                const firstRoadmap = filteredRoadmaps[0];
                 setSelectedRoadmapForAssignments(firstRoadmap);
                 await fetchRoadmapAssignmentsData(firstRoadmap._id);
             }
         } catch (err: any) {
             toast.error(err.response?.data?.message || "Failed to load course roadmaps.");
-            setCourseRoadmaps([]);
+            setCourseRoadmapsForAssignments([]);
             setSelectedRoadmapForAssignments(null);
             setRoadmapAssignmentsData(null);
         } finally {
@@ -275,44 +321,61 @@ export default function CourseManagementPage() {
     }, []);
 
     const handleCourseChangeForAssignments = useCallback(async (courseId: string) => {
-        const course = courses.find(c => c._id === courseId);
+        const course = allApprovedCourses.find(c => c._id === courseId); // Use allApprovedCourses here
         setSelectedCourseForAssignments(course || null);
         if (course) {
-            await fetchCourseRoadmaps(courseId);
+            await fetchCourseRoadmapsForAssignments(course._id);
         }
-    }, [courses, fetchCourseRoadmaps]);
+    }, [allApprovedCourses, fetchCourseRoadmapsForAssignments]);
 
     const handleRoadmapChangeForAssignments = useCallback(async (roadmapId: string) => {
-        const roadmap = courseRoadmaps.find(r => r._id === roadmapId);
+        const roadmap = courseRoadmapsForAssignments.find(r => r._id === roadmapId);
         setSelectedRoadmapForAssignments(roadmap || null);
         if (roadmap) {
-            await fetchRoadmapAssignmentsData(roadmapId);
+            await fetchRoadmapAssignmentsData(roadmap._id);
         }
-    }, [courseRoadmaps, fetchRoadmapAssignmentsData]);
+    }, [courseRoadmapsForAssignments, fetchRoadmapAssignmentsData]);
 
-    // Auto-load first course's roadmaps when courses are loaded
+    // Auto-load first approved course's roadmaps when components load or `allApprovedCourses` changes
     useEffect(() => {
-        if (courses.length > 0 && !selectedCourseForAssignments) {
-            const firstCourse = courses[0];
-            setSelectedCourseForAssignments(firstCourse);
-            fetchCourseRoadmaps(firstCourse._id);
-        }
-    }, [courses, selectedCourseForAssignments, fetchCourseRoadmaps]);
+        if (allApprovedCourses.length > 0) {
+            // Check if current selected course is still valid (e.g., in approved list)
+            const currentSelectedCourseStillApproved = selectedCourseForAssignments ? 
+                allApprovedCourses.some(c => c._id === selectedCourseForAssignments._id) : false;
 
+            if (!selectedCourseForAssignments || !currentSelectedCourseStillApproved) {
+                // If no course selected, or current selected is no longer approved, pick the first one
+                const firstApprovedCourse = allApprovedCourses[0];
+                setSelectedCourseForAssignments(firstApprovedCourse);
+                fetchCourseRoadmapsForAssignments(firstApprovedCourse._id);
+            }
+            // If a course is already selected and is still approved, no action needed on initial load.
+        } else if (allApprovedCourses.length === 0 && selectedCourseForAssignments) {
+            // If no approved courses are available, clear out the assignments tab data.
+            setSelectedCourseForAssignments(null);
+            setCourseRoadmapsForAssignments([]);
+            setSelectedRoadmapForAssignments(null);
+            setRoadmapAssignmentsData(null);
+            setLoadingAssignments(false);
+        }
+    }, [allApprovedCourses]); // Depend only on allApprovedCourses
+
+
+    // --- UI Helper Functions ---
     const getStatusBadge = (status: string) => {
         switch (status) {
             case "Approved":
             case "approved":
-                return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Approved</Badge>;
+                return <Badge className="bg-green-600 text-white hover:bg-green-700">Approved</Badge>;
             case "PendingApproval":
             case "pending_approval":
-                return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Pending</Badge>;
+                return <Badge className="bg-yellow-600 text-white hover:bg-yellow-700">Pending</Badge>;
             case "Draft":
             case "draft":
-                return <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">Draft</Badge>;
+                return <Badge variant="secondary">Draft</Badge>;
             case "Rejected":
             case "rejected":
-                return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Rejected</Badge>;
+                return <Badge variant="destructive">Rejected</Badge>;
             default:
                 return <Badge variant="secondary">{status}</Badge>;
         }
@@ -337,20 +400,18 @@ export default function CourseManagementPage() {
         }
     };
 
-    // Filter courses based on search term and status filter
-    const filteredCourses = courses.filter(course => {
+    // Filter courses for the management tab based on search term and status filter
+    const filteredCoursesForManagement = coursesForManagement.filter(course => {
         const matchesSearch = course.title.toLowerCase().includes(courseSearchTerm.toLowerCase()) ||
                               (typeof course.description === 'string' && course.description.toLowerCase().includes(courseSearchTerm.toLowerCase())) ||
                               (typeof course.facilitator === 'object' && course.facilitator.name.toLowerCase().includes(courseSearchTerm.toLowerCase())) ||
                               (typeof course.program === 'object' && course.program.name.toLowerCase().includes(courseSearchTerm.toLowerCase()));
         
-        const matchesStatus = courseStatusFilter === "all" || course.status === courseStatusFilter;
-        
-        return matchesSearch && matchesStatus;
+        return matchesSearch; // Status filter applied at fetchCoursesForManagementTab level
     });
 
-    // Filter roadmaps based on search term and status filter
-    const filteredRoadmaps = allRoadmaps.filter(roadmap => {
+    // Filter roadmaps for the management tab based on search term and status filter
+    const filteredRoadmapsForManagement = allRoadmaps.filter(roadmap => {
         const matchesSearch = 
             roadmap.title.toLowerCase().includes(roadmapSearchTerm.toLowerCase()) ||
             getNestedName(roadmap, 'program.name').toLowerCase().includes(roadmapSearchTerm.toLowerCase()) ||
@@ -390,10 +451,10 @@ export default function CourseManagementPage() {
             </div>
 
             <Tabs defaultValue="courses" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="courses">Course Management</TabsTrigger>
-                    <TabsTrigger value="roadmaps">Weekly Roadmap Management</TabsTrigger>
-                    <TabsTrigger value="assignments">Assignments & Performance</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3 bg-[#1f497d]"> {/* Apply color here */}
+                    <TabsTrigger value="courses" className="text-white data-[state=active]:bg-white data-[state=active]:text-[#1f497d]">Course Management</TabsTrigger>
+                    <TabsTrigger value="roadmaps" className="text-white data-[state=active]:bg-white data-[state=active]:text-[#1f497d]">Weekly Roadmap Management</TabsTrigger>
+                    <TabsTrigger value="assignments" className="text-white data-[state=active]:bg-white data-[state=active]:text-[#1f497d]">Assignments & Performance</TabsTrigger>
                 </TabsList>
 
                 {/* Course Management Tab */}
@@ -402,7 +463,7 @@ export default function CourseManagementPage() {
                         <CardHeader className="pb-3">
                             <div className="flex justify-between items-center mb-2">
                                 <CardTitle className="text-xl">Course Management</CardTitle>
-                                <Button onClick={fetchCourses} variant="outline" size="sm" disabled={loading}>
+                                <Button onClick={fetchCoursesForManagementTab} variant="outline" size="sm" disabled={loading}>
                                     {loading ? (
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     ) : (
@@ -452,14 +513,14 @@ export default function CourseManagementPage() {
                             </div>
 
                             {/* Course List */}
-                            {filteredCourses.length === 0 ? (
+                            {filteredCoursesForManagement.length === 0 ? (
                                 <div className="text-center py-8">
                                     <Inbox className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                                     <p className="text-muted-foreground">No courses found matching your criteria.</p>
                                 </div>
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                    {filteredCourses.map(course => (
+                                    {filteredCoursesForManagement.map(course => (
                                         <Card key={course._id} className="flex flex-col overflow-hidden">
                                             <CardHeader className="pb-3">
                                                 <div className="flex items-center justify-between gap-2">
@@ -509,10 +570,10 @@ export default function CourseManagementPage() {
                                                         </Button>
                                                         <Button 
                                                             size="sm"
-                                                            variant="default"
+                                                            style={{backgroundColor: '#1f497d'}} // Apply custom color
+                                                            className="flex-1 min-w-[80px] hover:bg-[#1a3f6b] text-white" // Adjust hover
                                                             onClick={() => handleApproveCourse(course._id)} 
                                                             disabled={isProcessingCourseAction === course._id} 
-                                                            className="flex-1 min-w-[80px]"
                                                         >
                                                             {isProcessingCourseAction === course._id ? 
                                                                 <Loader2 className="mr-1 h-3 w-3 animate-spin"/> : 
@@ -525,10 +586,10 @@ export default function CourseManagementPage() {
                                                 {course.status === "Rejected" && (
                                                     <Button 
                                                         size="sm"
-                                                        variant="default"
+                                                        style={{backgroundColor: '#1f497d'}} // Apply custom color
+                                                        className="flex-1 min-w-[80px] hover:bg-[#1a3f6b] text-white" // Adjust hover
                                                         onClick={() => handleActivateCourse(course._id)} 
                                                         disabled={isProcessingCourseAction === course._id} 
-                                                        className="flex-1 min-w-[80px]"
                                                     >
                                                         {isProcessingCourseAction === course._id ? 
                                                             <Loader2 className="mr-1 h-3 w-3 animate-spin"/> : 
@@ -552,7 +613,7 @@ export default function CourseManagementPage() {
                         <CardHeader className="pb-3">
                             <div className="flex justify-between items-center mb-2">
                                 <CardTitle className="text-xl">Weekly Roadmap Management</CardTitle>
-                                <Button onClick={fetchAllRoadmaps} variant="outline" size="sm" disabled={isRefreshingRoadmaps}>
+                                <Button onClick={fetchAllRoadmapsForManagementTab} variant="outline" size="sm" disabled={isRefreshingRoadmaps}>
                                     {isRefreshingRoadmaps ? (
                                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     ) : (
@@ -602,14 +663,14 @@ export default function CourseManagementPage() {
                             </div>
 
                             {/* Roadmap List */}
-                            {filteredRoadmaps.length === 0 ? (
+                            {filteredRoadmapsForManagement.length === 0 ? (
                                 <div className="text-center py-8">
                                     <BookOpen className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                                     <p className="text-muted-foreground">No roadmaps found matching your criteria.</p>
                                 </div>
                             ) : (
                                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                    {filteredRoadmaps.map((roadmap) => (
+                                    {filteredRoadmapsForManagement.map((roadmap) => (
                                         <Card key={roadmap._id} className="flex flex-col overflow-hidden">
                                             <CardHeader className="pb-3">
                                                 <div className="flex items-center justify-between gap-2">
@@ -642,12 +703,20 @@ export default function CourseManagementPage() {
                                                 )}
                                             </CardContent>
                                             <div className="p-4 pt-0 flex flex-wrap gap-2 justify-end">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleOpenViewRoadmapModal(roadmap)}
+                                                    className="flex-1 min-w-[80px]"
+                                                >
+                                                    <Eye className="mr-1 h-3 w-3" /> View
+                                                </Button>
                                                 {roadmap.status === 'pending_approval' && (
                                                     <>
                                                         <Button
                                                             size="sm"
                                                             variant="destructive" 
-                                                            onClick={() => roadmap._id && handleOpenRejectRoadmapModal(roadmap._id)} 
+                                                            onClick={() => handleOpenRejectRoadmapModal(roadmap)} 
                                                             disabled={isProcessingRoadmapAction === roadmap._id}
                                                             className="flex-1 min-w-[80px]"
                                                         >
@@ -655,10 +724,10 @@ export default function CourseManagementPage() {
                                                         </Button>
                                                         <Button
                                                             size="sm"
-                                                            variant="default" 
+                                                            style={{backgroundColor: '#1f497d'}} // Apply custom color
+                                                            className="flex-1 min-w-[80px] hover:bg-[#1a3f6b] text-white" // Adjust hover
                                                             onClick={() => roadmap._id && handleApproveRoadmap(roadmap._id)}
                                                             disabled={isProcessingRoadmapAction === roadmap._id}
-                                                            className="flex-1 min-w-[80px]"
                                                         >
                                                             {isProcessingRoadmapAction === roadmap._id ? (
                                                                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -687,42 +756,52 @@ export default function CourseManagementPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {/* Course and Roadmap selection dropdowns */}
-                            <div className="flex flex-col sm:flex-row gap-3">
+                            <div className="flex flex-col sm:flex-row gap-3 bg-blue-50 p-4 rounded-md border border-blue-200">
                                 <div className="flex-1">
-                                    <Label htmlFor="selectCourseAssignments" className="sr-only">Select Course</Label>
+                                    <Label htmlFor="selectCourseAssignments" className="text-sm font-medium text-blue-900">Select Approved Course:</Label>
                                     <Select
                                         value={selectedCourseForAssignments?._id || ""}
-                                        onValueChange={(value) => value && handleCourseChangeForAssignments(value)}
+                                        onValueChange={(value) => handleCourseChangeForAssignments(value)}
+                                        // Disable if no approved courses
+                                        disabled={allApprovedCourses.length === 0}
                                     >
-                                        <SelectTrigger id="selectCourseAssignments">
-                                            <SelectValue placeholder="Select a course" />
+                                        <SelectTrigger id="selectCourseAssignments" className="bg-white">
+                                            <SelectValue placeholder="Select an approved course" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {courses.map(course => (
-                                                <SelectItem key={course._id} value={course._id}>
-                                                    {course.title} ({getNestedName(course, 'program.name')})
-                                                </SelectItem>
-                                            ))}
+                                            {allApprovedCourses.length === 0 ? (
+                                                <SelectItem value="no-courses" disabled>No approved courses available</SelectItem>
+                                            ) : (
+                                                allApprovedCourses.map(course => (
+                                                    <SelectItem key={course._id} value={course._id}>
+                                                        {course.title} ({getNestedName(course, 'program.name')})
+                                                    </SelectItem>
+                                                ))
+                                            )}
                                         </SelectContent>
                                     </Select>
                                 </div>
                                 {selectedCourseForAssignments && (
                                     <div className="flex-1">
-                                        <Label htmlFor="selectRoadmapAssignments" className="sr-only">Select Weekly Roadmap</Label>
+                                        <Label htmlFor="selectRoadmapAssignments" className="text-sm font-medium text-blue-900">Select Weekly Roadmap:</Label>
                                         <Select
                                             value={selectedRoadmapForAssignments?._id || ""}
-                                            onValueChange={(value) => value && handleRoadmapChangeForAssignments(value)}
-                                            disabled={courseRoadmaps.length === 0}
+                                            onValueChange={(value) => handleRoadmapChangeForAssignments(value)}
+                                            disabled={courseRoadmapsForAssignments.length === 0}
                                         >
-                                            <SelectTrigger id="selectRoadmapAssignments">
+                                            <SelectTrigger id="selectRoadmapAssignments" className="bg-white">
                                                 <SelectValue placeholder="Select a weekly roadmap" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {courseRoadmaps.map(roadmap => (
-                                                    <SelectItem key={roadmap._id} value={roadmap._id}>
-                                                        Week {roadmap.weekNumber}: {roadmap.title}
-                                                    </SelectItem>
-                                                ))}
+                                                {courseRoadmapsForAssignments.length === 0 ? (
+                                                    <SelectItem value="no-roadmaps" disabled>No roadmaps for this course</SelectItem>
+                                                ) : (
+                                                    courseRoadmapsForAssignments.map(roadmap => (
+                                                        <SelectItem key={roadmap._id} value={roadmap._id}>
+                                                            Week {roadmap.weekNumber}: {roadmap.title}
+                                                        </SelectItem>
+                                                    ))
+                                                )}
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -731,44 +810,46 @@ export default function CourseManagementPage() {
 
                             {/* Assignments data display */}
                             {loadingAssignments ? (
-                                <div className="text-center py-10">
+                                <div className="text-center py-10 bg-muted rounded-md">
                                     <Loader2 className="h-8 w-8 animate-spin" />
                                     <p className="text-muted-foreground mt-2">Loading assignments data...</p>
                                 </div>
-                            ) : roadmapAssignmentsData ? (
+                            ) : roadmapAssignmentsData && roadmapAssignmentsData.assignments.length > 0 ? (
                                 <div className="space-y-6">
                                     {/* Roadmap Info Summary (condensed) */}
                                     <Card className="bg-muted/50 border-dashed">
-                                        <CardHeader className="py-3 px-4">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <CardTitle className="text-lg">{roadmapAssignmentsData.roadmap.title}</CardTitle>
-                                                    <CardDescription className="text-xs">
-                                                        Week {roadmapAssignmentsData.roadmap.weekNumber} • Program: {roadmapAssignmentsData.roadmap.program} • Facilitator: {roadmapAssignmentsData.roadmap.facilitator}
-                                                    </CardDescription>
-                                                </div>
+                                        <CardContent className="p-4 space-y-2">
+                                            <h4 className="text-lg font-semibold text-[#1f497d] mb-1">
+                                                {roadmapAssignmentsData.roadmap.title} (Week {roadmapAssignmentsData.roadmap.weekNumber})
+                                            </h4>
+                                            <div className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
+                                                <span><strong>Program:</strong> {roadmapAssignmentsData.roadmap.program}</span>
+                                                <span><strong>Facilitator:</strong> {roadmapAssignmentsData.roadmap.facilitator}</span>
+                                                <span><strong>Start Date:</strong> {new Date(roadmapAssignmentsData.roadmap.startDate).toLocaleDateString()}</span>
                                             </div>
-                                        </CardHeader>
+                                        </CardContent>
                                     </Card>
 
                                     {roadmapAssignmentsData.assignments.map(assignment => (
-                                        <Card key={assignment.assignmentId} className="mb-6">
-                                            <CardHeader className="pb-3">
+                                        <Card key={assignment.assignmentId} className="mb-6 border border-[#1f497d]/20">
+                                            <CardHeader className="pb-3 bg-[#1f497d]/5 rounded-t-lg">
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div>
-                                                        <CardTitle className="text-xl">{assignment.assignmentTitle}</CardTitle>
+                                                        <CardTitle className="text-xl text-[#1f497d]">{assignment.assignmentTitle}</CardTitle>
                                                         <CardDescription className="text-sm mt-1">Due: {new Date(assignment.dueDate).toLocaleDateString()}</CardDescription>
                                                         <div className="mt-2 prose prose-sm max-w-none text-muted-foreground">
                                                             <div dangerouslySetInnerHTML={{ __html: assignment.assignmentDescription }} />
                                                         </div>
                                                     </div>
                                                     <div className="text-right text-sm">
-                                                        <Badge variant="secondary">{assignment.maxGrade} Points</Badge>
+                                                        <Badge variant="secondary" className="text-base py-1 px-3">
+                                                            {assignment.maxGrade} Points
+                                                        </Badge>
                                                         <p className="text-muted-foreground mt-1">Facilitator: {assignment.facilitatorName}</p>
                                                     </div>
                                                 </div>
                                             </CardHeader>
-                                            <CardContent className="pt-0">
+                                            <CardContent className="pt-4">
                                                 {assignment.submissions.length === 0 ? (
                                                     <div className="text-center py-8 bg-muted rounded-md">
                                                         <MessageSquare className="mx-auto h-8 w-8 text-gray-400 mb-2" />
@@ -777,8 +858,8 @@ export default function CourseManagementPage() {
                                                 ) : (
                                                     <div className="space-y-4">
                                                         {/* Submissions Filters and Summary */}
-                                                        <div className="flex flex-wrap items-center gap-3">
-                                                            <span className="font-semibold text-sm">Student Performance:</span>
+                                                        <div className="flex flex-wrap items-center gap-3 bg-gray-50 p-3 rounded-md">
+                                                            <span className="font-semibold text-sm text-gray-700">Student Performance:</span>
                                                             <Input
                                                                 placeholder="Search student..."
                                                                 value={assignmentSearchTerm}
@@ -820,7 +901,7 @@ export default function CourseManagementPage() {
                                                                             if (assignmentFilter === 'submitted') return submission.hasSubmitted;
                                                                             if (assignmentFilter === 'not-submitted') return !submission.hasSubmitted;
                                                                             if (assignmentFilter === 'pending') return submission.hasSubmitted && submission.status === 'Submitted';
-                                                                            return submission.status === assignmentFilter.replace('-', ' '); // 'reviewed' -> 'Reviewed' etc.
+                                                                            return submission.status?.toLowerCase() === assignmentFilter.replace('-', ' '); 
                                                                         })();
                                                                         const searchMatch = !assignmentSearchTerm || 
                                                                             submission.traineeName.toLowerCase().includes(assignmentSearchTerm.toLowerCase()) ||
@@ -835,8 +916,9 @@ export default function CourseManagementPage() {
                                                                         <TableCell>
                                                                             <div className="font-medium">{submission.traineeName}</div>
                                                                             <div className="text-xs text-muted-foreground">{submission.traineeEmail}</div>
+                                                                            {/* Only show 'Not Enrolled' if totalSessions is 0 */}
                                                                             {submission.totalSessions === 0 && (
-                                                                                <Badge variant="outline" className="text-xs mt-1">Not Enrolled</Badge>
+                                                                                <Badge variant="secondary" className="text-xs mt-1">Not Enrolled</Badge>
                                                                             )}
                                                                         </TableCell>
                                                                         <TableCell>
@@ -846,25 +928,26 @@ export default function CourseManagementPage() {
                                                                             <Badge variant={
                                                                                 submission.status === 'Reviewed' ? 'default' :
                                                                                 submission.status === 'NeedsRevision' ? 'destructive' :
-                                                                                submission.status === 'Not Submitted' || submission.totalSessions === 0 ? 'secondary' : 'outline'
+                                                                                // If no attendance sessions, display N/A for status
+                                                                                submission.totalSessions === 0 ? 'secondary' : (submission.status === 'Submitted' ? 'outline' : 'default')
                                                                             } className="text-xs">
                                                                                 {submission.totalSessions === 0 ? 'N/A' : (submission.status === 'Submitted' ? 'Pending Review' : submission.status)}
                                                                             </Badge>
                                                                         </TableCell>
                                                                         <TableCell className="text-center">
-                                                                            {submission.grade === 'Not graded' ? '-' : `${submission.grade}`}
-                                                                            {submission.grade !== 'Not graded' && `/${assignment.maxGrade}`}
+                                                                            {submission.grade === 'Not graded' || !submission.grade ? '-' : `${submission.grade}`}
+                                                                            {(submission.grade !== 'Not graded' && submission.grade) && `/${assignment.maxGrade}`}
                                                                         </TableCell>
                                                                         <TableCell className="text-center">
                                                                             {submission.attendancePercentage}% ({submission.presentSessions}/{submission.totalSessions})
                                                                         </TableCell>
                                                                         <TableCell className="text-center">
                                                                             {submission.hasSubmitted && submission.grade !== 'Not graded' && submission.attendancePercentage > 0 ? (
-                                                                                `${Math.round((parseFloat(submission.grade) / assignment.maxGrade * 0.7 + submission.attendancePercentage / 100 * 0.3) * 100)}%`
+                                                                                `${Math.round((parseFloat(submission.grade || '0') / assignment.maxGrade * 0.7 + submission.attendancePercentage / 100 * 0.3) * 100)}%`
                                                                             ) : '-'}
                                                                         </TableCell>
                                                                         <TableCell>
-                                                                            <div className="max-w-xs line-clamp-2">
+                                                                            <div className="max-w-xs line-clamp-2" title={submission.feedback || 'No feedback'}>
                                                                                 {submission.feedback || 'No feedback'}
                                                                             </div>
                                                                         </TableCell>
@@ -875,17 +958,18 @@ export default function CourseManagementPage() {
                                                         
                                                         {/* Summary Statistics */}
                                                         <div className="mt-6 p-4 bg-muted/50 rounded-lg">
-                                                            <h5 className="font-semibold mb-3">Assignment Summary</h5>
+                                                            <h5 className="font-semibold mb-3">Assignment Summary for "{assignment.assignmentTitle}"</h5>
                                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                                                 <div><div className="text-muted-foreground">Average Grade</div><div className="font-semibold">
                                                                     {(() => {
-                                                                        const graded = assignment.submissions.filter(s => s.hasSubmitted && s.grade !== 'Not graded');
-                                                                        return graded.length > 0 ? `${(graded.reduce((sum, s) => sum + parseFloat(s.grade), 0) / graded.length).toFixed(1)}/${assignment.maxGrade}` : 'N/A';
+                                                                        const graded = assignment.submissions.filter(s => s.hasSubmitted && s.grade !== 'Not graded' && s.grade);
+                                                                        return graded.length > 0 ? `${(graded.reduce((sum, s) => sum + parseFloat(s.grade || '0'), 0) / graded.length).toFixed(1)}/${assignment.maxGrade}` : 'N/A';
                                                                     })()}
                                                                 </div></div>
                                                                 <div><div className="text-muted-foreground">Average Attendance</div><div className="font-semibold">
                                                                     {(() => {
-                                                                        const avg = assignment.submissions.reduce((sum, s) => sum + s.attendancePercentage, 0) / assignment.submissions.length;
+                                                                        const studentsWithAttendance = assignment.submissions.filter(s => s.totalSessions > 0);
+                                                                        const avg = studentsWithAttendance.length > 0 ? studentsWithAttendance.reduce((sum, s) => sum + s.attendancePercentage, 0) / studentsWithAttendance.length : 0;
                                                                         return `${avg.toFixed(1)}%`;
                                                                     })()}
                                                                 </div></div>
@@ -912,9 +996,14 @@ export default function CourseManagementPage() {
                             ) : (
                                 <div className="text-center py-16 bg-muted rounded-md">
                                     <AlertCircle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                                    <h3 className="text-xl font-semibold">No Data Available</h3>
+                                    <h3 className="text-xl font-semibold">No Assignments Data Available</h3>
                                     <p className="text-muted-foreground mt-2">
-                                        Select a course and weekly roadmap to view assignments and student performance.
+                                        {selectedCourseForAssignments ? 
+                                            courseRoadmapsForAssignments.length > 0 ?
+                                                "Select a weekly roadmap to view its assignments and student performance."
+                                                : "No roadmaps found for the selected course."
+                                            : "Select an approved course and a weekly roadmap to view performance data."
+                                        }
                                     </p>
                                 </div>
                             )}
@@ -927,7 +1016,7 @@ export default function CourseManagementPage() {
             <Dialog open={isRejectCourseModalOpen} onOpenChange={setRejectCourseModalOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Reject Course: {selectedCourse?.title}</DialogTitle>
+                        <DialogTitle>Reject Course: {selectedCourseForAction?.title}</DialogTitle>
                         <DialogDescription>
                             Please provide a clear reason for the rejection. The facilitator will see this feedback.
                         </DialogDescription>
@@ -950,7 +1039,7 @@ export default function CourseManagementPage() {
                             onClick={handleRejectCourse} 
                             disabled={!!isProcessingCourseAction || !rejectionReason.trim()}
                         >
-                            {isProcessingCourseAction === selectedCourse?._id ? 
+                            {isProcessingCourseAction === selectedCourseForAction?._id ? 
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : 
                                 <X className="mr-2 h-4 w-4" />
                             }
@@ -965,8 +1054,8 @@ export default function CourseManagementPage() {
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>
-                            Reject Roadmap: {selectedRoadmapId && allRoadmaps.find(r => r._id === selectedRoadmapId) ? 
-                                `Week ${allRoadmaps.find(r => r._id === selectedRoadmapId)?.weekNumber} - ${allRoadmaps.find(r => r._id === selectedRoadmapId)?.title}` : 
+                            Reject Roadmap: {selectedRoadmapForAction ? 
+                                `Week ${selectedRoadmapForAction.weekNumber} - ${selectedRoadmapForAction.title}` : 
                                 'Roadmap'
                             }
                         </DialogTitle>
@@ -992,12 +1081,76 @@ export default function CourseManagementPage() {
                             onClick={handleRejectRoadmap} 
                             disabled={!!isProcessingRoadmapAction || !roadmapRejectionReason.trim()}
                         >
-                            {isProcessingRoadmapAction === selectedRoadmapId ? 
+                            {isProcessingRoadmapAction === selectedRoadmapForAction?._id ? 
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : 
                                 <X className="mr-2 h-4 w-4" />
                             }
                             Confirm Rejection
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* View Roadmap Modal */}
+            <Dialog open={isViewRoadmapModalOpen} onOpenChange={setViewRoadmapModalOpen}>
+                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Weekly Roadmap Details</DialogTitle>
+                        <DialogDescription>
+                            Comprehensive overview of Week {selectedRoadmapForAction?.weekNumber}: {selectedRoadmapForAction?.title}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {selectedRoadmapForAction && (
+                        <div className="space-y-4 py-4">
+                            <Card className="bg-muted/50 border-dashed">
+                                <CardContent className="p-4 space-y-2">
+                                    <p className="text-sm"><strong>Program:</strong> {getNestedName(selectedRoadmapForAction, 'program.name')}</p>
+                                    <p className="text-sm"><strong>Course:</strong> {getNestedName(selectedRoadmapForAction, 'course.title')}</p>
+                                    <p className="text-sm"><strong>Facilitator:</strong> {getNestedName(selectedRoadmapForAction, 'facilitator.name')}</p>
+                                    <p className="text-sm"><strong>Start Date:</strong> {new Date(selectedRoadmapForAction.startDate).toLocaleDateString()}</p>
+                                    <p className="text-sm flex items-center gap-2">
+                                        <strong>Status:</strong> {getStatusBadge(selectedRoadmapForAction.status)}
+                                        {selectedRoadmapForAction.status === 'rejected' && selectedRoadmapForAction.feedback && (
+                                            <span className="text-xs text-red-600 ml-2">Reason: {selectedRoadmapForAction.feedback}</span>
+                                        )}
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <div className="space-y-2">
+                                <h4 className="font-semibold text-lg">Objectives</h4>
+                                <ul className="list-disc list-inside text-muted-foreground text-sm space-y-1">
+                                    {selectedRoadmapForAction.objectives?.map((obj, index) => (
+                                        <li key={index}>{obj}</li>
+                                    ))}
+                                </ul>
+                            </div>
+
+                            <div className="space-y-3">
+                                <h4 className="font-semibold text-lg">Daily Schedule</h4>
+                                {selectedRoadmapForAction.topics?.length === 0 ? (
+                                    <p className="text-muted-foreground text-sm">No topics planned for this roadmap yet.</p>
+                                ) : (
+                                    selectedRoadmapForAction.topics?.map((topic, index) => (
+                                        <Card key={index} className="p-3">
+                                            <div className="flex justify-between items-center text-sm">
+                                                <div className="font-medium">{topic.day}: {topic.title}</div>
+                                                <Badge variant="outline" className="capitalize">{topic.sessionType}</Badge>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {topic.startTime && topic.endTime ? 
+                                                    `${topic.startTime} - ${topic.endTime} (${topic.duration})` :
+                                                    topic.duration || 'No time specified'
+                                                }
+                                            </p>
+                                        </Card>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setViewRoadmapModalOpen(false)}>Close</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
