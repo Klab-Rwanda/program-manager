@@ -1,13 +1,8 @@
+// lib/services/attendance.service.ts
 import api from '../api';
 
-// --- Type Imports ---
-// Make sure StudentSummary is defined in your @/types file, or add it as shown below.
-import { Program, AttendanceRecord, StudentSummary } from '@/types';
+import { Program, AttendanceRecord } from '@/types'; 
 
-
-// ===================================================================
-//   TYPE DEFINITIONS (Ensure these are in your @/types/index.ts)
-// ===================================================================
 
 export interface ClassSession {
   _id: string;
@@ -28,75 +23,34 @@ export interface ClassSession {
   status: 'scheduled' | 'active' | 'completed' | 'cancelled';
   accessLink?: string;
   meetingLink?: string;
-  qrCodeImage?: string; // Frontend-only convenience field
+  qrCodeImage?: string; // This is a frontend-only convenience field, not in DB model
   updatedAt: string;
 }
 
-/* 
-  NOTE: Ensure this StudentSummary type is added to your main types file (e.g., '@/types/index.ts')
-  so it can be imported and used across your app.
-*/
-/*
-export interface StudentSummary {
-  userId: string;
-  name: string;
-  email: string;
-  role: string;
-  present: number;
-  absent: number;
-  late: number;
-  excused: number;
-  attendanceRate: number;
-  records: {
-    date: string;
-    status: string;
-    timestamp: string;
-    checkIn?: string;
-    sessionTitle?: string;
-    method: string;
-  }[];
-}
-*/
-
-
-// ===================================================================
-//   MANAGER / REPORTING SERVICES
-// ===================================================================
-
-/**
- * NEW: Fetches an aggregated summary of attendance for a program, grouped by student.
- * This is for the new manager dashboard view.
- */
-export const getProgramAttendanceSummary = async (programId: string, startDate: string, endDate: string): Promise<{ totalSessions: number, report: StudentSummary[] }> => {
-    const response = await api.get(`/attendance/report/program/${programId}/summary`, {
-        params: { startDate, endDate }
-    });
-    return response.data.data;
-};
-
-/**
- * LEGACY: Fetches a flat list of all attendance records for a program.
- * Good for a detailed log view or exporting raw data.
- */
-export const getProgramAttendanceReport = async (programId: string, startDate: string, endDate: string): Promise<AttendanceRecord[]> => {
-    const response = await api.get(`/attendance/report/program/${programId}`, {
-        params: { startDate, endDate }
-    });
-    return response.data.data;
-};
-
-export const getSessionAttendance = async (sessionId: string): Promise<AttendanceRecord[]> => {
+export const getSessionAttendance = async (sessionId: string): Promise<{ session: ClassSession; attendance: AttendanceRecord[] }> => {
     const response = await api.get(`/attendance/sessions/${sessionId}/attendance`);
     return response.data.data;
 };
 
+// --- Trainee Services ---
 
-// ===================================================================
-//   TRAINEE SERVICES
-// ===================================================================
+export const getMyAttendanceHistory = async (
+  programId?: string, 
+  startDate?: string, 
+  endDate?: string
+): Promise<AttendanceRecord[]> => {
+    const params: { [key: string]: string } = {};
+    if (programId && programId !== 'all') { 
+        params.programId = programId;
+    }
+    if (startDate) {
+        params.startDate = startDate;
+    }
+    if (endDate) {
+        params.endDate = endDate;
+    }
 
-export const getMyAttendanceHistory = async (): Promise<AttendanceRecord[]> => {
-    const response = await api.get('/attendance/my-history');
+    const response = await api.get('/attendance/my-history', { params });
     return response.data.data;
 };
 
@@ -115,10 +69,7 @@ export const markGeolocationAttendance = async (sessionId: string, latitude: num
     return response.data.data;
 };
 
-
-// ===================================================================
-//   FACILITATOR SERVICES
-// ===================================================================
+// --- Facilitator Services ---
 
 export const createSession = async (sessionData: any): Promise<ClassSession> => {
     const response = await api.post('/attendance/sessions', sessionData);
@@ -130,13 +81,14 @@ export const getFacilitatorSessions = async (): Promise<ClassSession[]> => {
     return response.data.data;
 };
 
+
 export const startOnlineSession = async (sessionId: string): Promise<{ session: ClassSession }> => {
     const response = await api.post(`/attendance/sessions/${sessionId}/start-online`);
     return response.data.data;
 };
 
-export const startPhysicalSession = async (sessionId: string, latitude: number, longitude: number): Promise<ClassSession> => {
-    const response = await api.post(`/attendance/sessions/${sessionId}/start-physical`, { latitude, longitude });
+export const startPhysicalSession = async (sessionId: string, location: {latitude: number, longitude: number, radius?: number}): Promise<ClassSession> => {
+    const response = await api.post(`/attendance/sessions/${sessionId}/start-physical`, location);
     return response.data.data;
 };
 
@@ -154,3 +106,87 @@ export const endSession = async (sessionId: string): Promise<ClassSession> => {
     const response = await api.post(`/attendance/sessions/${sessionId}/end`);
     return response.data.data;
 };
+
+export const getProgramAttendanceReport = async (programId: string, startDate: string, endDate: string): Promise<ProgramAttendanceReportData> => {
+    const response = await api.get(`/attendance/report/program/${programId}`, {
+        params: { startDate, endDate }
+    });
+    return response.data.data;
+};
+
+
+export const markManualStudentAttendance = async (
+    sessionId: string,
+    userId: string,
+    status: string,
+    reason?: string
+): Promise<AttendanceRecord> => {
+    const response = await api.post(`/attendance/sessions/${sessionId}/manual-attendance`, {
+        userId,
+        status,
+        reason
+    });
+    return response.data.data;
+};
+
+// NEW INTERFACE for the summary report structure
+export interface ProgramAttendanceSummaryReport {
+    totalSessions: number;
+    report: Array<{
+        userId: string;
+        name: string;
+        email: string;
+        role: string;
+        present: number;
+        absent: number;
+        late: number;
+        excused: number;
+        attendanceRate: number;
+        records: Array<{
+            date: string;
+            status: string;
+            timestamp: string;
+            checkIn: string; // Or Date
+            sessionTitle: string;
+            method: string;
+        }>;
+    }>;
+}
+
+
+export const getProgramAttendanceSummary = async (
+    programId: string,
+    startDate: string,
+    endDate: string
+): Promise<ProgramAttendanceSummaryReport> => {
+    const response = await api.get(`/attendance/report/program/${programId}/summary`, {
+        params: { startDate, endDate }
+    });
+    return response.data.data;
+};
+
+export interface ProgramAttendanceReportData {
+    programName: string;
+    reportDates: string[]; // Array of YYYY-MM-DD strings for dates with sessions
+    traineeReports: Array<{
+        trainee: { _id: string; name: string; email: string };
+        dailyAttendance: Array<{ date: string; status: string }>; // Array of daily status for a trainee
+        summary: {
+            present: number;
+            absent: number;
+            late: number;
+            excused: number;
+            totalDaysInPeriod: number;
+        };
+    }>;
+    summaryStats: {
+        totalDaysInPeriod: number;
+        totalPresentCount: number;
+        totalAbsentCount: number;
+        totalLateCount: number;
+        totalExcusedCount: number;
+        totalTrainees: number;
+    };
+}
+
+

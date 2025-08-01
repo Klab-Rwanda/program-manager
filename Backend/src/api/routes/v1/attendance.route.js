@@ -130,7 +130,7 @@ router.get('/report/program/:programId/summary',
 );
 router.get('/report/program/:programId', 
     verifyRole(['Program Manager', 'SuperAdmin']), 
-    getProgramAttendanceReport // The function we just created
+    getProgramAttendanceReport 
 );
 
 router.get('/my-history', 
@@ -140,5 +140,10 @@ router.get('/my-history',
 router.post('/sessions/:sessionId/end', 
     verifyRole(['Facilitator']), 
     endSession
+);
+
+router.get('/sessions/:sessionId/report', 
+    verifyRole(['Facilitator', 'ProgramManager', 'SuperAdmin']), 
+    getSessionAttendance 
 );
 export default router;
