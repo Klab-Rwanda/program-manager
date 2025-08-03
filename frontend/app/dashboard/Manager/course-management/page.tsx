@@ -366,10 +366,10 @@ export default function CourseManagementPage() {
         switch (status) {
             case "Approved":
             case "approved":
-                return <Badge className="bg-green-600 text-white hover:bg-green-700">Approved</Badge>;
+                return <Badge className="bg-custom-blue text-white hover:bg-custom-blue">Approved</Badge>;
             case "PendingApproval":
             case "pending_approval":
-                return <Badge className="bg-yellow-600 text-white hover:bg-yellow-700">Pending</Badge>;
+                return <Badge className="bg-gray-500 text-white hover:bg-gray">Pending</Badge>;
             case "Draft":
             case "draft":
                 return <Badge variant="secondary">Draft</Badge>;
@@ -385,7 +385,7 @@ export default function CourseManagementPage() {
         switch (status) {
             case "Approved":
             case "approved":
-                return <CheckCircle className="h-4 w-4 text-green-600" />;
+                return <CheckCircle className="h-4 w-4 text-custom-blue" />;
             case "PendingApproval":
             case "pending_approval":
                 return <Clock className="h-4 w-4 text-yellow-600" />;
@@ -451,10 +451,10 @@ export default function CourseManagementPage() {
             </div>
 
             <Tabs defaultValue="courses" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 bg-[#1f497d]"> {/* Apply color here */}
-                    <TabsTrigger value="courses" className="text-white data-[state=active]:bg-white data-[state=active]:text-[#1f497d]">Course Management</TabsTrigger>
-                    <TabsTrigger value="roadmaps" className="text-white data-[state=active]:bg-white data-[state=active]:text-[#1f497d]">Weekly Roadmap Management</TabsTrigger>
-                    <TabsTrigger value="assignments" className="text-white data-[state=active]:bg-white data-[state=active]:text-[#1f497d]">Assignments & Performance</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3 bg-gray-100"> {/* Apply color here */}
+                    <TabsTrigger value="courses" className="text-black data-[state=active]:bg-white data-[state=active]:text-[#1f497d]">Course Management</TabsTrigger>
+                    <TabsTrigger value="roadmaps" className="text-black data-[state=active]:bg-white data-[state=active]:text-[#1f497d]">Weekly Roadmap Management</TabsTrigger>
+                    <TabsTrigger value="assignments" className="text-black data-[state=active]:bg-white data-[state=active]:text-[#1f497d]">Assignments & Performance</TabsTrigger>
                 </TabsList>
 
                 {/* Course Management Tab */}
@@ -758,7 +758,7 @@ export default function CourseManagementPage() {
                             {/* Course and Roadmap selection dropdowns */}
                             <div className="flex flex-col sm:flex-row gap-3 bg-blue-50 p-4 rounded-md border border-blue-200">
                                 <div className="flex-1">
-                                    <Label htmlFor="selectCourseAssignments" className="text-sm font-medium text-blue-900">Select Approved Course:</Label>
+                                    <Label htmlFor="selectCourseAssignments" className="text-sm font-medium text-custom-blue">Select Approved Course:</Label>
                                     <Select
                                         value={selectedCourseForAssignments?._id || ""}
                                         onValueChange={(value) => handleCourseChangeForAssignments(value)}
