@@ -126,8 +126,8 @@ export function ProgramManagerDashboard() {
       value: stats?.totalTrainees?.toString() || "0",
       change: "+18 from last month", 
       icon: Users,
-      color: "text-website-secondary",
-      bgColor: "bg-website-secondary/10",
+      color: "text-custom-blue",
+      bgColor: "bg-custom-blue/10",
     },
     {
       title: "Total Facilitators",
@@ -142,8 +142,8 @@ export function ProgramManagerDashboard() {
       value: ((stats?.pendingPrograms || 0) + (stats?.pendingCourses || 0)).toString(), 
       change: "Programs & Courses", 
       icon: Clock,
-      color: "text-website-accent",
-      bgColor: "bg-website-accent/10",
+      color: "text-custom-blue",
+      bgColor: "bg-custom-blue/10",
     },
   ]
 
@@ -224,7 +224,7 @@ export function ProgramManagerDashboard() {
       case 'roadmap_submitted':
         return 'bg-green-500'
       case 'assignment_completed':
-        return 'bg-blue-500'
+        return 'bg-custom-blue'
       case 'milestone_reached':
         return 'bg-yellow-500'
       case 'trainee_enrolled':
@@ -237,9 +237,9 @@ export function ProgramManagerDashboard() {
   return (
     <div className="space-y-8"> {/* Increased spacing */}
       {/* Header Section */}
-      <div className="rounded-xl bg-gradient-to-r from-custom-blue to-custom-blue/80 p-8 text-white shadow-lg">
-        <h1 className="text-3xl font-bold mb-3">Welcome back, Program Manager!</h1>
-        <p className="text-gray-100 mb-6 text-lg">
+      <div className="rounded-lg bg-gradient-to-r from-[#1f497d] to-[#30588f] p-6 text-white shadow-lg">
+        <h2 className="text-2xl font-bold mb-2">Welcome, Program Manager!</h2>
+        <p className="text-gray-200 mb-4 ">
           Manage your programs and track their performance.
         </p>
         <div className="flex flex-wrap gap-4">
@@ -283,46 +283,55 @@ export function ProgramManagerDashboard() {
       {/* Quick Actions, Action Required, & Recent Activity */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Action Required Card (New) */}
-        <Card className="bg-yellow-50 border-yellow-200 shadow-lg border-none">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-yellow-800 text-xl font-bold">
-              <AlertCircle className="h-6 w-6 text-yellow-800" />
-              Action Required
-            </CardTitle>
-            <CardDescription className="text-yellow-700">
-              Items awaiting your review or approval.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {stats && ((stats.pendingPrograms > 0 || stats.pendingCourses > 0) ? (
-                <>
-                    {stats.pendingPrograms > 0 && (
-                        <Link href="/dashboard/Manager/programs" className="block p-3 rounded-md hover:bg-yellow-100 transition-colors">
-                            <div className="flex justify-between items-center">
-                                <span className="font-semibold text-yellow-900">{stats.pendingPrograms} Programs</span>
-                                <ArrowRight className="h-5 w-5 text-yellow-800"/>
-                            </div>
-                            <p className="text-sm text-yellow-700">Need your approval</p>
-                        </Link>
-                    )}
-                    {stats.pendingCourses > 0 && (
-                        <Link href="/dashboard/Manager/course-management" className="block p-3 rounded-md hover:bg-yellow-100 transition-colors"> 
-                            <div className="flex justify-between items-center">
-                                <span className="font-semibold">{stats.pendingCourses} Courses</span>
-                                <ArrowRight className="h-5 w-5 text-yellow-800"/>
-                            </div>
-                            <p className="text-sm text-yellow-700">Need your approval</p>
-                        </Link>
-                    )}
-                </>
-            ) : (
-                <div className="text-center p-4 text-muted-foreground">
-                    <CheckCircle className="h-10 w-10 mx-auto mb-3 text-green-600" />
-                    <p className="font-medium text-green-700">All clear! No actions currently required.</p>
-                </div>
-            ))}
-          </CardContent>
-        </Card>
+        <Card className="bg-[#f9fafb] border border-website-secondary/30 shadow-md">
+  <CardHeader>
+    <CardTitle className="flex items-center gap-2 text-website-accent text-xl font-bold">
+      <AlertCircle className="h-6 w-6 text-website-accent" />
+      Action Required
+    </CardTitle>
+    <CardDescription className="text-website-secondary">
+      Items awaiting your review or approval.
+    </CardDescription>
+  </CardHeader>
+
+  <CardContent className="space-y-3">
+    {stats && ((stats.pendingPrograms > 0 || stats.pendingCourses > 0) ? (
+      <>
+        {stats.pendingPrograms > 0 && (
+          <Link
+            href="/dashboard/Manager/programs"
+            className="block p-3 rounded-md hover:bg-website-secondary/10 transition-colors"
+          >
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-website-accent">{stats.pendingPrograms} Programs</span>
+              <ArrowRight className="h-5 w-5 text-website-secondary" />
+            </div>
+            <p className="text-sm text-website-secondary">Need your approval</p>
+          </Link>
+        )}
+
+        {stats.pendingCourses > 0 && (
+          <Link
+            href="/dashboard/Manager/course-management"
+            className="block p-3 rounded-md hover:bg-website-secondary/10 transition-colors"
+          >
+            <div className="flex justify-between items-center">
+              <span className="font-semibold text-website-accent">{stats.pendingCourses} Courses</span>
+              <ArrowRight className="h-5 w-5 text-website-secondary" />
+            </div>
+            <p className="text-sm text-website-secondary">Need your approval</p>
+          </Link>
+        )}
+      </>
+    ) : (
+      <div className="text-center p-4 text-muted-foreground">
+        <CheckCircle className="h-10 w-10 mx-auto mb-3 text-green-600" />
+        <p className="font-medium text-green-700">All clear! No actions currently required.</p>
+      </div>
+    ))}
+  </CardContent>
+</Card>
+
 
         {/* Quick Actions */}
         <Card className="border-0 shadow-md bg-card">
