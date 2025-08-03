@@ -2,49 +2,36 @@
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 
-/**
- * Returns a Unicode symbol for attendance status.
- * @param {string} status - The attendance status (e.g., 'Present', 'Late', 'Absent', 'Excused').
- * @returns {string} Corresponding Unicode symbol.
- */
 const getStatusSymbol = (status) => {
     switch (status) {
-        case 'Present': return '✔️'; // Checkmark
-        case 'Late': return '⚠️';   // Warning sign for late
-        case 'Absent': return '❌';   // Cross mark
-        case 'Excused': return '✅';  // Green checkmark for excused
-        default: return '❓'; // Question mark for unknown
+        case 'Present': return 'P';
+        case 'Late': return 'L';   
+        case 'Absent': return 'A';   
+        case 'Excused': return 'E';  
+        default: return '?';
     }
 };
 
-/**
- * Generates an Excel attendance report.
- * @param {object} reportData - Structured data for the attendance report.
- * @returns {Promise<ExcelJS.Workbook>} Excel workbook object.
- */
 export const generateProgramAttendanceExcel = async (reportData) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Attendance Report');
 
     const { programName, reportDates, traineeReports, summaryStats } = reportData;
 
-    // --- Report Header ---
-    worksheet.mergeCells('A1:Z1'); // Merge enough cells to cover the title
+    worksheet.mergeCells('A1:Z1');
     worksheet.getCell('A1').value = `Attendance Report for Program: ${programName}`;
     worksheet.getCell('A1').font = { bold: true, size: 16 };
     worksheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
 
-    // Date Range
     worksheet.mergeCells('A2:Z2');
     const startDateFormatted = reportDates.length > 0 ? new Date(reportDates[0]).toLocaleDateString() : 'N/A';
     const endDateFormatted = reportDates.length > 0 ? new Date(reportDates[reportDates.length - 1]).toLocaleDateString() : 'N/A';
     worksheet.getCell('A2').value = `Period: ${startDateFormatted} to ${endDateFormatted}`;
     worksheet.getCell('A2').font = { bold: true, size: 12 };
     worksheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
-    worksheet.getRow(2).height = 20; // Give it some height
-    worksheet.addRow([]); // Empty row for spacing
+    worksheet.getRow(2).height = 20;
+    worksheet.addRow([]);
 
-    // --- Summary Statistics ---
     worksheet.addRow(['Summary Statistics:']).font = { bold: true };
     worksheet.addRow(['Total Trainees:', summaryStats.totalTrainees]);
     worksheet.addRow(['Total Class Days in Period:', summaryStats.totalDaysInPeriod]);
@@ -52,32 +39,29 @@ export const generateProgramAttendanceExcel = async (reportData) => {
     worksheet.addRow(['Overall Absent Marks:', summaryStats.totalAbsentCount]);
     worksheet.addRow(['Overall Late Marks:', summaryStats.totalLateCount]);
     worksheet.addRow(['Overall Excused Marks:', summaryStats.totalExcusedCount]);
-    worksheet.addRow([]); // Empty row for spacing
+    worksheet.addRow([]);
 
-    // --- Table Headers ---
     const headers = [{ header: 'Trainee Name', key: 'name', width: 30 }];
     reportDates.forEach(date => {
         headers.push({ header: new Date(date).toLocaleDateString('en-US', { day: '2-digit', month: '2-digit' }), key: date, width: 12 });
     });
-    headers.push({ header: 'P', key: 'present', width: 5 }); // Present count
-    headers.push({ header: 'L', key: 'late', width: 5 });     // Late count
-    headers.push({ header: 'A', key: 'absent', width: 5 });   // Absent count
-    headers.push({ header: 'E', key: 'excused', width: 5 });  // Excused count
+    headers.push({ header: 'P', key: 'present', width: 5 });
+    headers.push({ header: 'L', key: 'late', width: 5 });
+    headers.push({ header: 'A', key: 'absent', width: 5 });
+    headers.push({ header: 'E', key: 'excused', width: 5 });
     
     worksheet.columns = headers;
 
-    // Apply bold and fill to header row
     const headerRow = worksheet.getRow(worksheet.rowCount);
     headerRow.font = { bold: true };
     headerRow.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' } // Light gray background
+        fgColor: { argb: 'FFE0E0E0' }
     };
     headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
-    headerRow.height = 25; // Header row height
+    headerRow.height = 25;
 
-    // --- Table Body ---
     traineeReports.forEach(tr => {
         const rowData = { name: tr.trainee.name };
         tr.dailyAttendance.forEach(da => {
@@ -90,19 +74,17 @@ export const generateProgramAttendanceExcel = async (reportData) => {
         worksheet.addRow(rowData);
     });
 
-    // Style the symbol cells
     worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber > headerRow.number) { // Only for data rows (below header)
-            row.height = 20; // Set row height for data rows
+        if (rowNumber > headerRow.number) {
+            row.height = 20;
             row.eachCell((cell, colNumber) => {
-                if (colNumber > 1 && colNumber <= reportDates.length + 1) { // Only for daily attendance columns
+                if (colNumber > 1 && colNumber <= reportDates.length + 1) {
                     cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                    // Optional: add color based on symbol
-                    if (cell.value === '❌') cell.font = { color: { argb: 'FFFF0000' } }; // Red
-                    else if (cell.value === '✔️') cell.font = { color: { argb: 'FF00B050' } }; // Green
-                    else if (cell.value === '⚠️') cell.font = { color: { argb: 'FFFFC000' } }; // Orange
-                    else if (cell.value === '✅') cell.font = { color: { argb: 'FF92D050' } }; // Light Green for Excused
-                } else if (colNumber > reportDates.length + 1) { // Summary columns
+                    if (cell.value === 'A') cell.font = { color: { argb: 'FFFF0000' } };
+                    else if (cell.value === 'P') cell.font = { color: { argb: 'FF00B050' } };
+                    else if (cell.value === 'L') cell.font = { color: { argb: 'FFFFC000' } };
+                    else if (cell.value === 'E') cell.font = { color: { argb: 'FF92D050' } };
+                } else if (colNumber > reportDates.length + 1) {
                     cell.alignment = { horizontal: 'center', vertical: 'middle' };
                 }
             });
@@ -112,25 +94,18 @@ export const generateProgramAttendanceExcel = async (reportData) => {
     return workbook;
 };
 
-/**
- * Generates a PDF attendance report.
- * @param {object} reportData - Structured data for the attendance report.
- * @param {object} stream - Writable stream to pipe the PDF to (e.g., res object).
- */
 export const generateProgramAttendancePDF = (reportData, stream) => {
-    const doc = new PDFDocument({ margin: 30, layout: 'landscape' }); // Landscape for wide tables
+    const doc = new PDFDocument({ margin: 30, layout: 'landscape' });
     doc.pipe(stream);
 
     const { programName, reportDates, traineeReports, summaryStats } = reportData;
 
-    // --- Report Header ---
     doc.fontSize(18).font('Helvetica-Bold').text(`Attendance Report for Program: ${programName}`, { align: 'center' });
     const startDateFormatted = reportDates.length > 0 ? new Date(reportDates[0]).toLocaleDateString() : 'N/A';
     const endDateFormatted = reportDates.length > 0 ? new Date(reportDates[reportDates.length - 1]).toLocaleDateString() : 'N/A';
     doc.fontSize(12).font('Helvetica').text(`Period: ${startDateFormatted} to ${endDateFormatted}`, { align: 'center' });
     doc.moveDown(1.5);
 
-    // --- Summary Statistics ---
     doc.fontSize(12).font('Helvetica-Bold').text('Summary Statistics:', { underline: true });
     doc.moveDown(0.5);
     doc.fontSize(10).font('Helvetica').list([
@@ -143,26 +118,22 @@ export const generateProgramAttendancePDF = (reportData, stream) => {
     ], { lineGap: 4 });
     doc.moveDown(1.5);
 
-    // --- Table Headers & Body ---
-    doc.fontSize(8); // Smaller font for table content
+    doc.fontSize(8);
 
     const startX = 30;
     let currentY = doc.y;
     const traineeNameWidth = 90;
-    const dateColumnWidth = 20; // Adjusted for smaller dates
+    const dateColumnWidth = 20;
     const summaryColumnWidth = 15;
-    const padding = 2; // Internal cell padding
+    const padding = 2;
 
-    const rowHeight = 25; // Height for each data row
-    const headerHeight = 30; // Height for header row
+    const rowHeight = 25;
+    const headerHeight = 30;
 
-    // Helper to draw a single cell
     const drawCell = (text, x, y, width, height, align = 'left', bgColor = null, textColor = null, bold = false) => {
-        // Handle page breaks if content exceeds page height
         if (currentY + height > doc.page.height - doc.page.margins.bottom) {
             doc.addPage({ margin: 30, layout: 'landscape' });
             currentY = doc.page.margins.top;
-            // Redraw headers on new page
             let headerX = startX;
             drawCell('Trainee Name', headerX, currentY, traineeNameWidth, headerHeight, 'left', '#E0E0E0', null, true);
             headerX += traineeNameWidth;
@@ -197,13 +168,12 @@ export const generateProgramAttendancePDF = (reportData, stream) => {
             align,
             height: height - 2 * padding,
             valign: 'middle',
-            lineBreak: false // Prevent text from wrapping inside narrow columns
+            lineBreak: false
         });
-        doc.font('Helvetica'); // Reset font for next cell
-        doc.fillColor('black'); // Reset color for next cell
+        doc.font('Helvetica');
+        doc.fillColor('black');
     };
 
-    // Draw header row
     let x = startX;
     drawCell('Trainee Name', x, currentY, traineeNameWidth, headerHeight, 'left', '#E0E0E0', null, true);
     x += traineeNameWidth;
@@ -214,7 +184,6 @@ export const generateProgramAttendancePDF = (reportData, stream) => {
         x += dateColumnWidth;
     });
 
-    // Summary Headers (P, L, A, E)
     drawCell('P', x, currentY, summaryColumnWidth, headerHeight, 'center', '#E0E0E0', null, true); x += summaryColumnWidth;
     drawCell('L', x, currentY, summaryColumnWidth, headerHeight, 'center', '#E0E0E0', null, true); x += summaryColumnWidth;
     drawCell('A', x, currentY, summaryColumnWidth, headerHeight, 'center', '#E0E0E0', null, true); x += summaryColumnWidth;
@@ -222,41 +191,34 @@ export const generateProgramAttendancePDF = (reportData, stream) => {
 
     currentY += headerHeight;
     
-    // Draw horizontal line after headers
     doc.lineWidth(0.5);
     doc.strokeColor('#CCCCCC');
     doc.moveTo(startX, currentY - 0.5).lineTo(x, currentY - 0.5).stroke();
 
-    // Table Body
     traineeReports.forEach(tr => {
-        x = startX; // Reset X for each row
+        x = startX;
         
-        // Trainee Name Cell
         drawCell(tr.trainee.name, x, currentY, traineeNameWidth, rowHeight);
         x += traineeNameWidth;
 
-        // Daily Attendance Cells
         tr.dailyAttendance.forEach(da => {
             let cellBg = null;
             let textColor = null;
-            // Define colors for statuses
-            if (da.status === 'Absent') { cellBg = '#FFDDDD'; textColor = '#FF0000'; } // Light red background, red text
-            else if (da.status === 'Late') { cellBg = '#FFFFA0'; textColor = '#FFA500'; } // Light yellow background, orange text
-            else if (da.status === 'Present') { cellBg = '#DDFFDD'; textColor = '#008000'; } // Light green background, green text
-            else if (da.status === 'Excused') { cellBg = '#DDF0FF'; textColor = '#0000FF'; } // Light blue background, blue text
+            if (da.status === 'Absent') { cellBg = '#FFDDDD'; textColor = '#FF0000'; }
+            else if (da.status === 'Late') { cellBg = '#FFFFA0'; textColor = '#FFA500'; }
+            else if (da.status === 'Present') { cellBg = '#DDFFDD'; textColor = '#008000'; }
+            else if (da.status === 'Excused') { cellBg = '#DDF0FF'; textColor = '#0000FF'; }
 
             drawCell(getStatusSymbol(da.status), x, currentY, dateColumnWidth, rowHeight, 'center', cellBg, textColor);
             x += dateColumnWidth;
         });
 
-        // Summary Cells (counts)
         drawCell(tr.summary.present.toString(), x, currentY, summaryColumnWidth, rowHeight, 'center'); x += summaryColumnWidth;
         drawCell(tr.summary.late.toString(), x, currentY, summaryColumnWidth, rowHeight, 'center'); x += summaryColumnWidth;
         drawCell(tr.summary.absent.toString(), x, currentY, summaryColumnWidth, rowHeight, 'center'); x += summaryColumnWidth;
         drawCell(tr.summary.excused.toString(), x, currentY, summaryColumnWidth, rowHeight, 'center');
 
         currentY += rowHeight;
-        // Draw horizontal line after each row
         doc.lineWidth(0.5);
         doc.strokeColor('#EEEEEE');
         doc.moveTo(startX, currentY - 0.5).lineTo(x, currentY - 0.5).stroke(); 
