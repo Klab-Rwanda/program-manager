@@ -35,11 +35,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      // Use your computer's IP address instead of localhost
-      const API_URL = 'http://172.20.10.2:8000'; // Updated to correct IP
+     
+      const API_URL = 'http://172.20.10.4:8000'; 
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000); 
       
       const response = await fetch(`${API_URL}/api/v1/auth/login`, {
         method: 'POST',

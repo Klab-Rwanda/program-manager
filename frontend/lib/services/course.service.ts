@@ -89,18 +89,7 @@ export const getAllCoursesForAdmin = async (): Promise<Course[]> => {
     return response.data.data;
 };
 
-// --- NEW/UPDATED FUNCTION: Frontend service to get the file serving URL ---
-export const getCourseFileViewUrl = (course: Course): string => {
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:8000';
-    
-    // Get the token from localStorage (adjust based on where you store your token)
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    
-    // Include the token as a query parameter if it exists
-    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : '';
-    
-    return `${API_BASE_URL}/api/v1/files/serve?path=${encodeURIComponent(course.contentUrl)}${tokenParam}`;
-};
+
 
 
 export const getCourseFileViewUrlAsync = async (course: Course): Promise<string> => {
@@ -116,5 +105,22 @@ export const getCourseFileViewUrlAsync = async (course: Course): Promise<string>
     const tokenParam = `&token=${encodeURIComponent(token)}`;
     
     return `${API_BASE_URL}/api/v1/files/serve?path=${encodeURIComponent(course.contentUrl)}${tokenParam}`;
+};
+
+export const getCourseFileViewUrl = (course: Course): string => {
+    if (!course.contentUrl) {
+        return '#'; // Or a placeholder indicating no file
+    }
+    // Correctly constructs the URL for direct static file access
+    // `process.env.NEXT_PUBLIC_API_URL` should be something like `http://localhost:8000/api/v1`
+    // We need the base URL without the `/api/v1` part.
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:8000';
+    
+    // The `course.contentUrl` should be in the format 'uploads/filename.pdf'
+    // It already has the correct path relative to your `public` folder.
+    // Ensure backslashes are replaced with forward slashes for URLs.
+    const filePath = course.contentUrl.replace(/\\/g, '/');
+    
+    return `${baseUrl}/${filePath}`;
 };
 
