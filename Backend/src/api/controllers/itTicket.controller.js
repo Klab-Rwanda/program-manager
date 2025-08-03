@@ -89,8 +89,10 @@ export const resolveTicket = asyncHandler(async (req, res) => {
 
   if (!ticket) throw new ApiError(404, 'Ticket not found.');
 
-  // Only IT Support role should resolve tickets
-  if (req.user.role !== 'it_support' && req.user.role !== 'SuperAdmin') {
+  // Normalize user role to lowercase for safe comparison
+  const userRole = req.user.role.toLowerCase();
+
+  if (userRole !== 'itsupport' && userRole !== 'superadmin') {
     throw new ApiError(403, 'Only IT Supporters can resolve tickets.');
   }
 
