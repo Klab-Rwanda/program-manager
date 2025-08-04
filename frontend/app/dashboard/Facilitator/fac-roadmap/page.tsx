@@ -70,9 +70,9 @@ export default function FacilitatorRoadmapPage() {
             case 'pending_approval':
                 return <Badge variant="outline"><Send className="mr-1 h-3 w-3" />Pending Approval</Badge>;
             case 'approved':
-                return <Badge className="bg-green-100 text-green-800 hover:bg-green-100"><CheckCircle className="mr-1 h-3 w-3" />Approved</Badge>;
+                return <Badge className="secondary"><CheckCircle className="mr-1 h-3 w-3" />Approved</Badge>;
             case 'rejected':
-                return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Rejected</Badge>;
+                return <Badge variant="outline"><XCircle className="mr-1 h-3 w-3" />Rejected</Badge>;
             default:
                 return <Badge variant="secondary">{status}</Badge>;
         }
