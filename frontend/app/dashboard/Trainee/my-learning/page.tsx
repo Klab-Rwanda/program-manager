@@ -64,7 +64,7 @@ export default function MyLearningPage() {
 
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case "Active": return <Badge className="bg-blue-100 text-blue-800">Active</Badge>;
+            case "Active": return <Badge className="bg-custom-blue ">Active</Badge>;
             case "Completed": return <Badge className="bg-green-100 text-green-800">Completed</Badge>;
             default: return <Badge variant="secondary">{status}</Badge>;
         }
