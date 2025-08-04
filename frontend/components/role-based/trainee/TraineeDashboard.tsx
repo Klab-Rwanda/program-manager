@@ -284,7 +284,7 @@ export function TraineeDashboard() {
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="rounded-lg bg-gradient-to-r from-[#1f497d] to-[#1f497d]/80 p-6 text-white"> {/* Changed from gray-900/800 to custom-blue/80 */}
+      <div className="rounded-lg bg-gradient-to-r from-[#1f497d] to-[#30588f] p-6 text-white shadow-lg"> {/* Changed from gray-900/800 to custom-blue/80 */}
         <h2 className="text-2xl font-bold mb-2">Welcome back!</h2>
         <p className="text-gray-300 mb-4">
           Continue your learning journey. You have {stats.enrolledPrograms} active program{stats.enrolledPrograms !== 1 ? 's' : ''}.

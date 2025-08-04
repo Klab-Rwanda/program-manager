@@ -108,7 +108,7 @@ export function FacilitatorDashboard() {
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
-      <div className="rounded-lg bg-gradient-to-r from-[#1f497d] to-[#1f497d]/80 p-6 text-white">
+      <div className="rounded-lg bg-gradient-to-r from-[#1f497d] to-[#30588f] p-6 text-white shadow-lg">
         <h2 className="text-2xl font-bold mb-2">Welcome back!</h2>
         <p className="text-gray-100 mb-4">Ready to start today's classes? You have {stats ? stats.todaysSessions : "-"} sessions scheduled.</p>
         <Button size="lg" className="bg-white text-[#1f497d] hover:bg-gray-100" onClick={() => router.push("/dashboard/Facilitator/Fac-attendance") }>
