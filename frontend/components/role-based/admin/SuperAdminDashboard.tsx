@@ -84,7 +84,7 @@ export function SuperAdminDashboard() {
   return (
     <div className="space-y-6">
       {/* Welcome Section - Replaced existing top div */}
-      <div className="rounded-lg bg-gradient-to-r from-[#1f497d] to-[#1f497d]/80 p-6 text-white shadow-lg">
+      <div className="rounded-lg bg-gradient-to-r from-[#1f497d] to-[#30588f] p-6 text-white shadow-lg">
         <h2 className="text-2xl font-bold mb-2">Welcome, Super Admin!</h2>
         <p className="text-gray-200 mb-4">
           Here's a comprehensive overview of the system's performance and key operations.
@@ -152,30 +152,38 @@ export function SuperAdminDashboard() {
 
         {/* Sidebar Column: Action Items & Links */}
         <div className="lg:col-span-1 space-y-6">
-            <Card className="bg-yellow-50 border-yellow-200">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-yellow-800">
-                        <AlertCircle />
-                        Action Required
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                    <Link href="/dashboard/SuperAdmin/program-approval" className="block p-3 rounded-md hover:bg-yellow-100">
-                        <div className="flex justify-between items-center">
-                            <span className="font-semibold">{stats.pendingPrograms} Programs</span>
-                            <ArrowRight className="h-4 w-4 text-muted-foreground"/>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Need your approval</p>
-                    </Link>
-                     <Link href="/dashboard/Manager/course-management" className="block p-3 rounded-md hover:bg-yellow-100"> {/* Corrected link for pending courses */}
-                        <div className="flex justify-between items-center">
-                            <span className="font-semibold">{stats.pendingCourses} Courses</span>
-                            <ArrowRight className="h-4 w-4 text-muted-foreground"/>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Need your approval</p>
-                    </Link>
-                </CardContent>
-            </Card>
+            <Card className="bg-[#f9fafb] border border-website-secondary/30">
+  <CardHeader>
+    <CardTitle className="flex items-center gap-2 text-website-accent">
+      <AlertCircle />
+      Action Required
+    </CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-3">
+    <Link
+      href="/dashboard/SuperAdmin/program-approval"
+      className="block p-3 rounded-md hover:bg-website-secondary/10"
+    >
+      <div className="flex justify-between items-center">
+        <span className="font-semibold text-website-accent">{stats.pendingPrograms} Programs</span>
+        <ArrowRight className="h-4 w-4 text-website-secondary" />
+      </div>
+      <p className="text-xs text-website-secondary">Need your approval</p>
+    </Link>
+
+    <Link
+      href="/dashboard/Manager/course-management"
+      className="block p-3 rounded-md hover:bg-website-secondary/10"
+    >
+      <div className="flex justify-between items-center">
+        <span className="font-semibold text-website-accent">{stats.pendingCourses} Courses</span>
+        <ArrowRight className="h-4 w-4 text-website-secondary" />
+      </div>
+      <p className="text-xs text-website-secondary">Need your approval</p>
+    </Link>
+  </CardContent>
+</Card>
+
 
             <Card>
                 <CardHeader><CardTitle>Quick Links</CardTitle></CardHeader>

@@ -211,16 +211,16 @@ export default function FacilitatorCourseManagementPage() {
 
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'Draft': return <Badge variant="secondary" className="px-2 py-1 flex items-center gap-1">
+            case 'Draft': return <Badge className="bg-gray-100 text-custom-blue px-2 py-1 flex items-center gap-1">
                                     <Clock className="h-3 w-3 mr-1"/> Draft
                                   </Badge>;
-            case 'PendingApproval': return <Badge className="bg-yellow-100 text-yellow-800 px-2 py-1 flex items-center gap-1">
+            case 'PendingApproval': return <Badge className="bg-gray-100 text-custom-blue px-2 py-1 flex items-center gap-1">
                                             <Clock className="h-3 w-3 mr-1"/> Pending Approval
                                           </Badge>;
-            case 'Approved': return <Badge className="bg-green-100 text-green-800 px-2 py-1 flex items-center gap-1">
+            case 'Approved': return <Badge className="bg-gray-100 text-custom-blue px-2 py-1 flex items-center gap-1">
                                       <CheckCircle className="h-3 w-3"/> Approved
                                     </Badge>;
-            case 'Rejected': return <Badge variant="destructive" className="px-2 py-1 flex items-center gap-1">
+            case 'Rejected': return <Badge className="bg-gray-100 text-custom-blue px-2 py-1 flex items-center gap-1">
                                         <AlertCircle className="h-3 w-3"/> Rejected
                                     </Badge>;
             default: return <Badge>{status}</Badge>;
@@ -329,7 +329,7 @@ export default function FacilitatorCourseManagementPage() {
                                     )}
                                     <Button 
                                         size="sm" 
-                                        variant="destructive" 
+                                        variant="default" 
                                         className="flex-1 min-w-[100px]" 
                                         onClick={() => openDeleteModal(course)}
                                         disabled={isProcessingAction === course._id}

@@ -101,21 +101,21 @@ export default function CertificatesPage() {
       value: eligibleTrainees.length.toString(), 
       description: "Ready for certification", 
       icon: Users, 
-      color: "text-blue-500" 
+      color: "text-custom-blue" 
     },
     { 
       title: "Certificates Issued", 
       value: certificates.length.toString(), 
       description: "Total certificates", 
       icon: Award, 
-      color: "text-green-500" 
+      color: "text-custom-blue" 
     },
     { 
       title: "Templates Available", 
       value: templates.length.toString(), 
       description: "Certificate designs", 
       icon: MessageSquare, 
-      color: "text-purple-500" 
+      color: "text-custom-blue" 
     },
   ], [certificates, eligibleTrainees, templates]);
 
