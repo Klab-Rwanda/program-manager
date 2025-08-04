@@ -204,7 +204,7 @@ export default function AssignmentManagementPage() {
                                      <Button 
                                          variant="ghost" 
                                          size="icon" 
-                                         className="text-blue-500" 
+                                         className="text-custom-blue" 
                                          onClick={() => handleResendNotifications(assignment)}
                                          title="Resend to trainees"
                                      >
