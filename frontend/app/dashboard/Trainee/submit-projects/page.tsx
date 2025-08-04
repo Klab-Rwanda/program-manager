@@ -135,10 +135,10 @@ export default function SubmitProjectsPage() {
 
     const getStatusBadgeColor = (status: string) => {
         switch (status) {
-            case 'Submitted': return "bg-blue-100 text-blue-800";
-            case 'Reviewed': return "bg-green-100 text-green-800";
-            case 'NeedsRevision': return "bg-red-100 text-red-800";
-            case 'Graded': return "bg-green-100 text-green-800"; // Or different color if 'Graded' is a separate visual status
+            case 'Submitted': return "bg-custom-blue text-primary-foreground";
+            case 'Reviewed': return "bg-gray-100 text-gray-800";
+            case 'NeedsRevision': return "bg-gray-500 ";
+            case 'Graded': return "bg-green-100 text-green-300"; // Or different color if 'Graded' is a separate visual status
             default: return "bg-gray-100 text-gray-800";
         }
     };
@@ -309,7 +309,7 @@ export default function SubmitProjectsPage() {
                                         <div className="flex items-center gap-2">
                                             {getStatusBadge(sub.status)}
                                             {sub.grade !== undefined && sub.grade !== null && sub.grade !== '' && (
-                                                <Badge variant="outline" className="text-lg font-bold text-green-600">{sub.grade}</Badge>
+                                                <Badge variant="outline" className=" font-bold text-green-500">{sub.grade}</Badge>
                                             )}
                                             {sub.fileUrl && (
                                                 <>
