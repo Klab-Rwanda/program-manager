@@ -9,6 +9,7 @@ import { isWithinRadius } from '../../services/geolocation.service.js';
 import mongoose from 'mongoose';
 import { User } from '../models/user.model.js'; // Ensure User model is imported
 import { createNotification } from '../../services/notification.service.js'; // Ensure createNotification is imported
+import { scheduleSessionReminder } from '../../services/sessionReminder.service.js';
 
 // A reusable helper function to build robust queries for finding sessions by _id OR sessionId
 const buildSessionQuery = (idFromParams, extraConditions = {}) => {
@@ -26,10 +27,17 @@ const buildSessionQuery = (idFromParams, extraConditions = {}) => {
 // ===================================================================
 
 const createSession = asyncHandler(async (req, res) => {
-    const { type, programId, title, description, latitude, longitude, radius } = req.body;
-    if (!type || !programId || !title) {
-        throw new ApiError(400, "Type, Program ID, and Title are required.");
+    const { type, programId, title, description, latitude, longitude, radius, startTime } = req.body; // NEW: startTime from req.body
+    
+    if (!type || !programId || !title || !startTime) { // NEW: startTime is required
+        throw new ApiError(400, "Type, Program ID, Title, and Start Time are required.");
     }
+
+    const sessionStartTime = new Date(startTime); // Parse the incoming startTime string into a Date object
+    if (isNaN(sessionStartTime.getTime())) {
+        throw new ApiError(400, "Invalid Start Time format provided.");
+    }
+
     const program = await Program.findById(programId);
     if (!program) {
         throw new ApiError(404, "Program not found.");
@@ -42,7 +50,7 @@ const createSession = asyncHandler(async (req, res) => {
         description,
         facilitatorId: req.user._id,
         sessionId: generateSessionId(),
-        startTime: new Date(),
+        startTime: sessionStartTime, // Use the parsed Date object
         status: 'scheduled',
         createdBy: req.user._id,
     };
@@ -78,6 +86,9 @@ const createSession = asyncHandler(async (req, res) => {
     } else {
         console.log(`No trainees found in program ${program.name} for session ${session.title}. No notifications sent.`);
     }
+
+    // NEW: Schedule a reminder for the session
+    scheduleSessionReminder(session);
 
     return res.status(201).json(new ApiResponse(201, session, "Session created successfully."));
 });
@@ -965,6 +976,94 @@ const getProgramSessionCounts = asyncHandler(async (req, res) => {
     }, "Program session counts fetched successfully."));
 });
 
+const updateSession = asyncHandler(async (req, res) => {
+    const { sessionId: idFromParams } = req.params;
+    const facilitatorId = req.user._id;
+    const { title, description, startTime, duration, type, latitude, longitude, radius } = req.body;
+
+    const query = buildSessionQuery(idFromParams, { facilitatorId: facilitatorId });
+    const session = await ClassSession.findOne(query).populate('programId', 'name trainees');
+
+    if (!session) {
+        throw new ApiError(404, "Session not found or you are not authorized to update it.");
+    }
+
+    // Only allow updates if session is scheduled
+    if (session.status !== 'scheduled') {
+        throw new ApiError(400, `Cannot update a session with status '${session.status}'. Only scheduled sessions can be updated.`);
+    }
+
+    const updateFields = {};
+
+    if (title !== undefined) updateFields.title = title;
+    if (description !== undefined) updateFields.description = description;
+    if (duration !== undefined) {
+        const parsedDuration = parseInt(duration);
+        if (isNaN(parsedDuration) || parsedDuration <= 0) {
+            throw new ApiError(400, "Duration must be a positive number.");
+        }
+        updateFields.duration = parsedDuration;
+    }
+    
+    // If start time is updated, re-schedule the reminder
+    if (startTime !== undefined) {
+        const newStartTime = new Date(startTime);
+        if (isNaN(newStartTime.getTime())) {
+            throw new ApiError(400, "Invalid Start Time format provided.");
+        }
+        updateFields.startTime = newStartTime;
+        // Reschedule reminder
+        scheduleSessionReminder({ ...session.toObject(), startTime: newStartTime }); // Pass updated startTime
+    }
+
+    // If type is changed, and it becomes physical, validate location
+    // Or if it's already physical and location fields are provided, update them.
+    if (type !== undefined) updateFields.type = type;
+
+    if (type === 'physical' || (session.type === 'physical' && (latitude !== undefined || longitude !== undefined || radius !== undefined))) {
+        // Ensure location object exists or is created
+        if (!updateFields.location) updateFields.location = { ...session.location?.toObject() }; 
+        
+        if (latitude !== undefined) updateFields.location.lat = latitude;
+        if (longitude !== undefined) updateFields.location.lng = longitude;
+        if (radius !== undefined) updateFields.location.radius = radius;
+
+        // If changing to physical, and location isn't fully provided, it's an error.
+        if (updateFields.type === 'physical' && (updateFields.location.lat === undefined || updateFields.location.lng === undefined)) {
+             throw new ApiError(400, "Latitude and longitude are required for a physical session.");
+        }
+    }
+
+
+    const updatedSession = await ClassSession.findByIdAndUpdate(
+        session._id,
+        { $set: updateFields },
+        { new: true, runValidators: true } // Run validators to ensure data integrity
+    ).populate('programId', 'name'); // Populate for response
+
+    if (!updatedSession) {
+        throw new ApiError(500, "Failed to update session unexpectedly.");
+    }
+    
+    // Notify trainees about the session update
+    if (updatedSession.programId && updatedSession.programId.trainees && updatedSession.programId.trainees.length > 0) {
+        const trainees = await User.find({ _id: { $in: updatedSession.programId.trainees }, role: 'Trainee' }).select('_id');
+        const notificationPromises = trainees.map(trainee =>
+            createNotification({
+                recipient: trainee._id,
+                sender: req.user._id,
+                title: `Session Updated: ${updatedSession.title}`,
+                message: `The class session "${updatedSession.title}" for your program "${updatedSession.programId.name}" has been updated. It is now scheduled for ${new Date(updatedSession.startTime).toLocaleString()}.`,
+                link: `/dashboard/Trainee/Trattendance`,
+                type: 'info'
+            })
+        );
+        await Promise.allSettled(notificationPromises);
+    }
+
+    return res.status(200).json(new ApiResponse(200, updatedSession, "Session updated successfully."));
+});
+
 
 export {
     // Facilitator
@@ -973,7 +1072,8 @@ export {
     startPhysicalSession,
     markPhysicalAttendance,
     openQrForSession,
-    deleteSession, // Added deleteSession
+    deleteSession, 
+    updateSession,
     
     // Trainee
     markQRAttendance,

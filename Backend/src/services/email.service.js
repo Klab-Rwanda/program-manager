@@ -268,11 +268,82 @@ const sendCertificateIssuedEmail = async (traineeEmail, traineeName, programName
     }
 };
 
+// --- NEW FUNCTION: Send Session Reminder Email ---
+const sendSessionReminderEmail = async (traineeEmail, traineeName, sessionTitle, programName, sessionTime, facilitatorName, sessionLink) => {
+    const subject = `Reminder: Your Session is Starting Soon! - ${sessionTitle}`;
+    
+    const formattedSessionTime = new Date(sessionTime).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' });
+
+    const htmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <h1 style="color: #333; margin-bottom: 10px;">Klab Program Manager</h1>
+                <h2 style="color: #1f497d; margin-top: 0;">Session Reminder</h2>
+            </div>
+            
+            <p>Hello ${traineeName},</p>
+            <p>Just a friendly reminder that your upcoming session is starting in <strong>10 minutes</strong>!</p>
+            
+            <div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #1f497d; margin-top: 0;">Session Details</h3>
+                <ul style="list-style: none; padding: 0; margin: 0;">
+                    <li style="margin-bottom: 10px;"><strong>Session:</strong> ${sessionTitle}</li>
+                    <li style="margin-bottom: 10px;"><strong>Program:</strong> ${programName}</li>
+                    <li style="margin-bottom: 10px;"><strong>Time:</strong> ${formattedSessionTime}</li>
+                    <li style="margin-bottom: 10px;"><strong>Facilitator:</strong> ${facilitatorName}</li>
+                </ul>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                ${sessionLink ? `
+                    <a href="${sessionLink}" 
+                       style="background-color: #28a745; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                        Join Session Now
+                    </a>
+                    <p style="margin-top: 15px; color: #666; font-size: 12px;">(Link: <span style="word-break: break-all;">${sessionLink}</span>)</p>
+                ` : `
+                    <p style="color: #666;">Please check your dashboard for the session link if available.</p>
+                `}
+            </div>
+            
+            <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p style="margin: 0; color: #856404;"><strong>⏰ Don't be late!</strong> Ensure you have a stable internet connection and quiet environment.</p>
+            </div>
+            
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+            <p style="font-size: 12px; color: #666;">
+                This is an automated notification from Klab Program Manager.<br>
+                Best regards,<br>
+                The Klab Team
+            </p>
+        </div>
+    `;
+
+    const mailOptions = {
+        from: `"Klab Program Manager" <${process.env.EMAIL_USER}>`,
+        to: traineeEmail,
+        subject: subject,
+        html: htmlBody,
+    };
+
+    try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`Session reminder email sent to ${traineeEmail}: ${info.messageId}`);
+        return true;
+    } catch (error) {
+        console.error(`Error sending session reminder email to ${traineeEmail}:`, error);
+        return false;
+    }
+};
+
+
+
 
 export { 
     sendRegistrationEmail, 
     sendPasswordResetEmail, 
     sendPasswordChangeConfirmationEmail,
     sendAssignmentNotificationEmail,
-    sendCertificateIssuedEmail // Export the new email function
+    sendCertificateIssuedEmail,
+    sendSessionReminderEmail
 };
