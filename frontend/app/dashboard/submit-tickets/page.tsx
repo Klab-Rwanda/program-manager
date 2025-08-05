@@ -306,7 +306,7 @@ export default function MyTickets() {
       ) : (
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-10">
           {filteredTickets.map((ticket) => (
-            <li key={ticket._id} className="border rounded-xl p-4 shadow-md">
+            <li key={ticket._id} className="border rounded-xl p-4 ">
               <div className="flex justify-between items-center mb-2">
                 <h2 className="text-lg font-semibold">{ticket.title}</h2>
                 <div className="flex gap-2">
@@ -323,7 +323,7 @@ export default function MyTickets() {
                   <button
                     onClick={() => handleDelete(ticket._id)}
                     title="Delete Ticket"
-                   className="flex items-center gap-1 bg-red-200 text-red-600 hover:bg-red-200 px-3 py-1 rounded-lg shadow-sm border border-red-300 transition-all duration-200"
+                   className="flex items-center gap-1 bg-gray-200 text-gray-600 hover:bg-gray-400 px-3 py-1 rounded-lg shadow-sm border border-gray-300 transition-all duration-200"
                   >
                     <FaTrash />
                     <span className="text-sm font-medium">delete</span>
