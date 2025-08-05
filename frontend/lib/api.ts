@@ -1,12 +1,13 @@
-// src/lib/api.ts
 import axios from 'axios';
 
-// Priority 2: Fallback based on domain
-let API_BASE_URL = 'http://localhost:8000/api/v1'; // default fallback
+let API_BASE_URL = 'http://localhost:8000/api/v1'; // Fallback (local dev)
 
+// Step 1: Use env var if available (for build-time injection in Vercel, Andasy, etc.)
 if (process.env.NEXT_PUBLIC_API_URL || process.env.REACT_APP_API_URL) {
   API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.REACT_APP_API_URL!;
-} else if (typeof window !== 'undefined') {
+}
+// Step 2: Fallback to dynamic hostname-based detection (if env is not present)
+else if (typeof window !== 'undefined') {
   const hostname = window.location.hostname;
   if (hostname.includes('andasy')) {
     API_BASE_URL = 'https://klabbackend.andasy.dev/api/v1';
@@ -15,6 +16,7 @@ if (process.env.NEXT_PUBLIC_API_URL || process.env.REACT_APP_API_URL) {
   }
 }
 
+// Create and export the axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
