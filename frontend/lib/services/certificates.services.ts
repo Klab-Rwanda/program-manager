@@ -46,7 +46,7 @@ export interface Template {
 
 // Trainee eligible for certificates (from backend aggregate)
 export interface TraineeForCert {
-    _id: string;
+    _id: string; // Trainee User ID
     name: string;
     email: string;
     program: string; // Program name (from backend aggregation $project)
@@ -55,6 +55,7 @@ export interface TraineeForCert {
     attendanceRate: number;
     completionDate: string;
     isEligible: boolean; // True if passed eligibility criteria
+    eligibilityReason: string; // NEW: Reason for eligibility/non-eligibility
 }
 
 // --- Backend API calls ---
@@ -62,17 +63,20 @@ export interface TraineeForCert {
 /**
  * Fetches certificates based on the user's role.
  * The backend handles role-based filtering automatically.
+ * @param role - The user's role to determine which endpoint to call
  * @returns A promise that resolves to an array of DisplayCertificate objects.
  */
-export const fetchCertificates = async (): Promise<DisplayCertificate[]> => {
-    const response = await api.get('/certificates');
+export const fetchCertificates = async (role?: string): Promise<DisplayCertificate[]> => {
+    // Determine the correct endpoint based on role
+    const endpoint = role === 'trainee' ? '/certificates/my-certificates' : '/certificates';
+    
+    const response = await api.get(endpoint);
     const backendCerts: BackendCertificate[] = response.data.data;
 
     // Transform backend certs to DisplayCertificate format
     const transformedCerts: DisplayCertificate[] = backendCerts.map((cert: BackendCertificate) => {
-        // Ensure trainee and program are objects for safe access
-        const trainee = typeof cert.trainee === 'object' && cert.trainee !== null ? cert.trainee : { _id: '', name: 'Unknown', email: '' };
-        const program = typeof cert.program === 'object' && cert.program !== null ? cert.program : { _id: '', name: 'Unknown' };
+        const trainee = typeof cert.trainee === 'object' ? cert.trainee : { _id: '', name: 'Unknown', email: '' };
+        const program = typeof cert.program === 'object' ? cert.program : { _id: '', name: 'Unknown' };
 
         return {
             _id: cert._id,
@@ -101,10 +105,10 @@ export const fetchTemplates = async (): Promise<Template[]> => {
 };
 
 /**
- * Fetches trainees eligible for certificates (calculated by backend).
+ * Fetches all students in relevant programs with their eligibility status (calculated by backend).
  * @returns A promise that resolves to an array of TraineeForCert objects.
  */
-export const fetchEligibleTrainees = async (): Promise<TraineeForCert[]> => {
+export const fetchStudentsEligibility = async (): Promise<TraineeForCert[]> => {
     const response = await api.get('/certificates/eligible-students');
     return response.data.data;
 };
@@ -159,4 +163,42 @@ export const updateCertificateTemplate = async (id: string, data: Partial<Templa
  */
 export const deleteCertificateTemplate = async (id: string): Promise<void> => {
     await api.delete(`/certificates/templates/${id}`);
+};
+
+/**
+ * Resends the notification for an issued certificate.
+ * @param certificateId The ID of the certificate for which to resend notification.
+ * @returns A promise indicating success.
+ */
+export const resendCertificateNotification = async (certificateId: string): Promise<void> => {
+    await api.post(`/certificates/${certificateId}/resend-notification`);
+};
+
+/**
+ * Downloads a certificate file as a PDF.
+ * This function makes the API call and triggers the browser download.
+ * @param certificateId The ID of the certificate to download.
+ * @param filename A suggested filename for the downloaded file (e.g., "My_Certificate.pdf").
+ */
+export const downloadCertificateFile = async (certificateId: string, filename: string): Promise<void> => {
+    try {
+        const response = await api.get(`/certificates/${certificateId}/download`, {
+            responseType: 'blob', // Important: responseType must be 'blob' for file downloads
+        });
+
+        // Create a URL for the blob and trigger a download
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename); // Set the download filename
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url); // Clean up the object URL
+
+    } catch (error) {
+        console.error('Error downloading certificate:', error);
+        // Rethrow or handle error in the calling component
+        throw error;
+    }
 };

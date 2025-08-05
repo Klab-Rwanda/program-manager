@@ -26,7 +26,8 @@ import {
     endSession,
     getProgramAttendanceSummary,
     deleteSession,
-    getProgramSessionCounts
+    getProgramSessionCounts,
+    updateSession
 } from '../../controllers/attendance.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole as verifyRole } from '../../middlewares/role.middleware.js';
@@ -46,6 +47,10 @@ router.post('/sessions',
     createSession
 );
 
+router.patch('/sessions/:sessionId',
+    verifyRole(['Facilitator']),
+    updateSession
+);
 // Start an online session and generate QR code
 router.post('/sessions/:sessionId/start-online', 
     verifyRole(['Facilitator']), 

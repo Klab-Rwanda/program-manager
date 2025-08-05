@@ -32,6 +32,18 @@ export interface ClassSession {
   };
 }
 
+
+export interface UpdateSessionData {
+  title?: string;
+  description?: string;
+  startTime?: string; // Combined date and time
+  duration?: number;
+  type?: 'physical' | 'online';
+  // Location specific fields (only for physical type)
+  latitude?: number;
+  longitude?: number;
+  radius?: number;
+}
 export const getSessionAttendance = async (sessionId: string): Promise<{ session: ClassSession; attendance: AttendanceRecord[] }> => {
     const response = await api.get(`/attendance/sessions/${sessionId}/attendance`);
     return response.data.data;
@@ -220,5 +232,10 @@ export const getProgramSessionCounts = async (programId: string): Promise<{
     }
 };
 
+
+export const updateSession = async (sessionId: string, data: UpdateSessionData): Promise<ClassSession> => {
+    const response = await api.patch(`/attendance/sessions/${sessionId}`, data);
+    return response.data.data;
+};
 
 
