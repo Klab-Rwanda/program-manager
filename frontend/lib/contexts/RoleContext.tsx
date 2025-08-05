@@ -1,122 +1,56 @@
-// src/lib/contexts/RoleContext.tsx
-"use client";
+"use client"
+import { createContext, useContext, useState } from "react";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '@/types'; // Import your new User type
-import api from '@/lib/api'; // Import the configured api client
-
-// Make sure your UserRole type covers all roles from the backend
-export type UserRole = 'super_admin' | 'program_manager' | 'facilitator' | 'trainee' | 'it_support';
-
-export interface AuthContextType {
-  user: User | null;
-  role: UserRole | null;
-  isAuthenticated: boolean;
-  loading: boolean;
+interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-   setUser: (user: User | null) => void;
+  isAuthenticated: boolean;
+  user: any;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function RoleProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true); // Add loading state
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState(null);
+  const isAuthenticated = !!user;
 
-   const [hasMounted, setHasMounted] = useState(false);
+  const login = async (email: string, password: string) => {
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL;
+      if (!API_URL) throw new Error("API URL not set");
 
-  useEffect(() => {
-      setHasMounted(true);
-  }, []);
-  const normalizeRole = (role: string): UserRole => {
-      // Convert backend role names to frontend format
-      const roleMap: Record<string, UserRole> = {
-        'SuperAdmin': 'super_admin',
-        'Program Manager': 'program_manager',
-        'Facilitator': 'facilitator',
-        'Trainee': 'trainee',
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
 
-        'ItSupport': 'it_support'
+      if (!res.ok) throw new Error("Login failed");
+      const data = await res.json();
 
-
-      };
-      return roleMap[role] || role as UserRole;
-  };
-
-const login = async (email: string, password: string) => {
-const API_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:8000' 
-  : 'https://program-manager-klab.onrender.com';
-
-const res = await fetch(`${API_URL}/api/v1/auth/login`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  credentials: "include",
-  body: JSON.stringify({ email, password }),
-});
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new Error(data.message || "Login failed");
-  }
-
-  // ✅ Save token + user to localStorage
-  localStorage.setItem("accessToken", data.data.accessToken);
-  localStorage.setItem("user", JSON.stringify(data.data.user));
-  setUser(data.data.user); // Update global user state
-  setIsAuthenticated(true); // Set authentication status to true
-};
-
-
-  const logout = (): void => {
-    setUser(null);
-    setIsAuthenticated(false);
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('user');
-  };
-
-  useEffect(() => {
-    // This effect runs once on app load to check for an existing session
-    const token = localStorage.getItem('accessToken');
-    const storedUser = localStorage.getItem('user');
-
-    if (token && storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-        setIsAuthenticated(true);
-      } catch (e) {
-        console.error("Failed to parse user data from localStorage", e);
-        logout(); // Clear invalid data
-      }
+      localStorage.setItem("accessToken", data.accessToken);
+      setUser(data.user);
+    } catch (err) {
+      console.error("Login error:", err);
+      throw err;
     }
-    setLoading(false); // Finished checking auth status
-  }, []);
+  };
 
-  const value: AuthContextType = {
-    user,
-    role: user ? normalizeRole(user.role) : null,
-    isAuthenticated,
-    loading,
-    login,
-    logout,
-      setUser,
+  const logout = () => {
+    localStorage.removeItem("accessToken");
+    setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
+    <AuthContext.Provider value={{ login, logout, isAuthenticated, user }}>
+      {children}
     </AuthContext.Provider>
   );
-}
+};
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within a RoleProvider');
-  }
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
   return context;
-}
+};
