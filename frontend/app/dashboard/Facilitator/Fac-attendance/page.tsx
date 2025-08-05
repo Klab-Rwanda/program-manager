@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Loader2, QrCode, Play, Eye, Download, StopCircle, UserCheck, Edit, Save, Trash2 } from "lucide-react"; 
+import { Plus, Loader2, QrCode, Play, Eye, Download, StopCircle, UserCheck, Edit, Save, Trash2, Calendar, Clock as ClockIcon } from "lucide-react"; 
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,21 +21,37 @@ import {
   markManualStudentAttendance, 
   getSessionAttendance, 
   deleteSession, 
+  updateSession, // NEW: Import updateSession service
   ClassSession
 } from "@/lib/services/attendance.service";
 import { Program, User as TraineeUser, AttendanceRecord } from "@/types"; 
 import api from "@/lib/api"; 
 
-const initialFormState = { type: 'online' as 'physical' | 'online', programId: '', title: '', description: '', duration: 120 };
+// Update initialFormState for both create and edit.
+// For edit, we'll populate it from an existing session.
+const initialFormState = { 
+    type: 'online' as 'physical' | 'online', 
+    programId: '', 
+    title: '', 
+    description: '', 
+    duration: 120,
+    sessionDate: '', 
+    sessionTime: '',
+    latitude: undefined as number | undefined, // For physical session location
+    longitude: undefined as number | undefined,
+    radius: 50 as number | undefined // Default radius
+};
 
 export default function FacilitatorAttendancePage() {
   const [sessions, setSessions] = useState<ClassSession[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setEditModalOpen] = useState(false); // NEW: State for edit modal
+  const [editingSession, setEditingSession] = useState<ClassSession | null>(null); // NEW: State to hold session being edited
   const [isQrModalOpen, setQrModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState<string | boolean>(false); // Used for session creation/start/end/delete
-  const [formData, setFormData] = useState(initialFormState); // Corrected: Use useState with the object
+  const [formData, setFormData] = useState(initialFormState);
   const [activeQrCode, setActiveQrCode] = useState<string | null>(null);
   
   // State for manual attendance marking
@@ -71,14 +87,69 @@ export default function FacilitatorAttendancePage() {
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+
+    if (!formData.sessionDate || !formData.sessionTime) {
+        toast.error("Please select both a date and a time for the session.");
+        setIsSubmitting(false);
+        return;
+    }
+
+    // Combine date and time into a single ISO string for startTime
+    const combinedStartTime = `${formData.sessionDate}T${formData.sessionTime}:00`;
+
     try {
-      const newSession = await createSession({ ...formData, startTime: new Date().toISOString() });
+      const newSession = await createSession({ 
+          ...formData, 
+          startTime: combinedStartTime // Use the combined start time
+      });
       toast.success("Session created successfully!");
       setCreateModalOpen(false);
-      setFormData(initialFormState);
+      setFormData(initialFormState); // Reset form
       fetchSessionsAndPrograms(); // Re-fetch all sessions
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to create session.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // NEW: Handle update session
+  const handleUpdateSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSession) return;
+    setIsSubmitting(true);
+
+    if (!formData.sessionDate || !formData.sessionTime) {
+        toast.error("Please select both a date and a time for the session.");
+        setIsSubmitting(false);
+        return;
+    }
+
+    const combinedStartTime = `${formData.sessionDate}T${formData.sessionTime}:00`;
+
+    try {
+      const updatedSessionData = { 
+          title: formData.title,
+          description: formData.description,
+          duration: formData.duration,
+          type: formData.type,
+          startTime: combinedStartTime,
+          // Only include location if type is physical
+          ...(formData.type === 'physical' && { 
+            latitude: formData.latitude, 
+            longitude: formData.longitude, 
+            radius: formData.radius 
+          })
+      };
+
+      await updateSession(editingSession.sessionId, updatedSessionData);
+      toast.success("Session updated successfully!");
+      setEditModalOpen(false);
+      setEditingSession(null);
+      setFormData(initialFormState);
+      fetchSessionsAndPrograms();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update session.");
     } finally {
       setIsSubmitting(false);
     }
@@ -92,9 +163,21 @@ export default function FacilitatorAttendancePage() {
         const result = await startOnlineSession(session.sessionId);
         updatedSession = result.session;
       } else {
-        const dummyLat = -1.9441; // Example: Kigali
-        const dummyLng = 30.0619; // Example: Kigali
-        updatedSession = await startPhysicalSession(session.sessionId, { latitude: dummyLat, longitude: dummyLng }); 
+        // For starting a physical session, we need facilitator's current location
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            if (!navigator.geolocation) {
+                return reject(new Error('Geolocation is not supported by your browser.'));
+            }
+            navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
+        }).catch(err => {
+            toast.error(`Location Error: ${err.message}. Cannot start physical session without location.`);
+            throw err; // Re-throw to propagate error and stop process
+        });
+
+        updatedSession = await startPhysicalSession(session.sessionId, { 
+            latitude: position.coords.latitude, 
+            longitude: position.coords.longitude 
+        }); 
       }
       toast.success(`Session "${updatedSession.title}" is now active!`);
       fetchSessionsAndPrograms(); // Re-fetch all sessions to update status
@@ -231,6 +314,28 @@ export default function FacilitatorAttendancePage() {
     }
   };
 
+  // NEW: Function to open the edit session modal
+  const handleOpenEditModal = (session: ClassSession) => {
+    setEditingSession(session);
+    // Pre-fill form data from the selected session
+    const sessionDate = new Date(session.startTime).toISOString().split('T')[0];
+    const sessionTime = new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    
+    setFormData({
+        type: session.type,
+        programId: session.programId._id, // Assume programId is populated
+        title: session.title,
+        description: session.description || '',
+        duration: session.duration,
+        sessionDate: sessionDate,
+        sessionTime: sessionTime,
+        latitude: session.location?.lat,
+        longitude: session.location?.lng,
+        radius: session.location?.radius
+    });
+    setEditModalOpen(true);
+  };
+
   const activeOrScheduledSessions = useMemo(() => sessions.filter(s => s.status === 'active' || s.status === 'scheduled'), [sessions]);
   const completedSessions = useMemo(() => sessions.filter(s => s.status === 'completed'), [sessions]);
 
@@ -264,6 +369,12 @@ export default function FacilitatorAttendancePage() {
                                     <Badge variant={session.status === 'active' ? 'default' : 'secondary'} className={session.status === 'active' ? 'bg-green-500 text-white' : ''}>{session.status}</Badge>
                                 </div>
                                 <CardDescription>{session.programId.name}</CardDescription>
+                                <div className="text-sm text-muted-foreground flex items-center gap-1">
+                                    <Calendar className="h-4 w-4" /> 
+                                    {new Date(session.startTime).toLocaleDateString()}
+                                    <ClockIcon className="h-4 w-4 ml-2" />
+                                    {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 {session.status === 'scheduled' && (
@@ -280,8 +391,11 @@ export default function FacilitatorAttendancePage() {
                                             } 
                                             <span className="truncate">Start Session</span>
                                         </Button>
-                                        <Button variant="outline" onClick={() => handleOpenManualMarkModal(session)} disabled={manualMarkLoading}>
+                                        <Button variant="outline" onClick={() => handleOpenEditModal(session)}> {/* NEW: Edit button for scheduled sessions */}
                                             <Edit className="h-4 w-4" />
+                                        </Button>
+                                        <Button variant="outline" onClick={() => handleOpenManualMarkModal(session)} disabled={manualMarkLoading}>
+                                            <UserCheck className="h-4 w-4" /> {/* Changed to UserCheck for clarity */}
                                         </Button>
                                     </div>
                                 )}
@@ -293,7 +407,7 @@ export default function FacilitatorAttendancePage() {
                                             </Button>
                                         </Link>
                                         <Button variant="outline" onClick={() => handleOpenManualMarkModal(session)} disabled={manualMarkLoading}>
-                                            <Edit className="h-4 w-4" />
+                                            <UserCheck className="h-4 w-4" /> {/* Changed to UserCheck for clarity */}
                                         </Button>
                                         <Button variant="destructive" size={session.type === 'online' ? 'default' : 'lg'} className="flex-1" onClick={() => handleEndSession(session)} disabled={isSubmitting === session.sessionId}>
                                             {isSubmitting === session.sessionId ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <StopCircle className="mr-2 h-4 w-4" />} End Session
@@ -338,7 +452,16 @@ export default function FacilitatorAttendancePage() {
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                             {completedSessions.map(session => (
                                 <Card key={session._id} className="opacity-80">
-                                    <CardHeader><CardTitle>{session.title}</CardTitle><CardDescription>{session.programId.name}</CardDescription></CardHeader>
+                                    <CardHeader>
+                                        <CardTitle>{session.title}</CardTitle>
+                                        <CardDescription>{session.programId.name}</CardDescription>
+                                        <div className="text-sm text-muted-foreground flex items-center gap-1">
+                                            <Calendar className="h-4 w-4" /> 
+                                            {new Date(session.startTime).toLocaleDateString()}
+                                            <ClockIcon className="h-4 w-4 ml-2" />
+                                            {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                    </CardHeader>
                                     <CardContent className="space-y-3">
                                         <Badge variant="outline">Completed</Badge>
                                         <p className="text-sm text-muted-foreground">Ended on: {new Date(session.updatedAt).toLocaleDateString()}</p>
@@ -348,7 +471,7 @@ export default function FacilitatorAttendancePage() {
                                         </Link>
                                         {/* Manual Mark button for completed sessions as well */}
                                         <Button variant="outline" className="w-full" onClick={() => handleOpenManualMarkModal(session)} disabled={manualMarkLoading}>
-                                            <Edit className="mr-2 h-4 w-4" /> Manual Mark
+                                            <UserCheck className="mr-2 h-4 w-4" /> Manual Mark
                                         </Button>
                                         {/* Delete Button moved here for completed sessions */}
                                         <Button variant="destructive" onClick={() => handleDeleteSession(session)} disabled={!!isSubmitting && isSubmitting === session.sessionId} className="w-full">
@@ -372,11 +495,86 @@ export default function FacilitatorAttendancePage() {
                  <div className="space-y-2"><Label>Program</Label><Select value={formData.programId} onValueChange={(v) => setFormData(f => ({...f, programId: v}))}><SelectTrigger><SelectValue placeholder="Select program"/></SelectTrigger><SelectContent>{programs.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
                  <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData(f => ({...f, title: e.target.value}))} required/></div>
                  <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData(f => ({...f, description: e.target.value}))} /></div>
+                 
+                 {/* Date and Time Pickers */}
+                 <div className="grid grid-cols-2 gap-4">
+                     <div className="space-y-2">
+                         <Label>Session Date</Label>
+                         <Input type="date" value={formData.sessionDate} onChange={(e) => setFormData(f => ({...f, sessionDate: e.target.value}))} required />
+                     </div>
+                     <div className="space-y-2">
+                         <Label>Session Time</Label>
+                         <Input type="time" value={formData.sessionTime} onChange={(e) => setFormData(f => ({...f, sessionTime: e.target.value}))} required />
+                     </div>
+                 </div>
+                 {formData.type === 'physical' && (
+                     <div className="grid grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                             <Label>Latitude</Label>
+                             <Input type="number" step="any" value={formData.latitude ?? ''} onChange={(e) => setFormData(f => ({...f, latitude: parseFloat(e.target.value)}))} placeholder="e.g., -1.9441" />
+                         </div>
+                         <div className="space-y-2">
+                             <Label>Longitude</Label>
+                             <Input type="number" step="any" value={formData.longitude ?? ''} onChange={(e) => setFormData(f => ({...f, longitude: parseFloat(e.target.value)}))} placeholder="e.g., 30.0619" />
+                         </div>
+                         <div className="space-y-2 col-span-2">
+                             <Label>Location Radius (meters)</Label>
+                             <Input type="number" value={formData.radius ?? 50} onChange={(e) => setFormData(f => ({...f, radius: parseInt(e.target.value)}))} placeholder="Default: 50" />
+                         </div>
+                     </div>
+                 )}
+
                  <div className="space-y-2"><Label>Duration (minutes)</Label><Input type="number" value={formData.duration} onChange={(e) => setFormData(f => ({...f, duration: parseInt(e.target.value)}))} required/></div>
                  <DialogFooter><Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>Cancel</Button><Button type="submit" disabled={!!isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Create Session</Button></DialogFooter>
             </form>
         </DialogContent>
       </Dialog>
+
+      {/* NEW: Edit Session Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent>
+            <DialogHeader><DialogTitle>Edit Session: {editingSession?.title}</DialogTitle></DialogHeader>
+            <form onSubmit={handleUpdateSession} className="space-y-4 py-4">
+                 <div className="space-y-2"><Label>Session Type</Label><Select value={formData.type} onValueChange={(v) => setFormData(f => ({...f, type: v as any}))} disabled><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="online">Online</SelectItem><SelectItem value="physical">Physical</SelectItem></SelectContent></Select></div>
+                 <div className="space-y-2"><Label>Program</Label><Select value={formData.programId} onValueChange={(v) => setFormData(f => ({...f, programId: v}))} disabled><SelectTrigger><SelectValue placeholder="Select program"/></SelectTrigger><SelectContent>{programs.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
+                 <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData(f => ({...f, title: e.target.value}))} required/></div>
+                 <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData(f => ({...f, description: e.target.value}))} /></div>
+                 
+                 {/* Date and Time Pickers */}
+                 <div className="grid grid-cols-2 gap-4">
+                     <div className="space-y-2">
+                         <Label>Session Date</Label>
+                         <Input type="date" value={formData.sessionDate} onChange={(e) => setFormData(f => ({...f, sessionDate: e.target.value}))} required />
+                     </div>
+                     <div className="space-y-2">
+                         <Label>Session Time</Label>
+                         <Input type="time" value={formData.sessionTime} onChange={(e) => setFormData(f => ({...f, sessionTime: e.target.value}))} required />
+                     </div>
+                 </div>
+                 {formData.type === 'physical' && (
+                     <div className="grid grid-cols-2 gap-4">
+                         <div className="space-y-2">
+                             <Label>Latitude</Label>
+                             <Input type="number" step="any" value={formData.latitude ?? ''} onChange={(e) => setFormData(f => ({...f, latitude: parseFloat(e.target.value)}))} placeholder="e.g., -1.9441" />
+                         </div>
+                         <div className="space-y-2">
+                             <Label>Longitude</Label>
+                             <Input type="number" step="any" value={formData.longitude ?? ''} onChange={(e) => setFormData(f => ({...f, longitude: parseFloat(e.target.value)}))} placeholder="e.g., 30.0619" />
+                         </div>
+                         <div className="space-y-2 col-span-2">
+                             <Label>Location Radius (meters)</Label>
+                             <Input type="number" value={formData.radius ?? 50} onChange={(e) => setFormData(f => ({...f, radius: parseInt(e.target.value)}))} placeholder="Default: 50" />
+                         </div>
+                     </div>
+                 )}
+
+                 <div className="space-y-2"><Label>Duration (minutes)</Label><Input type="number" value={formData.duration} onChange={(e) => setFormData(f => ({...f, duration: parseInt(e.target.value)}))} required/></div>
+                 <DialogFooter><Button type="button" variant="outline" onClick={() => setEditModalOpen(false)}>Cancel</Button><Button type="submit" disabled={!!isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Save Changes</Button></DialogFooter>
+            </form>
+        </DialogContent>
+      </Dialog>
+      {/* END NEW: Edit Session Modal */}
+
       <Dialog open={isQrModalOpen} onOpenChange={setQrModalOpen}>
         <DialogContent><DialogHeader><DialogTitle>Session QR Code</DialogTitle></DialogHeader><div className="flex justify-center p-4">{activeQrCode ? <img src={activeQrCode} alt="QR Code" /> : <Loader2 className="h-16 w-16 animate-spin"/>}</div></DialogContent>
       </Dialog>

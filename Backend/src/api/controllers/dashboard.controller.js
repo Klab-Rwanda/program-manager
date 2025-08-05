@@ -71,39 +71,39 @@ export const getFacilitatorDashboardStats = asyncHandler(async (req, res) => {
 });
 
 export const getAdminOverview = asyncHandler(async (req, res) => {
-    const isManager = req.user.role === 'Program Manager' ;
+    // Determine if the user is a manager to filter some stats
+    const isManager = req.user.role === 'Program Manager';
     const managerQuery = isManager ? { programManager: req.user._id } : {};
 
-    // Get IDs of programs managed by the current PM, if applicable
-    let managedProgramIds = [];
-    if (isManager) {
-        managedProgramIds = (await Program.find({ programManager: req.user._id }).select('_id')).map(p => p._id);
-    }
-
     const [
-        totalPrograms,
+        totalPrograms, // This variable will now hold the count of 'Active' or 'PendingApproval' programs
         activePrograms,
         pendingPrograms,
         totalTrainees,
         totalFacilitators,
-        pendingCourses, // This will now be specific to managed programs for PMs
+        pendingCourses,
         recentLogs,
         programsEndingSoon,
     ] = await Promise.all([
-        Program.countDocuments(managerQuery),
+        // Count programs that are either 'Active' or 'PendingApproval'
+        // The pre-find middleware in program.model.js will already filter out isDeleted:true and isArchived:true
+        Program.countDocuments({ 
+            ...managerQuery, 
+            status: { $in: ['Active', 'PendingApproval'] } 
+        }),
+        
+        // These are already correctly filtered by status
         Program.countDocuments({ ...managerQuery, status: 'Active' }),
         Program.countDocuments({ ...managerQuery, status: 'PendingApproval' }),
-        User.countDocuments({ role: 'Trainee', isActive: true }), // System-wide for now
-        User.countDocuments({ role: 'Facilitator', isActive: true }), // System-wide for now
-        // For Program Manager, filter pending courses by programs they manage
-        // For SuperAdmin, managedProgramIds will be empty, so it will count all pending courses.
-        isManager 
-            ? Course.countDocuments({ program: { $in: managedProgramIds }, status: 'PendingApproval' }) 
-            : Course.countDocuments({ status: 'PendingApproval' }),
+        
+        // These remain system-wide counts for SuperAdmin, or filtered by manager for Program Manager
+        User.countDocuments({ role: 'Trainee', isActive: true }),
+        User.countDocuments({ role: 'Facilitator', isActive: true }),
+        Course.countDocuments({ status: 'PendingApproval' }), // Pending course approvals are system-wide for SuperAdmin, or could be filtered by program manager's courses if desired (but generally pending approvals are centralized)
         Log.find({}).sort({ createdAt: -1 }).limit(5).populate('user', 'name role'),
         Program.find({
             ...managerQuery,
-            status: 'Active',
+            status: 'Active', // Only active programs ending soon
             endDate: { $gte: new Date(), $lte: new Date(new Date().setDate(new Date().getDate() + 30)) }
         }).sort('endDate').limit(3).select('name endDate')
     ]);
@@ -121,6 +121,7 @@ export const getAdminOverview = asyncHandler(async (req, res) => {
     
     return res.status(200).json(new ApiResponse(200, stats, "Admin overview fetched successfully."));
 });
+
 
 
 

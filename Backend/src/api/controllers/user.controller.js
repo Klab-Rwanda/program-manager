@@ -150,16 +150,16 @@ const getUserById = asyncHandler(async (req, res) => {
         $or: [{ trainees: id }, { facilitators: id }, { programManager: id }] 
     }).select('name').lean();
 
-    const recentAttendance = await Attendance.find({ userId: id }) // Corrected 'user' to 'userId'
+    const recentAttendance = await Attendance.find({ userId: id })
         .sort({ createdAt: -1 })
         .limit(5)
-        .populate('programId', 'name') // Corrected 'program' to 'programId'
+        .populate('programId', 'name')
         .lean();
 
     const activityFeed = [];
 
     recentAttendance.forEach(a => {
-        if (a.programId && typeof a.programId === 'object') { // Check if populated and is object
+        if (a.programId && typeof a.programId === 'object') {
             activityFeed.push({
                 id: a._id.toString(),
                 type: 'Attendance',
@@ -230,7 +230,7 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
 
     await createNotification({
         recipient: user._id,
-        sender: req.user._id, // User themselves or System if no specific sender
+        sender: req.user._id,
         title: "Password Changed",
         message: "Your password has been successfully changed.",
         link: `/dashboard/settings`,
@@ -359,36 +359,59 @@ export const getArchivedUsers = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { name, role } = req.body;
 
+    // A SuperAdmin should not be able to change their own role.
     if (req.user._id.toString() === id && role && req.user.role !== role) {
         throw new ApiError(400, "You cannot change your own role.");
     }
     
+    // Find the user first to get their current data including old role
     const userToUpdate = await User.findById(id);
     if (!userToUpdate) {
         throw new ApiError(404, "User not found.");
     }
 
-    // Capture old role for notification
-    const oldRole = userToUpdate.role;
+    const oldRole = userToUpdate.role; // Store old role for notification comparison
 
-    if (name) userToUpdate.name = name.trim();
-    if (role) userToUpdate.role = role;
+    const updateFields = {};
+    if (name !== undefined) {
+        updateFields.name = name.trim();
+    }
+    if (role !== undefined) {
+        // Validate the incoming role against the User schema's enum values
+        const validRoles = User.schema.path('role').enumValues;
+        if (!validRoles.includes(role)) {
+            console.error(`Attempted to set invalid role: "${role}". Valid roles are: ${validRoles.join(', ')}`);
+            throw new ApiError(400, `Invalid role provided. Must be one of: ${validRoles.join(', ')}`);
+        }
+        updateFields.role = role;
+    }
 
-    await userToUpdate.save({ validateBeforeSave: false });
+    // Use findByIdAndUpdate with $set and runValidators: true
+    // This applies schema validations and returns the updated document
+    const updatedUser = await User.findByIdAndUpdate(
+        id,
+        { $set: updateFields },
+        { new: true, runValidators: true } // Crucial: runValidators for enum checks
+    ).select('-password'); // Select -password to not return it
 
-    // Send notification for role change
-    if (oldRole !== userToUpdate.role) {
+    if (!updatedUser) {
+        // This case should ideally not be reached if findById found the user
+        throw new ApiError(500, "Failed to update user details after validation.");
+    }
+
+    // Send notification if role changed
+    // Use updatedUser.role as it reflects the change, and oldRole for comparison
+    if (role && oldRole !== updatedUser.role) {
         await createNotification({
-            recipient: userToUpdate._id,
+            recipient: updatedUser._id,
             sender: req.user._id,
-            title: "Your Role Has Changed",
-            message: `Your role has been changed from '${oldRole}' to '${userToUpdate.role}' by a Super Admin.`,
+            title: "Your Role Has Been Changed",
+            message: `Your role has been updated from '${oldRole}' to '${updatedUser.role}' by ${req.user.name}.`,
             link: `/dashboard/profile`,
-            type: 'info'
+            type: 'warning' // 'warning' or 'info' depending on desired emphasis
         });
     }
 
-    const updatedUser = await User.findById(id).select('-password');
     return res.status(200).json(new ApiResponse(200, updatedUser, "User details updated successfully."));
 });
 
@@ -400,22 +423,19 @@ export const getArchivedUsers = asyncHandler(async (req, res) => {
         throw new ApiError(400, "You cannot delete your own account.");
     }
 
-    // FIX: Fetch the user BEFORE attempting to delete/update and notify
     const userToDelete = await User.findById(id);
     if (!userToDelete) {
         throw new ApiError(404, "User not found.");
     }
 
-    // Perform the soft delete
     const user = await User.findByIdAndUpdate(
         id,
         { $set: { isActive: false, isDeleted: true } },
         { new: true }
     );
 
-    // Send notification
     await createNotification({
-        recipient: userToDelete._id, // Use userToDelete for notification details
+        recipient: userToDelete._id,
         sender: req.user._id, 
         title: "Account Deleted",
         message: `Your account (${userToDelete.email}) has been deleted by a Super Admin. You will no longer be able to log in.`,
