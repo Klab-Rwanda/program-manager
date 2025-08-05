@@ -46,22 +46,29 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   };
 
 const login = async (email: string, password: string) => {
-  try {
-    const res = await api.post('/auth/login', {
-      email,
-      password,
-    });
+const API_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8000' 
+  : 'https://program-manager-klab.onrender.com';
 
-    const { accessToken, user } = res.data.data;
+const res = await fetch(`${API_URL}/api/v1/auth/login`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  credentials: "include",
+  body: JSON.stringify({ email, password }),
+});
+  const data = await res.json();
 
-    localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('user', JSON.stringify(user));
-    setUser(user);
-    setIsAuthenticated(true);
-  } catch (err: any) {
-    console.error('Login error:', err);
-    throw new Error(err?.response?.data?.message || 'Login failed');
+  if (!res.ok) {
+    throw new Error(data.message || "Login failed");
   }
+
+  // ✅ Save token + user to localStorage
+  localStorage.setItem("accessToken", data.data.accessToken);
+  localStorage.setItem("user", JSON.stringify(data.data.user));
+  setUser(data.data.user); // Update global user state
+  setIsAuthenticated(true); // Set authentication status to true
 };
 
 
