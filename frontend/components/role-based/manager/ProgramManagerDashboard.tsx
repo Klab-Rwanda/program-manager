@@ -67,17 +67,19 @@ export function ProgramManagerDashboard() {
           'Content-Type': 'application/json'
         }
 
-        const [programsRes, statsRes, activityRes] = await Promise.all([
-          fetch("http://localhost:8000/api/v1/programs", {
-            headers
-          }),
-          fetch("http://localhost:8000/api/v1/dashboard/stats", {
-            headers
-          }),
-          fetch("http://localhost:8000/api/v1/dashboard/recent-activity", {
-            headers
-          })
-        ])
+        const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api/v1";
+
+             const [programsRes, statsRes, activityRes] = await Promise.all([
+           fetch(`${BASE_URL}/programs`, {
+    headers
+  }),
+  fetch(`${BASE_URL}/dashboard/stats`, {
+    headers
+  }),
+  fetch(`${BASE_URL}/dashboard/recent-activity`, {
+    headers
+  })
+]);
 
         if (!programsRes.ok || !statsRes.ok) {
           throw new Error("Failed to fetch dashboard data")

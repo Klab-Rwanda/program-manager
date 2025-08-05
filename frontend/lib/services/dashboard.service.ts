@@ -32,6 +32,19 @@ interface PaginatedUsers {
   // Add other pagination fields if your backend sends them
 }
 
+
+export interface RecentActivity {
+  id: string;
+  type: string;
+  text: string;
+  timestamp: string;
+}
+
+export const getRecentActivities = async (): Promise<RecentActivity[]> => {
+  const response = await api.get('/dashboard/recent-activity');
+  return response.data.data;
+};
+
 // Type for the user detail object from the backend
 export interface UserDetails extends User {
   programs: Array<{ name: string }>;

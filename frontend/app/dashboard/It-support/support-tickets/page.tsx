@@ -1,18 +1,18 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { getTickets, addCommentToTicket, updateTicket, Ticket } from '@/lib/services/ticket.service';
 
 export default function SupportTicketsPage() {
-  const [tickets, setTickets] = useState([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
-  const [selectedTicketId, setSelectedTicketId] = useState(null);
-  const [resolvingTicketId, setResolvingTicketId] = useState(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [resolvingTicketId, setResolvingTicketId] = useState<string | null>(null);
   const [resolution, setResolution] = useState('');
 
   const fetchTickets = async () => {
-    const token = localStorage.getItem("accessToken");
-
     try {
+
       const res = await fetch("http://localhost:8000/api/v1/it-support/tickets", {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -22,6 +22,7 @@ export default function SupportTicketsPage() {
 
       const result = await res.json();
       setTickets(result.data);
+
     } catch (err) {
       console.error("Error fetching tickets:", err);
     } finally {
@@ -35,8 +36,9 @@ export default function SupportTicketsPage() {
 
   const handleAddComment = async (ticketId: string) => {
     if (!comment.trim()) return;
-    const token = localStorage.getItem("accessToken");
+    
     try {
+
       const res = await fetch(`http://localhost:8000/api/v1/it-support/tickets/${ticketId}/comment`, {
         method: 'POST',
         headers: {
@@ -52,6 +54,7 @@ export default function SupportTicketsPage() {
       } else {
         console.error("Failed to add comment");
       }
+
     } catch (err) {
       console.error("Error adding comment:", err);
     }
@@ -59,8 +62,9 @@ export default function SupportTicketsPage() {
 
   const handleResolveTicket = async (ticketId: string) => {
     if (!resolution.trim()) return;
-    const token = localStorage.getItem("accessToken");
+    
     try {
+
       const res = await fetch(`http://localhost:8000/api/v1/it-support/tickets/${ticketId}/resolve`, {
         method: 'PATCH',
         headers: {
@@ -76,6 +80,7 @@ export default function SupportTicketsPage() {
       } else {
         console.error("Failed to resolve ticket");
       }
+
     } catch (err) {
       console.error("Error resolving ticket:", err);
     }
@@ -86,12 +91,14 @@ export default function SupportTicketsPage() {
 
   return (
     <div>
+
       
       <h1 className="text-3xl font-bold">Support Tickets</h1>
       <p className="text-lg text-gray-400 mb-10"> Resolve the Tickets that Users have submitted</p>
     
       <ul className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-2 gap-4 mb-6">
         {tickets.map((ticket: any) => (
+
           <li key={ticket._id} className="border rounded p-4">
             <p><strong>Title:</strong> {ticket.title}</p>
             <p><strong>Status:</strong> {ticket.status}</p>

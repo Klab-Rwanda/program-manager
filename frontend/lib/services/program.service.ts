@@ -45,7 +45,7 @@ export const deleteProgram = async (id: string): Promise<void> => {
   console.log("=== API DELETE DEBUG ===");
   console.log("Deleting program with ID:", id);
   console.log("API URL:", `/programs/${id}`);
-  console.log("Full URL:", `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/programs/${id}`);
+  console.log("Full URL:", `${process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1'}/programs/${id}`);
   
   try {
     const response = await api.delete(`/programs/${id}`);
