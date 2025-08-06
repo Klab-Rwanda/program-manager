@@ -11,44 +11,27 @@ export default function SupportTicketsPage() {
   const [resolvingTicketId, setResolvingTicketId] = useState<string | null>(null);
   const [resolution, setResolution] = useState('');
 
-  // Helper to get base URL based on environment
-  const determineBaseUrl = (): string => {
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-      if (hostname.includes("andasy")) return "https://klabbackend.andasy.dev/api/v1";
-      if (hostname.includes("vercel") || hostname.includes("onrender")) return "https://program-manager-klab.onrender.com/api/v1";
-    }
-    return "http://localhost:8000/api/v1";
-  };
 
-  // Fetch tickets from API
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
   const fetchTickets = async () => {
-    setLoading(true);
-    const token = localStorage.getItem("accessToken");
     if (!token) {
-      console.error("No token found.");
-      setLoading(false);
+      console.error('No token found.');
       return;
     }
 
-    const BASE_URL = determineBaseUrl();
-
     try {
-      const res = await fetch(`${BASE_URL}/it-support/tickets`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const response = await fetch('http://localhost:8000/api/v1/tickets', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
+      const data = await response.json();
+      setTickets(data);
 
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to fetch tickets");
-      }
-
-      const result = await res.json();
-      setTickets(result.data);
-    } catch (err) {
-      console.error("Error fetching tickets:", err);
-    } finally {
       setLoading(false);
+    } catch (error) {
+      console.error('Error fetching tickets:', error);
     }
   };
 
@@ -61,30 +44,34 @@ export default function SupportTicketsPage() {
   const handleAddComment = async (ticketId: string) => {
     if (!comment.trim()) return;
 
-    const token = localStorage.getItem("accessToken");
-    if (!token) return console.error("No token found.");
-
-    const BASE_URL = determineBaseUrl();
+    if (!token) {
+      console.error('No token found.');
+      return;
+    }
 
     try {
-      const res = await fetch(`${BASE_URL}/it-support/tickets/${ticketId}/comment`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message: comment }),
-      });
+      const res = await fetch(
+        `http://localhost:8000/api/v1/it-support/tickets/${ticketId}/comment`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: comment }),
+        }
+      );
+
 
       if (res.ok) {
         setComment('');
         setSelectedTicketId(null);
         await fetchTickets();
       } else {
-        console.error("Failed to add comment");
+        console.error('Failed to add comment');
       }
     } catch (err) {
-      console.error("Error adding comment:", err);
+      console.error('Error adding comment:', err);
     }
   };
 
@@ -92,30 +79,34 @@ export default function SupportTicketsPage() {
   const handleResolveTicket = async (ticketId: string) => {
     if (!resolution.trim()) return;
 
-    const token = localStorage.getItem("accessToken");
-    if (!token) return console.error("No token found.");
-
-    const BASE_URL = determineBaseUrl();
+    if (!token) {
+      console.error('No token found.');
+      return;
+    }
 
     try {
-      const res = await fetch(`${BASE_URL}/it-support/tickets/${ticketId}/resolve`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ resolution }),
-      });
+      const res = await fetch(
+        `http://localhost:8000/api/v1/it-support/tickets/${ticketId}/resolve`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ resolution }),
+        }
+      );
+
 
       if (res.ok) {
         setResolution('');
         setResolvingTicketId(null);
         await fetchTickets();
       } else {
-        console.error("Failed to resolve ticket");
+        console.error('Failed to resolve ticket');
       }
     } catch (err) {
-      console.error("Error resolving ticket:", err);
+      console.error('Error resolving ticket:', err);
     }
   };
 
@@ -133,37 +124,49 @@ export default function SupportTicketsPage() {
   return (
     <div>
       <h1 className="text-3xl font-bold">Support Tickets</h1>
-      <p className="text-lg text-gray-400 mb-10">Resolve the tickets that users have submitted</p>
 
-      <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        {tickets.map((ticket: Ticket) => (
+      <p className="text-lg text-gray-400 mb-10">
+        Resolve the Tickets that Users have submitted
+      </p>
+
+      <ul className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-2 gap-4 mb-6">
+        {tickets.map((ticket: any) => (
           <li key={ticket._id} className="border rounded p-4">
-            <p><strong>Title:</strong> {ticket.title}</p>
-            <p><strong>Status:</strong> {ticket.status}</p>
-            <p><strong>Created by:</strong> {ticket.createdBy?.name || 'N/A'}</p>
-            <p><strong>Priority:</strong> {ticket.priority}</p>
-            <p><strong>Date:</strong> {new Date(ticket.createdAt).toLocaleString()}</p>
+            <p>
+              <strong>Title:</strong> {ticket.title}
+            </p>
+            <p>
+              <strong>Status:</strong> {ticket.status}
+            </p>
+            <p>
+              <strong>Created by:</strong> {ticket.createdBy?.name}
+            </p>
+            <p>
+              <strong>Priority:</strong> {ticket.priority}
+            </p>
+            <p>
+              <strong>Date:</strong>{' '}
+              {new Date(ticket.createdAt).toLocaleString()}
+            </p>
 
             <div className="mt-2">
-              <button
-                onClick={() => {
-                  setSelectedTicketId(ticket._id);
-                  setResolvingTicketId(null); // Close resolve if open
-                }}
-                className="mr-2 bg-blue-900 text-white px-2 py-1 rounded"
-              >
-                Add Comment
-              </button>
-              <button
-                onClick={() => {
-                  setResolvingTicketId(ticket._id);
-                  setSelectedTicketId(null); // Close comment if open
-                }}
-                className="bg-green-500 text-white px-2 py-1 rounded"
-              >
-                Resolve Ticket
-              </button>
-            </div>
+           <button
+            onClick={() => setSelectedTicketId(ticket._id)}
+            className="mr-2 bg-blue-900 text-white px-2 py-1 rounded"
+             >
+            Add Comment
+            </button>
+            {ticket.status.toLowerCase() !== 'Resolved' && (
+
+            <button
+            onClick={() => setResolvingTicketId(ticket._id)}
+             className="bg-green-500 text-white px-2 py-1 rounded"
+         >
+            Resolve Ticket
+       </button>
+       )}
+         </div>
+
 
             {selectedTicketId === ticket._id && (
               <div className="mt-2">
@@ -175,7 +178,9 @@ export default function SupportTicketsPage() {
                 />
                 <button
                   onClick={() => handleAddComment(ticket._id)}
-                  className="mt-1 bg-blue-600 text-white px-2 py-1 rounded"
+
+                  className="mt-1 bg-blue-900 text-white px-2 py-1 rounded"
+
                 >
                   Submit Comment
                 </button>
