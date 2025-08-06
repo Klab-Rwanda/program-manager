@@ -58,10 +58,12 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     const hostname = window.location.hostname;
 
     if (hostname === "localhost") {
-      API_URL = "http://localhost:8000";
-    } else {
-      API_URL = "https://klabbackend.andasy.dev"; // ✅ Use this in Vercel
-    }
+        API_URL = "http://localhost:8000";
+      } else if (hostname.includes("vercel")) {
+        API_URL = "https://program-manager-klab.onrender.com";
+      } else {
+        API_URL = "https://klabbackend.andasy.dev";
+      }
 
     const res = await fetch(`${API_URL}/api/v1/auth/login`, {
       method: "POST",
