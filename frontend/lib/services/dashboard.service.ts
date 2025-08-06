@@ -35,10 +35,21 @@ interface PaginatedUsers {
 
 export interface RecentActivity {
   id: string;
-  type: string;
-  text: string;
+  type: 'roadmap_submitted' | 'assignment_completed' | 'assignment_created' | 'session_activity'; // More specific types
+  title: string;
+  description: string;
   timestamp: string;
+  programName?: string;
+  facilitatorName?: string;
+  traineeName?: string;
+  assignmentName?: string;
+  courseTitle?: string; // For roadmaps and assignments
+  sessionTitle?: string; // For session activity
+  status?: string; // For submission status or session status
+  grade?: string; // For submission grade
+  sessionStatus?: string; // For session status
 }
+
 
 export const getRecentActivities = async (): Promise<RecentActivity[]> => {
   const response = await api.get('/dashboard/recent-activity');
@@ -112,4 +123,9 @@ export interface FacilitatorSession {
 export const getFacilitatorSessions = async (): Promise<FacilitatorSession[]> => {
   const response = await api.get('/attendance/facilitator/sessions');
   return response.data.data;
+};
+
+export const getRecentActivity = async (): Promise<RecentActivity[]> => {
+    const response = await api.get('/dashboard/recent-activity');
+    return response.data.data;
 };
