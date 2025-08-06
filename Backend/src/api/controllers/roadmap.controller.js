@@ -124,7 +124,7 @@ export const createOrUpdateRoadmap = asyncHandler(async (req, res) => {
 
 const getFullRoadmapById = async (roadmapId) => {
     const roadmap = await Roadmap.findById(roadmapId)
-        .populate('program', 'name')
+        .populate('program', 'name status') // FIX: Ensure program status is populated here
         .populate('course', 'title')
         .lean();
     if (!roadmap) return null;

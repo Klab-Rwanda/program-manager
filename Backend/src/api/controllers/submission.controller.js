@@ -32,98 +32,31 @@ const verifyFacilitatorSubmissionAccess = async (submissionId, facilitatorId) =>
 
 // Trainee submits a project for an assignment
 const createSubmission = asyncHandler(async (req, res) => {
-    const { assignmentId } = req.body;
-    const traineeId = req.user._id; // The logged-in user is the trainee
-    const traineeName = req.user.name; // Get trainee's name from req.user
+    const { courseId, programId } = req.body;
+    const traineeId = req.user._id;
 
-    if (!assignmentId) {
-        throw new ApiError(400, "Assignment ID is required.");
-    }
     if (!req.file) {
         throw new ApiError(400, "Project file is required.");
     }
+    const fileUrl = req.file.path; // In a real app, this would be a cloud URL
 
-    const fileUrl = `uploads/${req.file.filename}`; // Consistent with course upload path
-
-    // Verify assignment exists and trainee is in the associated program
-    // Crucially, populate 'course' and 'facilitator' here for notification
-    const assignment = await Assignment.findById(assignmentId)
-        .populate('course', 'title') // Get course title for notification message
-        .populate('facilitator', 'name email'); // Get facilitator details for notification recipient
-
-    if (!assignment) {
-        throw new ApiError(404, "Assignment not found.");
+    // NEW: Verify program is Active for submission
+    const program = await Program.findById(programId);
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
     }
-    if (!assignment.course) { // Should ideally be populated, but defensive check
-        throw new ApiError(500, "Associated course not found for assignment.");
-    }
-    if (!assignment.facilitator) { // Should ideally be populated, but defensive check
-        throw new ApiError(500, "Facilitator not found for assignment.");
+    if (program.status !== 'Active') {
+        throw new ApiError(400, `Cannot submit. The program "${program.name}" is not active.`);
     }
 
-    const program = await Program.findById(assignment.program);
-    if (!program || !program.trainees.includes(traineeId)) {
-        throw new ApiError(403, "You are not enrolled in the program associated with this assignment.");
-    }
-
-    // Check if trainee has already submitted for this assignment
-    const existingSubmission = await Submission.findOne({
+    const submission = await Submission.create({
+        program: programId,
+        course: courseId,
         trainee: traineeId,
-        assignment: assignmentId
+        fileUrl,
     });
 
-    let submissionResult; // Declare variable to hold the created or updated submission
-
-    if (existingSubmission) {
-        // Allow re-submission only if status is 'Submitted' (pending review) or 'NeedsRevision'
-        if (existingSubmission.status === 'Reviewed' || existingSubmission.status === 'Graded') {
-             throw new ApiError(400, "You have already submitted and it has been reviewed/graded. Cannot resubmit.");
-        }
-        
-        // Update existing submission
-        existingSubmission.fileUrl = fileUrl;
-        existingSubmission.submittedAt = new Date();
-        existingSubmission.status = 'Submitted'; // Reset status to submitted for re-submission
-        existingSubmission.feedback = ''; // Clear feedback on re-submission
-        existingSubmission.grade = null; // Clear grade on re-submission (set to null)
-        submissionResult = await existingSubmission.save();
-
-        // Send notification to facilitator about re-submission
-        await createNotification({
-            recipient: assignment.facilitator._id,
-            sender: traineeId,
-            title: "Assignment Re-Submitted",
-            message: `${traineeName} has re-submitted their assignment for "${assignment.course.title}".`,
-            link: `/dashboard/Facilitator/fac-reviews`, // Link to facilitator's review page
-            type: 'info'
-        });
-
-        return res.status(200).json(new ApiResponse(200, submissionResult, "Project re-submitted successfully."));
-
-    } else {
-        // Create new submission
-        submissionResult = await Submission.create({
-            program: assignment.program,
-            course: assignment.course,
-            assignment: assignmentId, // Link to assignment
-            trainee: traineeId,
-            fileUrl,
-            submittedAt: new Date(),
-            status: 'Submitted' // Default status
-        });
-
-        // Send notification to facilitator about new submission
-        await createNotification({
-            recipient: assignment.facilitator._id,
-            sender: traineeId,
-            title: "New Assignment Submission",
-            message: `${traineeName} has submitted an assignment for "${assignment.course.title}".`,
-            link: `/dashboard/Facilitator/fac-reviews`, // Link to facilitator's review page
-            type: 'info'
-        });
-
-        return res.status(201).json(new ApiResponse(201, submissionResult, "Project submitted successfully."));
-    }
+    return res.status(201).json(new ApiResponse(201, submission, "Project submitted successfully."));
 });
 
 // Facilitator gets all submissions for a course they manage
@@ -236,14 +169,28 @@ const reviewSubmission = asyncHandler(async (req, res) => {
 const getMySubmissions = asyncHandler(async (req, res) => {
     const traineeId = req.user._id;
 
-    const submissions = await Submission.find({ trainee: traineeId })
-        .populate('assignment', 'title description maxGrade dueDate') // Populate assignment details
-        .populate('course', 'title') // Populate the course title
-        .populate('program', 'name') // Populate the program name
+    // Find programs the trainee is enrolled in that are Active or Completed
+    const userPrograms = await Program.find({ 
+        trainees: traineeId, 
+        status: { $in: ['Active', 'Completed'] } 
+    }).select('_id');
+
+    if (userPrograms.length === 0) {
+        return res.status(200).json(new ApiResponse(200, [], "Not enrolled in any active or completed programs."));
+    }
+    const programIds = userPrograms.map(p => p._id);
+
+    const submissions = await Submission.find({ 
+        trainee: traineeId,
+        program: { $in: programIds } // Filter submissions by these programs
+    })
+        .populate('course', 'title') 
+        .populate('program', 'name status') // Populate program status for frontend filtering
         .sort({ submittedAt: -1 });
 
     return res.status(200).json(new ApiResponse(200, submissions, "Your submissions fetched successfully."));
 });
+
 
 
 export { 

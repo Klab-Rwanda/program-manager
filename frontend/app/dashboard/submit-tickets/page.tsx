@@ -56,36 +56,48 @@ export default function MyTickets() {
     fetchTickets();
   }, []);
 
-  const fetchTickets = async () => {
-    setLoading(true);
-    const token = localStorage.getItem("accessToken");
-    if (!token) return console.error("No token found.");
+const fetchTickets = async () => {
+  setLoading(true);
 
-    try {
-      const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000/api/v1";
+  const token = localStorage.getItem("accessToken");
+  if (!token) {
+    console.error("No token found.");
+    return;
+  }
 
-const res = await fetch(`${BASE_URL}/tickets`, {
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-});
+  // Detect API base URL based on current hostname
+  let BASE_URL = "http://localhost:8000/api/v1"; // Default for local dev
 
-      const data = await res.json();
-      if (res.ok) {
-        const sorted = data.data.sort(
-          (a: Ticket, b: Ticket) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        setTickets(sorted);
-      } else {
-        console.error(data.message || "Failed to fetch tickets");
-      }
-    } catch (err) {
-      console.error("Error fetching tickets:", err);
-    } finally {
-      setLoading(false);
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+
+    if (hostname.includes("andasy")) {
+      BASE_URL = "https://klabbackend.andasy.dev/api/v1";
+    } else if (hostname.includes("vercel")) {
+      BASE_URL = "https://program-manager-klab.onrender.com/api/v1";
     }
-  };
+  }
+
+  try {
+    const res = await fetch(`${BASE_URL}/tickets`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.message || "Failed to fetch tickets");
+    }
+
+    const data = await res.json();
+    setTickets(data.tickets || []); // Replace with your actual key
+  } catch (err) {
+    console.error("Error fetching tickets:", err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Open modal for creating new ticket
   const openCreateModal = () => {
@@ -107,17 +119,33 @@ const res = await fetch(`${BASE_URL}/tickets`, {
   };
 
   // Submit handler for both create & edit
- const handleSubmit = async (e: React.FormEvent) => {
+ // Submit handler for both create & edit
+const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   setSubmitting(true);
   setSuccessMessage("");
+
   const token = localStorage.getItem("accessToken");
   if (!token) return alert("You must be logged in");
 
   try {
+    // Detect API base URL based on current hostname
+    let BASE_URL = "http://localhost:8000/api/v1"; // Default for local dev
+
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname;
+
+      if (hostname.includes("andasy")) {
+        BASE_URL = "https://klabbackend.andasy.dev/api/v1";
+      } else if (hostname.includes("vercel")) {
+        BASE_URL = "https://program-manager-klab.onrender.com/api/v1";
+      }
+    }
+
     const url = editingTicket
-      ? `http://localhost:8000/api/v1/tickets/${editingTicket._id}`
-      : "http://localhost:8000/api/v1/tickets";
+      ? `${BASE_URL}/tickets/${editingTicket._id}`
+      : `${BASE_URL}/tickets`;
+
     const method = editingTicket ? "PUT" : "POST";
 
     const res = await fetch(url, {
@@ -135,16 +163,15 @@ const res = await fetch(`${BASE_URL}/tickets`, {
       setFormData({ title: "", description: "", category: "", priority: "" });
       toast.success(editingTicket ? "Ticket updated successfully!" : "Ticket submitted successfully!");
 
-      // Clear and refresh
       closeModal();
       fetchTickets();
       resetForm();
     } else {
-      toast.error(data?.message || "Something went wrong."); 
+      toast.error(data?.message || "Something went wrong.");
     }
   } catch (err: any) {
     console.error("Submission error:", err);
-    toast.error(err?.message || "Something went wrong."); 
+    toast.error(err?.message || "Something went wrong.");
   } finally {
     setSubmitting(false);
   }
@@ -152,35 +179,47 @@ const res = await fetch(`${BASE_URL}/tickets`, {
 
 
   // Delete ticket
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this ticket?")) return;
+  // Delete ticket
+const handleDelete = async (id: string) => {
+  if (!confirm("Are you sure you want to delete this ticket?")) return;
 
-    const token = localStorage.getItem("accessToken");
-    if (!token) return alert("You must be logged in");
+  const token = localStorage.getItem("accessToken");
+  if (!token) return alert("You must be logged in");
 
-    try {
+  try {
+    // Detect API base URL based on current hostname
+    let BASE_URL = "http://localhost:8000/api/v1"; // Default for local dev
 
-      const res = await fetch(`http://localhost:8000/api/v1/tickets/${id}`, {
-        method: "DELETE",
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname;
 
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (res.ok) {
-        toast.success("Ticket deleted successfully!");
-        fetchTickets();
-      } else {
-        const data = await res.json();
-        toast.error(data.message || "Failed to delete ticket");
+      if (hostname.includes("andasy")) {
+        BASE_URL = "https://klabbackend.andasy.dev/api/v1";
+      } else if (hostname.includes("vercel")) {
+        BASE_URL = "https://program-manager-klab.onrender.com/api/v1";
       }
-    } catch (err) {
-      console.error(err);
-      toast.error("Error deleting ticket");
     }
-  };
-  
+
+    const res = await fetch(`${BASE_URL}/tickets/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (res.ok) {
+      toast.success("Ticket deleted successfully!");
+      fetchTickets();
+    } else {
+      const data = await res.json();
+      toast.error(data.message || "Failed to delete ticket");
+    }
+  } catch (err) {
+    console.error(err);
+    toast.error("Error deleting ticket");
+  }
+};
+
   const filteredTickets = tickets.filter((ticket) => {
     if (filterStatus === "All") return true;
     if (filterStatus === "Unresolved") return ticket.status === "Open";

@@ -25,6 +25,7 @@ const sendRegistrationEmail = async (to, name, password) => {
         </ul>
         <p>It is highly recommended that you change your password after your first login.</p>
         <p>Best regards,<br>The Klab Team</p>
+        <p>you can log in using this link https://program-manager-klab.vercel.app/auth/login</p>
     `;
 
     const mailOptions = {

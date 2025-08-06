@@ -1,4 +1,5 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 import { Ticket } from '@/lib/services/ticket.service';
 
@@ -9,6 +10,7 @@ export default function SupportTicketsPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [resolvingTicketId, setResolvingTicketId] = useState<string | null>(null);
   const [resolution, setResolution] = useState('');
+
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
@@ -26,18 +28,22 @@ export default function SupportTicketsPage() {
       });
       const data = await response.json();
       setTickets(data);
+
       setLoading(false);
     } catch (error) {
       console.error('Error fetching tickets:', error);
     }
   };
 
+  // Initial fetch
   useEffect(() => {
     fetchTickets();
   }, []);
 
+  // Add comment to ticket
   const handleAddComment = async (ticketId: string) => {
     if (!comment.trim()) return;
+
     if (!token) {
       console.error('No token found.');
       return;
@@ -56,10 +62,11 @@ export default function SupportTicketsPage() {
         }
       );
 
+
       if (res.ok) {
         setComment('');
         setSelectedTicketId(null);
-        fetchTickets();
+        await fetchTickets();
       } else {
         console.error('Failed to add comment');
       }
@@ -68,8 +75,10 @@ export default function SupportTicketsPage() {
     }
   };
 
+  // Mark ticket as resolved
   const handleResolveTicket = async (ticketId: string) => {
     if (!resolution.trim()) return;
+
     if (!token) {
       console.error('No token found.');
       return;
@@ -88,10 +97,11 @@ export default function SupportTicketsPage() {
         }
       );
 
+
       if (res.ok) {
         setResolution('');
         setResolvingTicketId(null);
-        fetchTickets();
+        await fetchTickets();
       } else {
         console.error('Failed to resolve ticket');
       }
@@ -101,11 +111,20 @@ export default function SupportTicketsPage() {
   };
 
   if (loading) return <p>Loading...</p>;
-  if (!tickets || tickets.length === 0) return <p>No tickets found.</p>;
+
+  if (!tickets || tickets.length === 0) {
+    return (
+      <div className="text-center text-gray-500 mt-10">
+        <p className="text-xl font-semibold">🎉 No tickets to resolve</p>
+        <p>You're all caught up!</p>
+      </div>
+    );
+  }
 
   return (
     <div>
       <h1 className="text-3xl font-bold">Support Tickets</h1>
+
       <p className="text-lg text-gray-400 mb-10">
         Resolve the Tickets that Users have submitted
       </p>
@@ -148,6 +167,7 @@ export default function SupportTicketsPage() {
        )}
          </div>
 
+
             {selectedTicketId === ticket._id && (
               <div className="mt-2">
                 <textarea
@@ -158,7 +178,9 @@ export default function SupportTicketsPage() {
                 />
                 <button
                   onClick={() => handleAddComment(ticket._id)}
+
                   className="mt-1 bg-blue-900 text-white px-2 py-1 rounded"
+
                 >
                   Submit Comment
                 </button>

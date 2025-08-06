@@ -39,16 +39,25 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, stats, "Dashboard statistics fetched successfully."));
 });
 
-/**
- * @desc    Get facilitator dashboard statistics.
- * @route   GET /api/v1/dashboard/facilitator-stats
- * @access  Private (Facilitator)
- */
 export const getFacilitatorDashboardStats = asyncHandler(async (req, res) => {
     const facilitatorId = req.user._id;
-    // Assigned programs: count of programs where facilitator is assigned
-    const assignedPrograms = await Program.countDocuments({ facilitators: facilitatorId, isActive: true });
-    // Today's sessions: count of sessions scheduled for today for this facilitator
+
+    // Fetch programs assigned to this facilitator
+    const assignedPrograms = await Program.find({ facilitators: facilitatorId, isActive: true }).select('_id trainees');
+    const assignedProgramIds = assignedPrograms.map(p => p._id);
+
+    // Count total students across all assigned programs
+    let totalStudents = 0;
+    assignedPrograms.forEach(program => {
+        totalStudents += program.trainees.length;
+    });
+
+    // Count courses created by this facilitator
+    const courses = await Course.find({ facilitator: facilitatorId }).select('status');
+    const totalCourses = courses.length;
+    const approvedCourses = courses.filter(c => c.status === 'Approved').length;
+
+    // Count sessions scheduled for today by this facilitator
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date();
@@ -57,18 +66,35 @@ export const getFacilitatorDashboardStats = asyncHandler(async (req, res) => {
         facilitatorId,
         startTime: { $gte: startOfDay, $lte: endOfDay }
     });
-    // Pending reviews: count of courses with status 'PendingApproval' for this facilitator
-    const pendingReviews = await Course.countDocuments({ facilitator: facilitatorId, status: 'PendingApproval' });
-    // Attendance rate: placeholder (real calculation would require more logic)
-    const attendanceRate = 92;
+
+    // Count pending submissions for assignments created by this facilitator
+    // This is more complex and would ideally involve joining Submission and Assignment by facilitatorId
+    // For now, we count pending assignments that belong to courses/programs this facilitator manages
+    const pendingReviews = await Submission.countDocuments({
+        status: 'Submitted', // Assuming 'Submitted' means pending review
+        // You would need to refine this to only count for THIS facilitator's assignments
+        // A more robust query: find assignments created by this facilitator, then count submissions for them.
+        // For simplicity, let's keep it as is (counting general pending reviews) or directly count assignments.
+        // Let's count assignments created by this facilitator that have NOT been graded yet.
+        assignment: { $in: await Assignment.find({ facilitator: facilitatorId }).select('_id') }
+    });
+
+
+    // Attendance rate placeholder (complex to calculate accurately across multiple classes/students without aggregation)
+    const attendanceRate = 92; // Still a mock or aggregate from data you retrieve elsewhere
+
     const stats = {
-        assignedPrograms,
+        assignedPrograms: assignedProgramIds.length,
         todaysSessions,
+        totalStudents,      // NEW
+        totalCourses,       // NEW
+        approvedCourses,    // NEW
         pendingReviews,
         attendanceRate
     };
     return res.status(200).json(new ApiResponse(200, stats, "Facilitator dashboard stats fetched successfully."));
 });
+
 
 export const getAdminOverview = asyncHandler(async (req, res) => {
     // Determine if the user is a manager to filter some stats
@@ -125,42 +151,69 @@ export const getAdminOverview = asyncHandler(async (req, res) => {
 
 
 
-/**
- * @desc    Get recent activity for dashboard.
- * @route   GET /api/v1/dashboard/recent-activity
- * @access  Private (SuperAdmin, ProgramManager)
- */
-export const getRecentActivity = asyncHandler(async (req, res) => {
-    const isManager = req.user.role === 'Program Manager';
-    const managerQuery = isManager ? { programManager: req.user._id } : {};
 
-    // Get recent roadmaps submitted
+export const getRecentActivity = asyncHandler(async (req, res) => {
+    const userId = req.user._id;
+    const userRole = req.user.role;
+
+    let programQuery = {}; // For filtering by manager/facilitator if applicable
+
+    // Determine programs relevant to the user's role
+    if (userRole === 'Program Manager') {
+        programQuery = { programManager: userId };
+    } else if (userRole === 'Facilitator') {
+        programQuery = { facilitators: userId };
+    }
+
+    // Get recent roadmaps submitted (only by this facilitator or for managed programs)
     const recentRoadmaps = await Roadmap.find({
-        ...managerQuery,
-        status: 'pending_approval'
+        ...programQuery,
+        ...(userRole === 'Facilitator' && { facilitator: userId }), // Specifically filter by facilitator ID if it's a facilitator
+        status: 'pending_approval' // Show roadmaps pending approval in recent activity
     })
     .sort({ createdAt: -1 })
     .limit(3)
     .populate('program', 'name')
+    .populate('course', 'title') // Populate course for more context
     .populate('facilitator', 'name');
 
-    // Get recent assignment submissions
+    // Get recent assignment submissions for assignments related to this facilitator's courses
+    // Or for managed programs if it's a Program Manager
+    const relevantAssignments = await Assignment.find({
+        ...programQuery,
+        ...(userRole === 'Facilitator' && { facilitator: userId })
+    }).select('_id title maxGrade course program facilitator');
+
+    const relevantAssignmentIds = relevantAssignments.map(a => a._id);
+
     const recentSubmissions = await Submission.find({
+        assignment: { $in: relevantAssignmentIds },
         submittedAt: { $exists: true, $ne: null }
     })
     .sort({ submittedAt: -1 })
     .limit(3)
-    .populate('assignment', 'title')
+    .populate('assignment', 'title') // Should populate assignment title
     .populate('trainee', 'name');
 
-    // Get recent assignments created
-    const recentAssignments = await Assignment.find({
-        ...managerQuery
+    // Get recent assignments created by this facilitator (or for managed programs)
+    const recentAssignmentsCreated = await Assignment.find({
+        ...programQuery,
+        ...(userRole === 'Facilitator' && { facilitator: userId })
     })
     .sort({ createdAt: -1 })
     .limit(3)
     .populate('program', 'name')
-    .populate('course', 'name');
+    .populate('course', 'title');
+
+    // Get recent session activities related to this facilitator
+    const recentSessionsActivity = await ClassSession.find({
+        facilitatorId: userId,
+        startTime: { $lte: new Date() } // Sessions that have started or completed
+    })
+    .sort({ startTime: -1 })
+    .limit(3)
+    .populate('programId', 'name');
+
 
     const activities = [];
 
@@ -173,7 +226,8 @@ export const getRecentActivity = asyncHandler(async (req, res) => {
             description: `${roadmap.program?.name || 'Unknown Program'} - Week ${roadmap.weekNumber} roadmap submitted by ${roadmap.facilitator?.name || 'Unknown Facilitator'}`,
             timestamp: roadmap.createdAt,
             programName: roadmap.program?.name,
-            facilitatorName: roadmap.facilitator?.name
+            facilitatorName: roadmap.facilitator?.name,
+            courseTitle: roadmap.course?.title // Added courseTitle
         });
     });
 
@@ -183,23 +237,40 @@ export const getRecentActivity = asyncHandler(async (req, res) => {
             id: submission._id.toString(),
             type: 'assignment_completed',
             title: 'Assignment completed',
-            description: `${submission.assignment?.title || 'Unknown Assignment'} completed by ${submission.trainee?.name || 'Unknown Trainee'}`,
+            description: `${submission.assignment?.title || 'Unknown Assignment'} completed by ${submission.trainee?.name || 'Unknown Trainee'}. Status: ${submission.status || 'N/A'}. Grade: ${submission.grade || 'N/A'}`,
             timestamp: submission.submittedAt,
             assignmentName: submission.assignment?.title,
-            traineeName: submission.trainee?.name
+            traineeName: submission.trainee?.name,
+            status: submission.status,
+            grade: submission.grade
         });
     });
 
     // Add assignment creation activities
-    recentAssignments.forEach(assignment => {
+    recentAssignmentsCreated.forEach(assignment => {
         activities.push({
             id: assignment._id.toString(),
             type: 'assignment_created',
             title: 'New assignment created',
-            description: `${assignment.title} created for ${assignment.program?.name || 'Unknown Program'}`,
+            description: `${assignment.title} created for ${assignment.program?.name || 'Unknown Program'} (${assignment.course?.title || 'Unknown Course'})`,
             timestamp: assignment.createdAt,
             assignmentName: assignment.title,
-            programName: assignment.program?.name
+            programName: assignment.program?.name,
+            courseName: assignment.course?.title
+        });
+    });
+
+    // Add recent session activities
+    recentSessionsActivity.forEach(session => {
+        activities.push({
+            id: session._id.toString(),
+            type: 'session_activity',
+            title: `Session Activity: ${session.title}`,
+            description: `Session "${session.title}" (${session.programId?.name || 'Unknown Program'}) was ${session.status}. Started at ${new Date(session.startTime).toLocaleString()}`,
+            timestamp: session.startTime,
+            sessionTitle: session.title,
+            programName: session.programId?.name,
+            sessionStatus: session.status
         });
     });
 
