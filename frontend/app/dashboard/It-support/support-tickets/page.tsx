@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { getTickets, addCommentToTicket, updateTicket, Ticket } from '@/lib/services/ticket.service';
+import { Ticket } from '@/lib/services/ticket.service';
 
 export default function SupportTicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -10,23 +10,25 @@ export default function SupportTicketsPage() {
   const [resolvingTicketId, setResolvingTicketId] = useState<string | null>(null);
   const [resolution, setResolution] = useState('');
 
-  const fetchTickets = async () => {
-    try {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-      const res = await fetch("http://localhost:8000/api/v1/it-support/tickets", {
+  const fetchTickets = async () => {
+    if (!token) {
+      console.error('No token found.');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/tickets', {
         headers: {
           Authorization: `Bearer ${token}`,
-         
         },
       });
-
-      const result = await res.json();
-      setTickets(result.data);
-
-    } catch (err) {
-      console.error("Error fetching tickets:", err);
-    } finally {
+      const data = await response.json();
+      setTickets(data);
       setLoading(false);
+    } catch (error) {
+      console.error('Error fetching tickets:', error);
     }
   };
 
@@ -36,53 +38,65 @@ export default function SupportTicketsPage() {
 
   const handleAddComment = async (ticketId: string) => {
     if (!comment.trim()) return;
-    
-    try {
+    if (!token) {
+      console.error('No token found.');
+      return;
+    }
 
-      const res = await fetch(`http://localhost:8000/api/v1/it-support/tickets/${ticketId}/comment`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message: comment }),
-      });
+    try {
+      const res = await fetch(
+        `http://localhost:8000/api/v1/it-support/tickets/${ticketId}/comment`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ message: comment }),
+        }
+      );
+
       if (res.ok) {
         setComment('');
         setSelectedTicketId(null);
         fetchTickets();
       } else {
-        console.error("Failed to add comment");
+        console.error('Failed to add comment');
       }
-
     } catch (err) {
-      console.error("Error adding comment:", err);
+      console.error('Error adding comment:', err);
     }
   };
 
   const handleResolveTicket = async (ticketId: string) => {
     if (!resolution.trim()) return;
-    
-    try {
+    if (!token) {
+      console.error('No token found.');
+      return;
+    }
 
-      const res = await fetch(`http://localhost:8000/api/v1/it-support/tickets/${ticketId}/resolve`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ resolution }),
-      });
+    try {
+      const res = await fetch(
+        `http://localhost:8000/api/v1/it-support/tickets/${ticketId}/resolve`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ resolution }),
+        }
+      );
+
       if (res.ok) {
         setResolution('');
         setResolvingTicketId(null);
         fetchTickets();
       } else {
-        console.error("Failed to resolve ticket");
+        console.error('Failed to resolve ticket');
       }
-
     } catch (err) {
-      console.error("Error resolving ticket:", err);
+      console.error('Error resolving ticket:', err);
     }
   };
 
@@ -91,29 +105,48 @@ export default function SupportTicketsPage() {
 
   return (
     <div>
-
-      
       <h1 className="text-3xl font-bold">Support Tickets</h1>
-      <p className="text-lg text-gray-400 mb-10"> Resolve the Tickets that Users have submitted</p>
-    
+      <p className="text-lg text-gray-400 mb-10">
+        Resolve the Tickets that Users have submitted
+      </p>
+
       <ul className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-2 gap-4 mb-6">
         {tickets.map((ticket: any) => (
-
           <li key={ticket._id} className="border rounded p-4">
-            <p><strong>Title:</strong> {ticket.title}</p>
-            <p><strong>Status:</strong> {ticket.status}</p>
-            <p><strong>Created by:</strong> {ticket.createdBy?.name}</p>
-            <p><strong>Priority:</strong> {ticket.priority}</p>
-            <p><strong>Date:</strong> {new Date(ticket.createdAt).toLocaleString()}</p>
+            <p>
+              <strong>Title:</strong> {ticket.title}
+            </p>
+            <p>
+              <strong>Status:</strong> {ticket.status}
+            </p>
+            <p>
+              <strong>Created by:</strong> {ticket.createdBy?.name}
+            </p>
+            <p>
+              <strong>Priority:</strong> {ticket.priority}
+            </p>
+            <p>
+              <strong>Date:</strong>{' '}
+              {new Date(ticket.createdAt).toLocaleString()}
+            </p>
 
             <div className="mt-2">
-              <button onClick={() => setSelectedTicketId(ticket._id)} className="mr-2 bg-blue-900 text-white px-2 py-1 rounded">
-                Add Comment
-              </button>
-              <button onClick={() => setResolvingTicketId(ticket._id)} className="bg-green-500 text-white px-2 py-1 rounded">
-                Resolve Ticket
-              </button>
-            </div>
+           <button
+            onClick={() => setSelectedTicketId(ticket._id)}
+            className="mr-2 bg-blue-900 text-white px-2 py-1 rounded"
+             >
+            Add Comment
+            </button>
+            {ticket.status.toLowerCase() !== 'Resolved' && (
+
+            <button
+            onClick={() => setResolvingTicketId(ticket._id)}
+             className="bg-green-500 text-white px-2 py-1 rounded"
+         >
+            Resolve Ticket
+       </button>
+       )}
+         </div>
 
             {selectedTicketId === ticket._id && (
               <div className="mt-2">
@@ -123,10 +156,16 @@ export default function SupportTicketsPage() {
                   placeholder="Enter your comment"
                   className="w-full border rounded p-2"
                 />
-                <button onClick={() => handleAddComment(ticket._id)} className="mt-1 bg-blue-600 text-white px-2 py-1 rounded">
+                <button
+                  onClick={() => handleAddComment(ticket._id)}
+                  className="mt-1 bg-blue-900 text-white px-2 py-1 rounded"
+                >
                   Submit Comment
                 </button>
-                <button onClick={() => setSelectedTicketId(null)} className="ml-2 text-red-600">
+                <button
+                  onClick={() => setSelectedTicketId(null)}
+                  className="ml-2 text-red-600"
+                >
                   Cancel
                 </button>
               </div>
@@ -140,10 +179,16 @@ export default function SupportTicketsPage() {
                   placeholder="Enter resolution details"
                   className="w-full border rounded p-2"
                 />
-                <button onClick={() => handleResolveTicket(ticket._id)} className="mt-1 bg-green-600 text-white px-2 py-1 rounded">
+                <button
+                  onClick={() => handleResolveTicket(ticket._id)}
+                  className="mt-1 bg-green-600 text-white px-2 py-1 rounded"
+                >
                   Mark as Resolved
                 </button>
-                <button onClick={() => setResolvingTicketId(null)} className="ml-2 text-red-600">
+                <button
+                  onClick={() => setResolvingTicketId(null)}
+                  className="ml-2 text-red-600"
+                >
                   Cancel
                 </button>
               </div>
