@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Plus, Edit, Trash2, Loader2, Send, Clock, CheckCircle, XCircle, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -11,11 +11,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { getMyRoadmaps, saveRoadmap, deleteRoadmap } from "@/lib/services/roadmap.service";
 import { getAllPrograms } from "@/lib/services/program.service";
 import { getMyCourses } from "@/lib/services/course.service";
-import { Roadmap, Program, Topic, Course } from "@/types";
+import { Roadmap, Program as BackendProgram, Topic, Course } from "@/types";
+
+// Extend Roadmap type to ensure program and course are populated with status
+interface EnhancedRoadmap extends Roadmap {
+    program: BackendProgram; // Ensure program is populated with status
+    course: Course; // Ensure course is populated (title is enough)
+}
 
 const initialFormData = { 
     program: "", 
@@ -34,34 +41,50 @@ const initialFormData = {
 };
 
 export default function FacilitatorRoadmapPage() {
-    const [roadmaps, setRoadmaps] = useState<Roadmap[]>([]);
-    const [myPrograms, setMyPrograms] = useState<Program[]>([]);
-    const [myCourses, setMyCourses] = useState<Course[]>([]);
+    const [roadmaps, setRoadmaps] = useState<EnhancedRoadmap[]>([]); // Use EnhancedRoadmap
+    const [myPrograms, setMyPrograms] = useState<BackendProgram[]>([]); // All programs facilitator is part of
+    const [myCourses, setMyCourses] = useState<Course[]>([]); // All courses facilitator is part of (active/completed programs)
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSendingToStudents, setIsSendingToStudents] = useState(false);
-    const [sentRoadmaps, setSentRoadmaps] = useState<Set<string>>(new Set());
-    const [editingRoadmap, setEditingRoadmap] = useState<Roadmap | null>(null);
+    const [sentRoadmaps, setSentRoadmaps] = useState<Set<string>>(new Set()); // Keep track of sent roadmaps
+    const [editingRoadmap, setEditingRoadmap] = useState<EnhancedRoadmap | null>(null); // Use EnhancedRoadmap
     const [formData, setFormData] = useState<any>(initialFormData);
+    const [activeTab, setActiveTab] = useState("active"); // State for active tab
 
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
+            // getMyRoadmaps now fetches roadmaps from Active/Completed programs
+            // getAllPrograms now fetches programs facilitator is associated with (active/completed)
+            // getMyCourses now fetches courses facilitator is associated with (active/completed programs)
             const [roadmapsData, programsData, coursesData] = await Promise.all([
                 getMyRoadmaps(), 
                 getAllPrograms(),
                 getMyCourses()
             ]);
 
-            setRoadmaps(roadmapsData);
+            setRoadmaps(roadmapsData as EnhancedRoadmap[]); // Cast to EnhancedRoadmap
             setMyPrograms(programsData);
             setMyCourses(coursesData);
-        } catch (err) { toast.error("Failed to load data.");
+        } catch (err) { 
+            toast.error("Failed to load data.");
+            console.error("Fetch Data Error:", err);
         } finally { setLoading(false); }
     }, []);
 
     useEffect(() => { fetchData(); }, [fetchData]);
+
+    // Memoized lists for active and completed roadmaps
+    const activeRoadmaps = useMemo(() => 
+        roadmaps.filter(roadmap => (roadmap.program as BackendProgram)?.status === 'Active'), 
+        [roadmaps]
+    );
+    const completedRoadmaps = useMemo(() => 
+        roadmaps.filter(roadmap => (roadmap.program as BackendProgram)?.status === 'Completed'), 
+        [roadmaps]
+    );
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -70,23 +93,22 @@ export default function FacilitatorRoadmapPage() {
             case 'pending_approval':
                 return <Badge variant="outline"><Send className="mr-1 h-3 w-3" />Pending Approval</Badge>;
             case 'approved':
-                return <Badge className="secondary"><CheckCircle className="mr-1 h-3 w-3" />Approved</Badge>;
+                return <Badge className="bg-green-100 text-green-800 hover:bg-green-100"><CheckCircle className="mr-1 h-3 w-3" />Approved</Badge>;
             case 'rejected':
-                return <Badge variant="outline"><XCircle className="mr-1 h-3 w-3" />Rejected</Badge>;
+                return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Rejected</Badge>;
             default:
                 return <Badge variant="secondary">{status}</Badge>;
         }
     };
 
-    const handleOpenModal = (roadmap: Roadmap | null = null) => {
+    const handleOpenModal = (roadmap: EnhancedRoadmap | null = null) => { // Use EnhancedRoadmap
         setEditingRoadmap(roadmap);
         if (roadmap) {
             // Convert existing topics to new format if they don't have startTime/endTime
-            const convertedTopics = roadmap.topics.map(topic => {
+            const convertedTopics = (roadmap.topics || []).map(topic => {
                 if (topic.startTime && topic.endTime) {
                     return topic;
                 } else {
-                    // Convert old format (duration) to new format (startTime/endTime)
                     return {
                         ...topic,
                         startTime: "09:00",
@@ -97,7 +119,7 @@ export default function FacilitatorRoadmapPage() {
             
             setFormData({
                 program: typeof roadmap.program === 'string' ? roadmap.program : roadmap.program._id,
-                course: roadmap.course || "",
+                course: typeof roadmap.course === 'object' ? roadmap.course._id : roadmap.course,
                 weekNumber: roadmap.weekNumber,
                 title: roadmap.title,
                 startDate: new Date(roadmap.startDate).toISOString().split('T')[0],
@@ -112,13 +134,16 @@ export default function FacilitatorRoadmapPage() {
 
     const handleDelete = (roadmapId: string) => {
         toast("Are you sure?", {
-            description: "This will permanently delete the weekly roadmap and all its topics.",
+            description: "This will permanently delete the weekly roadmap and all its topics. Note: Only roadmaps from active programs can be deleted.",
             action: { label: "Delete", onClick: async () => {
                 try {
-                    await deleteRoadmap(roadmapId);
+                    await deleteRoadmap(roadmapId); // Backend enforces Active program status
                     toast.success("Roadmap deleted.");
                     fetchData();
-                } catch { toast.error("Failed to delete roadmap."); }
+                } catch (err: any) { 
+                    toast.error(err.response?.data?.message || "Failed to delete roadmap."); 
+                    console.error("Delete Error:", err);
+                }
             }},
             cancel: { label: "Cancel" }
         });
@@ -131,7 +156,7 @@ export default function FacilitatorRoadmapPage() {
     };
 
     const addTopicField = () => {
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         const nextDay = days[formData.topics.length] || `Day ${formData.topics.length + 1}`;
         setFormData({ ...formData, topics: [...formData.topics, { day: nextDay, title: "", startTime: "09:00", endTime: "12:00", sessionType: "in-person" }] });
     };
@@ -190,17 +215,15 @@ export default function FacilitatorRoadmapPage() {
         const newTopics = [...formData.topics];
         newTopics[index] = { ...newTopics[index], [field]: value };
         
-        // Validate that end time is after start time
         const topic = newTopics[index];
         if (topic.startTime && topic.endTime) {
             const start = new Date(`2000-01-01T${topic.startTime}`);
             const end = new Date(`2000-01-01T${topic.endTime}`);
             if (end <= start) {
-                // You could add a toast notification here if needed
-                console.warn('End time should be after start time');
+                // Optional: add a toast notification if end time is before start time
+                // toast.warning("End time should be after start time.");
             }
         }
-        
         setFormData({ ...formData, topics: newTopics });
     };
 
@@ -213,7 +236,7 @@ export default function FacilitatorRoadmapPage() {
                 weekNumber: parseInt(formData.weekNumber),
                 action: action === 'submit' ? 'submit_for_approval' : undefined
             };
-            await saveRoadmap(submitData);
+            await saveRoadmap(submitData); // Backend enforces Active program status
             const message = action === 'submit' 
                 ? `Roadmap for Week ${formData.weekNumber} submitted for approval!`
                 : `Roadmap for Week ${formData.weekNumber} saved successfully!`;
@@ -222,17 +245,18 @@ export default function FacilitatorRoadmapPage() {
             fetchData();
         } catch (err: any) {
             toast.error(err.response?.data?.message || "Operation failed.");
+            console.error("Save/Submit Error:", err);
         } finally {
             setIsSubmitting(false);
         }
     };
     
-    const handleSubmitForApproval = async (roadmap: Roadmap) => {
+    const handleSubmitForApproval = async (roadmap: EnhancedRoadmap) => { // Use EnhancedRoadmap
         try {
             setIsSubmitting(true);
             const submitData = {
                 program: typeof roadmap.program === 'string' ? roadmap.program : roadmap.program._id,
-                course: typeof roadmap.course === 'string' ? roadmap.course : roadmap.course._id,
+                course: typeof roadmap.course === 'object' ? roadmap.course._id : roadmap.course,
                 weekNumber: parseInt(roadmap.weekNumber.toString()),
                 title: roadmap.title,
                 startDate: new Date(roadmap.startDate).toISOString().split('T')[0],
@@ -241,8 +265,7 @@ export default function FacilitatorRoadmapPage() {
                 action: 'submit_for_approval'
             };
             
-            console.log('Submitting roadmap for approval:', submitData);
-            await saveRoadmap(submitData);
+            await saveRoadmap(submitData); // Backend enforces Active program status
             toast.success(`Roadmap for Week ${roadmap.weekNumber} submitted for approval!`);
             fetchData();
         } catch (err: any) {
@@ -253,14 +276,14 @@ export default function FacilitatorRoadmapPage() {
         }
     };
 
-    const getSendButtonText = (roadmap: Roadmap) => {
+    const getSendButtonText = (roadmap: EnhancedRoadmap) => { // Use EnhancedRoadmap
         if (sentRoadmaps.has(roadmap._id)) {
             return "Resend to Students";
         }
         return "Send to Students";
     };
 
-    const handleSendToStudents = async (roadmap: Roadmap) => {
+    const handleSendToStudents = async (roadmap: EnhancedRoadmap) => { // Use EnhancedRoadmap
         setIsSendingToStudents(true);
         try {
             // TODO: Implement API call to send roadmap to all students in the program
@@ -291,142 +314,222 @@ export default function FacilitatorRoadmapPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div><h1 className="text-3xl font-bold">Weekly Roadmap</h1><p className="text-muted-foreground">Plan and manage weekly learning schedules.</p></div>
-                <Button onClick={() => handleOpenModal()}><Plus className="mr-2 h-4 w-4"/>Plan New Week</Button>
+                {/* Create button disabled if not on "Active" tab */}
+                <Button onClick={() => handleOpenModal()} disabled={activeTab !== 'active'}>
+                    <Plus className="mr-2 h-4 w-4"/>Plan New Week
+                </Button>
             </div>
             
-            <Card>
-                <CardHeader><CardTitle>My Planned Weeks</CardTitle></CardHeader>
-                <CardContent>
-                    {loading ? <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div> :
-                    roadmaps.length === 0 ? <p className="text-center py-10 text-muted-foreground">You haven't planned any weeks yet.</p> :
-                    <Accordion type="single" collapsible className="w-full">
-                        {roadmaps.map(roadmap => (
-                            <AccordionItem value={roadmap._id} key={roadmap._id}>
-                                <AccordionTrigger className="text-lg p-4 hover:no-underline">
-                                    <div className="flex items-center gap-3">
-                                        <span>Week {roadmap.weekNumber}: {roadmap.title}</span>
-                                        <span className="text-sm text-gray-500">
-                                            ({(roadmap.program as any)?.name} - {(roadmap.course as any)?.title})
-                                        </span>
-                                        {getStatusBadge(roadmap.status)}
-                                        {roadmap.status === 'approved' && sentRoadmaps.has(roadmap._id) && (
-                                            <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                                                <CheckCircle className="mr-1 h-3 w-3" />
-                                                Sent to Students
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </AccordionTrigger>
-                                <AccordionContent className="px-4 pb-4 space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <div className="space-y-2">
-                                            {roadmap.feedback && (
-                                                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                                                    <p className="text-sm font-medium text-red-800">Feedback from Program Manager:</p>
-                                                    <p className="text-sm text-red-700">{roadmap.feedback}</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex gap-2">
-                                            {roadmap.status === 'draft' && (
-                                                <>
-                                                    <Button size="sm" variant="outline" onClick={() => handleOpenModal(roadmap)}>
-                                                        <Edit className="mr-2 h-4 w-4"/>Edit Week
-                                                    </Button>
-                                                    <Button size="sm" variant="default" onClick={() => handleSubmitForApproval(roadmap)} disabled={isSubmitting}>
-                                                        {isSubmitting ? (
-                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                        ) : (
-                                                            <Send className="mr-2 h-4 w-4" />
-                                                        )}
-                                                        Submit for Approval
-                                                    </Button>
-                                                </>
-                                            )}
-                                            {roadmap.status === 'rejected' && (
-                                                <Button size="sm" variant="outline" onClick={() => handleOpenModal(roadmap)}>
-                                                    <Edit className="mr-2 h-4 w-4"/>Edit & Resubmit
-                                                </Button>
-                                            )}
-                                            {roadmap.status === 'approved' && (
-                                                <Button size="sm" variant="default" onClick={() => handleSendToStudents(roadmap)} disabled={isSendingToStudents}>
-                                                    {isSendingToStudents ? (
-                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    ) : (
-                                                        <Users className="mr-2 h-4 w-4" />
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="active">Active Roadmaps ({activeRoadmaps.length})</TabsTrigger>
+                    <TabsTrigger value="completed">Completed Programs Roadmaps ({completedRoadmaps.length})</TabsTrigger>
+                </TabsList>
+
+                {/* Active Roadmaps Tab Content */}
+                <TabsContent value="active" className="mt-4">
+                    <Card>
+                        <CardHeader><CardTitle>Active Programs Roadmaps</CardTitle></CardHeader>
+                        <CardContent>
+                            {loading ? <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div> :
+                            activeRoadmaps.length === 0 ? <p className="text-center py-10 text-muted-foreground">No active roadmaps found.</p> :
+                            <Accordion type="single" collapsible className="w-full">
+                                {activeRoadmaps.map(roadmap => (
+                                    <AccordionItem value={roadmap._id} key={roadmap._id}>
+                                        <AccordionTrigger className="text-lg p-4 hover:no-underline">
+                                            <div className="flex items-center gap-3">
+                                                <span>Week {roadmap.weekNumber}: {roadmap.title}</span>
+                                                <span className="text-sm text-gray-500">
+                                                    ({(roadmap.program as BackendProgram)?.name} - {(roadmap.course as Course)?.title})
+                                                </span>
+                                                {getStatusBadge(roadmap.status)}
+                                                {roadmap.status === 'approved' && sentRoadmaps.has(roadmap._id) && (
+                                                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                                        <CheckCircle className="mr-1 h-3 w-3" />
+                                                        Sent to Students
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent className="px-4 pb-4 space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <div className="space-y-2">
+                                                    {roadmap.feedback && (
+                                                        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                                                            <p className="text-sm font-medium text-red-800">Feedback from Program Manager:</p>
+                                                            <p className="text-sm text-red-700">{roadmap.feedback}</p>
+                                                        </div>
                                                     )}
-                                                    {getSendButtonText(roadmap)}
-                                                </Button>
-                                            )}
-                                            {(roadmap.status === 'draft' || roadmap.status === 'rejected') && (
-                                                <Button size="sm" variant="destructive-outline" onClick={() => handleDelete(roadmap._id)}>
-                                                    <Trash2 className="mr-2 h-4 w-4"/>Delete Week
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <h4 className="font-semibold">Daily Topics</h4>
-                                        {roadmap.topics.map(topic => (
-                                            <div key={topic._id} className="p-3 border rounded-md bg-gray-50">
-                                                <div className="flex justify-between items-start">
-                                                    <div className="flex-1">
-                                                        <div className="font-medium text-gray-900">
-                                                            {topic.day}: {topic.title}
-                                                        </div>
-                                                        <div className="text-sm text-gray-600 mt-1">
-                                                            {topic.startTime && topic.endTime ? (
-                                                                <span>
-                                                                    {formatTimeDisplay(topic.startTime)} - {formatTimeDisplay(topic.endTime)}
-                                                                    <span className="ml-2 text-gray-500">
-                                                                        ({calculateDuration(topic.startTime, topic.endTime)})
-                                                                    </span>
-                                                                </span>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    {roadmap.status === 'draft' && (
+                                                        <>
+                                                            <Button size="sm" variant="outline" onClick={() => handleOpenModal(roadmap)}>
+                                                                <Edit className="mr-2 h-4 w-4"/>Edit Week
+                                                            </Button>
+                                                            <Button size="sm" variant="default" onClick={() => handleSubmitForApproval(roadmap)} disabled={isSubmitting}>
+                                                                {isSubmitting ? (
+                                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                ) : (
+                                                                    <Send className="mr-2 h-4 w-4" />
+                                                                )}
+                                                                Submit for Approval
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                    {roadmap.status === 'rejected' && (
+                                                        <Button size="sm" variant="outline" onClick={() => handleOpenModal(roadmap)}>
+                                                            <Edit className="mr-2 h-4 w-4"/>Edit & Resubmit
+                                                        </Button>
+                                                    )}
+                                                    {roadmap.status === 'approved' && (
+                                                        <Button size="sm" variant="default" onClick={() => handleSendToStudents(roadmap)} disabled={isSendingToStudents}>
+                                                            {isSendingToStudents ? (
+                                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                                             ) : (
-                                                                <span>{topic.duration || 'No time specified'}</span>
+                                                                <Users className="mr-2 h-4 w-4" />
                                                             )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-sm text-gray-500 ml-2">
-                                                        {topic.sessionType}
-                                                    </div>
+                                                            {getSendButtonText(roadmap)}
+                                                        </Button>
+                                                    )}
+                                                    {(roadmap.status === 'draft' || roadmap.status === 'rejected') && (
+                                                        <Button size="sm" variant="destructive-outline" onClick={() => handleDelete(roadmap._id)}>
+                                                            <Trash2 className="mr-2 h-4 w-4"/>Delete Week
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
-                                </AccordionContent>
-                            </AccordionItem>
-                        ))}
-                    </Accordion>
-                    }
-                </CardContent>
-            </Card>
+                                            <div className="space-y-2">
+                                                <h4 className="font-semibold">Daily Topics</h4>
+                                                {(roadmap.topics || []).map(topic => (
+                                                    <div key={topic._id} className="p-3 border rounded-md bg-gray-50">
+                                                        <div className="flex justify-between items-start">
+                                                            <div className="flex-1">
+                                                                <div className="font-medium text-gray-900">
+                                                                    {topic.day}: {topic.title}
+                                                                </div>
+                                                                <div className="text-sm text-gray-600 mt-1">
+                                                                    {topic.startTime && topic.endTime ? (
+                                                                        <span>
+                                                                            {formatTimeDisplay(topic.startTime)} - {formatTimeDisplay(topic.endTime)}
+                                                                            <span className="ml-2 text-gray-500">
+                                                                                ({calculateDuration(topic.startTime, topic.endTime)})
+                                                                            </span>
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span>{topic.duration || 'No time specified'}</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-sm text-gray-500 ml-2">
+                                                                {topic.sessionType}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                ))}
+                            </Accordion>
+                        }
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Completed Programs Roadmaps Tab Content */}
+                <TabsContent value="completed" className="mt-4">
+                    <Card>
+                        <CardHeader><CardTitle>Roadmaps from Completed Programs</CardTitle></CardHeader>
+                        <CardContent>
+                            {loading ? <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div> :
+                            completedRoadmaps.length === 0 ? <p className="text-center py-10 text-muted-foreground">No roadmaps found for completed programs.</p> :
+                            <Accordion type="single" collapsible className="w-full">
+                                {completedRoadmaps.map(roadmap => (
+                                    <AccordionItem value={roadmap._id} key={roadmap._id}>
+                                        <AccordionTrigger className="text-lg p-4 hover:no-underline">
+                                            <div className="flex items-center gap-3">
+                                                <span>Week {roadmap.weekNumber}: {roadmap.title}</span>
+                                                <span className="text-sm text-gray-500">
+                                                    ({(roadmap.program as BackendProgram)?.name} - {(roadmap.course as Course)?.title}) (Completed)
+                                                </span>
+                                                {getStatusBadge(roadmap.status)}
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent className="px-4 pb-4 space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <div className="space-y-2">
+                                                    {roadmap.feedback && (
+                                                        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                                                            <p className="text-sm font-medium text-red-800">Feedback from Program Manager:</p>
+                                                            <p className="text-sm text-red-700">{roadmap.feedback}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    {/* Action buttons disabled for completed program roadmaps */}
+                                                    <Button size="sm" variant="outline" disabled title="Program is completed. Cannot edit.">
+                                                        <Edit className="mr-2 h-4 w-4"/>Edit Week
+                                                    </Button>
+                                                    <Button size="sm" variant="default" disabled title="Program is completed. Cannot submit.">
+                                                        <Send className="mr-2 h-4 w-4"/>Submit for Approval
+                                                    </Button>
+                                                    <Button size="sm" variant="destructive-outline" disabled title="Program is completed. Cannot delete.">
+                                                        <Trash2 className="mr-2 h-4 w-4"/>Delete Week
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <h4 className="font-semibold">Daily Topics</h4>
+                                                {(roadmap.topics || []).map(topic => (
+                                                    <div key={topic._id} className="p-3 border rounded-md bg-gray-50">
+                                                        <p className="font-medium">{topic.day}: {topic.title}</p>
+                                                        <p className="text-xs text-muted-foreground">{topic.duration} - {topic.sessionType}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                ))}
+                            </Accordion>
+                        }
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
 
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                 <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader><DialogTitle>{editingRoadmap ? 'Edit' : 'Plan'} Week</DialogTitle></DialogHeader>
                     <form onSubmit={(e) => handleSubmit(e, 'save')} className="space-y-4 py-4">
-                        {/* Form content remains largely the same, but is now used for both create and edit */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label>Program</Label>
+                                {/* Filter programs in dropdown to only show Active ones for new roadmap creation/editing */}
                                 <Select value={formData.program} onValueChange={(v) => setFormData(f => ({...f, program: v}))} required>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select a program"/>
+                                        <SelectValue placeholder="Select an active program"/>
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {myPrograms.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}
+                                        {myPrograms
+                                            .filter(p => p.status === 'Active') // Only show active programs
+                                            .map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div className="space-y-2">
                                 <Label>Course</Label>
+                                {/* Filter courses to only show ones from the selected Active program */}
                                 <Select value={formData.course} onValueChange={(v) => setFormData(f => ({...f, course: v}))} required>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select a course"/>
+                                        <SelectValue placeholder="Select a course from active program"/>
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {myCourses.map(c => <SelectItem key={c._id} value={c._id}>{c.title}</SelectItem>)}
+                                        {myCourses
+                                            .filter(c => 
+                                                c.program?._id === formData.program && (c.program as BackendProgram)?.status === 'Active'
+                                            )
+                                            .map(c => <SelectItem key={c._id} value={c._id}>{c.title}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>

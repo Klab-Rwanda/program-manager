@@ -6,16 +6,17 @@ import { Course } from '../models/course.model.js';
 import { Program } from '../models/program.model.js';
 import { Roadmap } from '../models/roadmap.model.js';
 import { User } from '../models/user.model.js';
-import { Submission } from '../models/submission.model.js'; // Import Submission model to check status
 import { sendAssignmentNotificationEmail } from '../../services/email.service.js';
-import { createNotification } from '../../services/notification.service.js';
 
-// Helper to verify facilitator owns the course/program
-const verifyFacilitatorAccess = async (courseId, facilitatorId) => {
-    const course = await Course.findById(courseId);
+// Helper to verify facilitator owns the course/program AND program is Active (for modification actions)
+const verifyFacilitatorActiveProgramAccess = async (courseId, facilitatorId) => {
+    const course = await Course.findById(courseId).populate('program');
     if (!course) throw new ApiError(404, "Course not found.");
     if (course.facilitator.toString() !== facilitatorId.toString()) {
         throw new ApiError(403, "Forbidden: You are not the facilitator of this course.");
+    }
+    if (!course.program || course.program.status !== 'Active') {
+        throw new ApiError(400, `Cannot perform this action. The program "${course.program?.name || 'unknown'}" is not active.`);
     }
     return course;
 };
@@ -49,16 +50,6 @@ const sendAssignmentNotifications = async (assignment, course, program, facilita
             )
         );
 
-          const notificationPromises = trainees.map(trainee =>
-            createNotification({
-                recipient: trainee._id,
-                sender: facilitator._id,
-                title: `New Assignment: ${assignment.title}`,
-                message: `A new assignment "${assignment.title}" has been posted for your course "${course.title}" in program "${program.name}". Due: ${new Date(assignment.dueDate).toLocaleDateString()}.`,
-                link: `/dashboard/Trainee/submit-projects`, // Link to trainee's submission page
-                type: 'info'
-            })
-        );
         const results = await Promise.allSettled(emailPromises);
         const successfulEmails = results.filter(result => result.status === 'fulfilled' && result.value).length;
 
@@ -100,7 +91,7 @@ export const createAssignment = asyncHandler(async (req, res) => {
         throw new ApiError(400, "All required fields must be provided.");
     }
 
-    const course = await verifyFacilitatorAccess(courseId, facilitatorId);
+    const course = await verifyFacilitatorActiveProgramAccess(courseId, facilitatorId); // Access check includes program is Active
 
     // Verify roadmap exists and belongs to the course
     const roadmap = await Roadmap.findById(roadmapId);
@@ -110,6 +101,12 @@ export const createAssignment = asyncHandler(async (req, res) => {
     if (roadmap.course.toString() !== courseId) {
         throw new ApiError(400, "Roadmap does not belong to the selected course.");
     }
+    // Verify roadmap's program status is Active
+    const programForRoadmap = await Program.findById(roadmap.program);
+    if (!programForRoadmap || programForRoadmap.status !== 'Active') {
+        throw new ApiError(400, `Cannot create assignment. The program "${programForRoadmap?.name || 'unknown'}" for this roadmap is not active.`);
+    }
+
 
     console.log('Creating assignment with data:', {
         title,
@@ -172,21 +169,54 @@ export const createAssignment = asyncHandler(async (req, res) => {
  */
 export const getAssignmentsForCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
+    
+    // Allow fetching assignments for courses in ACTIVE OR COMPLETED programs
+    const course = await Course.findById(courseId).populate('program');
+    if (!course) throw new ApiError(404, "Course not found.");
+    
+    // Trainees: Must be enrolled in program, program must be Active/Completed, and course must be Approved.
+    if (req.user.role === 'Trainee') {
+        const userPrograms = await Program.find({ trainees: req.user._id, _id: course.program._id }).select('_id status');
+        if (userPrograms.length === 0) {
+            throw new ApiError(403, "Forbidden: You are not enrolled in this program.");
+        }
+        if (course.status !== 'Approved') {
+            throw new ApiError(403, "Access Denied: This course is not approved for trainee access.");
+        }
+        if (userPrograms[0].status !== 'Active' && userPrograms[0].status !== 'Completed') {
+            throw new ApiError(403, "Access Denied: This course belongs to an inaccessible program.");
+        }
+    } else { // Facilitator, PM, SA: Allow viewing assignments for courses in Active/Completed programs
+        if (course.program.status !== 'Active' && course.program.status !== 'Completed') {
+            throw new ApiError(403, "Access Denied: This course belongs to an inaccessible program.");
+        }
+    }
+
+
     const assignments = await Assignment.find({ course: courseId }).sort({ dueDate: 1 });
     return res.status(200).json(new ApiResponse(200, assignments, "Assignments fetched successfully."));
 });
 
 /**
- * @desc    Get all assignments created by the logged-in facilitator.
+ * @desc    Get all assignments created by the logged-in facilitator, including those from completed programs.
  * @route   GET /api/v1/assignments/my-assignments
  * @access  Private (Facilitator)
  */
 export const getMyCreatedAssignments = asyncHandler(async (req, res) => {
-    const assignments = await Assignment.find({ facilitator: req.user._id })
+    // NEW: Fetch all assignments created by facilitator, populating program status
+    const userPrograms = await Program.find({ facilitators: req.user._id, status: { $in: ['Active', 'Completed'] } }).select('_id');
+    const programIds = userPrograms.map(p => p._id);
+
+    const assignments = await Assignment.find({ 
+        facilitator: req.user._id,
+        program: { $in: programIds } // Only show assignments for programs facilitator is involved with (active or completed)
+    })
         .populate('course', 'title')
-        .populate('program', 'name')
+        .populate('program', 'name status') // Populate status to filter on frontend
         .populate('roadmap', 'title weekNumber')
-        .sort({ dueDate: -1 });
+        .sort({ dueDate: -1 }); // Sort newest first
+
+    // Send all for frontend to sort into tabs
     return res.status(200).json(new ApiResponse(200, assignments));
 });
 
@@ -203,7 +233,7 @@ export const updateAssignment = asyncHandler(async (req, res) => {
     const assignment = await Assignment.findById(id);
     if (!assignment) throw new ApiError(404, "Assignment not found.");
 
-    await verifyFacilitatorAccess(assignment.course, req.user._id);
+    await verifyFacilitatorActiveProgramAccess(assignment.course, req.user._id); // Access check includes program is Active
 
     // If roadmapId is provided, verify it exists and belongs to the course
     if (roadmapId) {
@@ -213,6 +243,11 @@ export const updateAssignment = asyncHandler(async (req, res) => {
         }
         if (roadmap.course.toString() !== assignment.course.toString()) {
             throw new ApiError(400, "Roadmap does not belong to the assignment's course.");
+        }
+        // Also check the roadmap's program status if roadmap is changed
+        const programForRoadmap = await Program.findById(roadmap.program);
+        if (!programForRoadmap || programForRoadmap.status !== 'Active') {
+            throw new ApiError(400, `Cannot update assignment with this roadmap. The program "${programForRoadmap?.name || 'unknown'}" for this roadmap is not active.`);
         }
     }
 
@@ -238,86 +273,72 @@ export const deleteAssignment = asyncHandler(async (req, res) => {
     const assignment = await Assignment.findById(id);
     if (!assignment) throw new ApiError(404, "Assignment not found.");
     
-    await verifyFacilitatorAccess(assignment.course, req.user._id);
+    await verifyFacilitatorActiveProgramAccess(assignment.course, req.user._id); // Access check includes program is Active
 
     await assignment.deleteOne();
-
-     const trainees = await User.find({ _id: { $in: assignment.program.trainees }, role: 'Trainee' }).select('_id');
-    const notificationPromises = trainees.map(trainee => 
-        createNotification({
-            recipient: trainee._id,
-            sender: facilitatorId,
-            title: `Assignment Deleted: ${assignment.title}`,
-            message: `The assignment "${assignment.title}" for course "${assignment.course.title}" has been deleted.`,
-            link: `/dashboard/Trainee/submit-projects`, // Link might show nothing now
-            type: 'warning'
-        })
-    );
-     await Promise.allSettled(notificationPromises);
 
     return res.status(200).json(new ApiResponse(200, {}, "Assignment deleted successfully."));
 });
 
 /**
- * @desc    Get assignments available for a trainee to submit (not yet reviewed/graded).
+ * @desc    Get all assignments available to the logged-in trainee.
  * @route   GET /api/v1/assignments/my-available
  * @access  Private (Trainee)
  */
 export const getMyAvailableAssignments = asyncHandler(async (req, res) => {
     const traineeId = req.user._id;
 
-    // 1. Find all programs the trainee is enrolled in.
-    const userPrograms = await Program.find({ trainees: traineeId }).select('_id');
+    // 1. Find all programs the trainee is enrolled in and are 'Active'.
+    const userPrograms = await Program.find({ trainees: traineeId, status: 'Active' }).select('_id');
     if (userPrograms.length === 0) {
-        return res.status(200).json(new ApiResponse(200, [], "Not enrolled in any programs."));
+        return res.status(200).json(new ApiResponse(200, [], "Not enrolled in any active programs."));
     }
     const programIds = userPrograms.map(p => p._id);
 
-    // 2. Find all assignments that belong to any of those programs AND are active.
-    let assignments = await Assignment.find({
+    // 2. Find all assignments that belong to any of those active programs.
+    const assignments = await Assignment.find({
         program: { $in: programIds },
-        isActive: true,
-        dueDate: { $gte: new Date() } // Only include assignments not yet past due
+        isActive: true // Only show active assignments
     })
     .populate('program', 'name')
     .populate('course', 'title')
-    .sort({ dueDate: 1 });
+    .sort({ dueDate: 1 }); // Sort by the nearest due date first
 
-    // 3. Filter out assignments for which the trainee has a 'Reviewed' or 'Graded' submission.
-    //    We need to fetch submissions for these assignments by this trainee.
-    const assignmentIds = assignments.map(a => a._id);
-    const submissions = await Submission.find({
-        trainee: traineeId,
-        assignment: { $in: assignmentIds },
-        status: { $in: ['Reviewed', 'Graded'] }
-    }).select('assignment');
-
-    const reviewedOrGradedAssignmentIds = new Set(submissions.map(s => s.assignment.toString()));
-
-    const availableAssignments = assignments.filter(assignment => 
-        !reviewedOrGradedAssignmentIds.has(assignment._id.toString())
-    );
-
-    return res.status(200).json(new ApiResponse(200, availableAssignments, "Available assignments fetched successfully."));
+    return res.status(200).json(new ApiResponse(200, assignments, "Available assignments fetched successfully."));
 });
 
-
+/**
+ * @desc    Get all assignments for a specific program (used for trainee submit-project page)
+ * @route   GET /api/v1/assignments/program/:programId
+ * @access  Private (Trainee)
+ */
 export const getAssignmentsForProgram = asyncHandler(async (req, res) => {
     const { programId } = req.params;
+    const traineeId = req.user._id;
 
-    // 1. Find all APPROVED courses for this program.
-    const approvedCourses = await Course.find({ 
-        program: programId, 
-        status: 'Approved' 
-    }).select('_id');
+    // Verify program exists and trainee is enrolled and program is Active
+    const program = await Program.findById(programId);
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
+    }
+    if (!program.trainees.includes(traineeId)) {
+        throw new ApiError(403, "Forbidden: You are not enrolled in this program.");
+    }
+    if (program.status !== 'Active') {
+        throw new ApiError(400, "This program is not active. Cannot retrieve assignments for submission.");
+    }
 
-    const courseIds = approvedCourses.map(c => c._id);
+    const assignments = await Assignment.find({ 
+        program: programId,
+        isActive: true
+    })
+    .populate('course', 'title')
+    .populate('roadmap', 'title weekNumber')
+    .sort({ dueDate: 1 });
 
-    // 2. Find all assignments linked to those approved courses.
-    const assignments = await Assignment.find({ course: { $in: courseIds } });
-    
     return res.status(200).json(new ApiResponse(200, assignments, "Assignments fetched successfully."));
 });
+
 
 /**
  * @desc    Resend assignment notifications to trainees.
@@ -329,15 +350,20 @@ export const resendAssignmentNotifications = asyncHandler(async (req, res) => {
     
     const assignment = await Assignment.findById(id)
         .populate('course', 'title')
-        .populate('program', 'name trainees')
+        .populate('program', 'name trainees status') // Populate program status
         .populate('facilitator', 'name');
     
     if (!assignment) {
         throw new ApiError(404, "Assignment not found.");
     }
 
-    // Verify facilitator owns the assignment
-    await verifyFacilitatorAccess(assignment.course, req.user._id);
+    // Verify facilitator owns the assignment and program is active
+    if (assignment.facilitator.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "Forbidden: You are not the facilitator of this assignment.");
+    }
+    if (assignment.program.status !== 'Active') {
+        throw new ApiError(400, `Cannot resend notifications. The program "${assignment.program.name}" is not active.`);
+    }
 
     console.log('Resending assignment notifications for:', assignment.title);
 
