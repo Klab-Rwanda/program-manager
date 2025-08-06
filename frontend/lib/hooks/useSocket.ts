@@ -5,6 +5,7 @@ import { io, Socket } from 'socket.io-client';
 // Dynamically resolve the WebSocket URL
 let SOCKET_URL = 'http://localhost:8000'; // Default local dev fallback
 
+
 if (typeof window !== 'undefined') {
   const hostname = window.location.hostname;
 
@@ -59,6 +60,7 @@ export const useSocket = (roomId?: string) => {
       newSocket.disconnect();
     });
 
+
     newSocket.on('disconnect', () => {
       console.log(`Disconnected from WebSocket server. Room ID: ${roomId}`);
     });
@@ -69,10 +71,12 @@ export const useSocket = (roomId?: string) => {
 
     setSocket(newSocket);
 
+
     return () => {
       newSocket.disconnect();
     };
   }, [roomId]);
+
 
   return socket;
 };
