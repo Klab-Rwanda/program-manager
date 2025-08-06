@@ -2,187 +2,129 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { FileText, Upload, Clock, CheckCircle, Loader2, BookOpen, User, Send, Download, X, Eye } from "lucide-react";
+import { FileText, Upload, Clock, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { useAuth } from "@/lib/contexts/RoleContext";
-import { Program, Assignment, Submission } from "@/types"; // Import Submission type
-import api from "@/lib/api"; // For general API calls
+import api from "@/lib/api"; 
+import { Program as BackendProgram, Assignment } from "@/types"; 
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+// Import relevant services
+import { getAllPrograms } from "@/lib/services/program.service"; // Used to get programs for dropdown
+import { getAssignmentsForProgram } from "@/lib/services/assignment.service"; 
+import { createSubmission } from "@/lib/services/submission.service"; 
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Import Tabs
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"; // Import Dialog
-
-
-// Service functions (adjusted for new backend endpoints)
-const getMyAvailableAssignments = async (): Promise<Assignment[]> => {
-    const response = await api.get('/assignments/my-available');
-    return response.data.data;
-};
-
-const getMySubmissions = async (): Promise<Submission[]> => {
-    const response = await api.get('/submissions/my-submissions');
-    return response.data.data;
-};
-
-const submitProjectFile = async (assignmentId: string, file: File): Promise<Submission> => {
-    const formData = new FormData();
-    formData.append('assignmentId', assignmentId);
-    formData.append('projectFile', file);
-
-    const response = await api.post('/submissions', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data.data;
-};
-
-// Helper function moved to top-level scope
-const getOverallProjectStatus = (assignment: Assignment, mySubmissions: Submission[]): 'Not Started' | 'Pending Submission' | 'Submitted' | 'Reviewed' | 'Needs Revision' | 'Graded' => {
-    const submission = mySubmissions.find(sub => 
-        sub.assignment && typeof sub.assignment === 'object' && sub.assignment._id === assignment._id
-    );
-    if (!submission) {
-        // Check if due date has passed
-        if (new Date(assignment.dueDate) < new Date()) {
-            return 'Not Started'; // Or 'Overdue'
-        }
-        return 'Pending Submission';
-    }
-    return submission.status as any; // Cast as it matches enum
-};
-
 
 export default function SubmitProjectsPage() {
-    const { user, loading: authLoading } = useAuth();
-    const [availableAssignments, setAvailableAssignments] = useState<Assignment[]>([]);
-    const [mySubmissions, setMySubmissions] = useState<Submission[]>([]);
+    const { user } = useAuth();
+    const [myPrograms, setMyPrograms] = useState<BackendProgram[]>([]); // Programs trainee is in
+    const [selectedProgramId, setSelectedProgramId] = useState<string>("");
+    const [assignments, setAssignments] = useState<Assignment[]>([]); // Assignments for selected program
     const [loading, setLoading] = useState(true);
-    
-    const [selectedAssignmentId, setSelectedAssignmentId] = useState<string>("");
-    const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // Filter states for "My Past Submissions"
-    const [searchTerm, setSearchTerm] = useState("");
-    const [filterStatus, setFilterStatus] = useState("all");
-
-    // State for Document Preview Modal
-    const [isPreviewModalOpen, setPreviewModalOpen] = useState(false);
-    const [previewFileUrl, setPreviewFileUrl] = useState<string>("");
-    const [previewFileName, setPreviewFileName] = useState<string>("");
+    const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false); // For upload process
 
     const fetchData = useCallback(async () => {
         if (!user) return;
         setLoading(true);
         try {
-            const [assignmentsData, submissionsData] = await Promise.all([
-                getMyAvailableAssignments(),
-                getMySubmissions()
-            ]);
-            setAvailableAssignments(assignmentsData);
-            setMySubmissions(submissionsData);
-            
-            // Auto-select the first assignment if available and no previous selection
-            if (assignmentsData.length > 0 && !selectedAssignmentId) {
-                setSelectedAssignmentId(assignmentsData[0]._id);
+            // Fetch all programs the trainee is associated with (active/completed)
+            const programsData = await getAllPrograms(); 
+            setMyPrograms(programsData);
+
+            // Automatically select the first active program if available
+            // IMPORTANT: Submissions are only allowed for active programs.
+            // So filter `programsData` to find only `Active` ones for this dropdown.
+            const activeProgramsOnly = programsData.filter(p => p.status === 'Active');
+
+            if (activeProgramsOnly.length > 0) {
+                // If selectedProgramId is not set, or the current selected one is no longer active, default to first active
+                if (!selectedProgramId || !activeProgramsOnly.some(p => p._id === selectedProgramId)) {
+                    setSelectedProgramId(activeProgramsOnly[0]._id);
+                }
+            } else {
+                setSelectedProgramId(""); // No active programs available
             }
         } catch (err) {
-            toast.error("Failed to load data for project submission.");
-            console.error(err);
+            toast.error("Failed to load your programs.");
+            console.error("Fetch Programs Error:", err);
         } finally {
             setLoading(false);
         }
-    }, [user, selectedAssignmentId]); // Include selectedAssignmentId as a dependency
+    }, [user, selectedProgramId]); // Re-run if user or selectedProgramId changes
+
+    const fetchAssignmentsForSelectedProgram = useCallback(async () => {
+        if (!selectedProgramId) {
+            setAssignments([]);
+            setLoading(false); // Make sure loading state is updated even if no program
+            return;
+        }
+        setLoading(true);
+        try {
+            // getAssignmentsForProgram from backend automatically filters for Active programs
+            // and throws an error if the program is not active.
+            const assignmentData = await getAssignmentsForProgram(selectedProgramId); 
+            setAssignments(assignmentData);
+        } catch (err: any) {
+            toast.error(err.response?.data?.message || "Failed to load assignments for this program. Ensure program is active.");
+            console.error("Fetch Assignments Error:", err);
+            setAssignments([]); // Clear assignments on error
+        } finally {
+            setLoading(false);
+        }
+    }, [selectedProgramId]); // Re-run when selected program changes
 
     useEffect(() => { fetchData(); }, [fetchData]);
-    
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            setSelectedFile(e.target.files[0]);
+    useEffect(() => { fetchAssignmentsForSelectedProgram(); }, [fetchAssignmentsForSelectedProgram]);
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.files && event.target.files[0]) {
+            setSubmissionFile(event.target.files[0]);
+        } else {
+            setSubmissionFile(null);
         }
     };
 
-    const handleSubmitProject = async () => {
-        if (!selectedAssignmentId) {
-            toast.error("Please select an assignment to submit for.");
+    const handleSubmission = async (assignmentId: string, programId: string) => {
+        if (!submissionFile) {
+            toast.error("Please select a file to submit.");
             return;
         }
-        if (!selectedFile) {
-            toast.error("Please select a file to upload.");
-            return;
-        }
-        
+
         setIsSubmitting(true);
         try {
-            const result = await submitProjectFile(selectedAssignmentId, selectedFile);
-            toast.success(`Project for "${(result.assignment as any)?.title || 'selected assignment'}" submitted successfully!`);
-            setSelectedFile(null); // Clear file input
-            // Clear the actual file input element
-            const fileInput = document.getElementById('project-file') as HTMLInputElement;
-            if (fileInput) fileInput.value = '';
-
-            fetchData(); // Refresh data to show new submission or updated status
+            await createSubmission(programId, assignmentId, submissionFile); // Backend enforces Active program status
+            toast.success("Project submitted successfully!");
+            setSubmissionFile(null); // Clear file input
+            // Re-fetch assignments to show updated status after submission
+            fetchAssignmentsForSelectedProgram(); 
         } catch (err: any) {
             toast.error(err.response?.data?.message || "Failed to submit project.");
-            console.error(err);
+            console.error("Submission Error:", err);
         } finally {
             setIsSubmitting(false);
         }
     };
-
-    const getStatusBadgeColor = (status: string) => {
-        switch (status) {
-            case 'Submitted': return "bg-custom-blue text-primary-foreground";
-            case 'Reviewed': return "bg-gray-100 text-gray-800";
-            case 'NeedsRevision': return "bg-gray-500 ";
-            case 'Graded': return "bg-green-100 text-green-300"; // Or different color if 'Graded' is a separate visual status
-            default: return "bg-gray-100 text-gray-800";
-        }
-    };
+    
+    // Helper to check if the selected program is active. 
+    // This is primarily for UI hints, as the backend enforces this strictly.
+    const isSelectedProgramActive = useMemo(() => {
+        const program = myPrograms.find(p => p._id === selectedProgramId);
+        return program?.status === 'Active';
+    }, [myPrograms, selectedProgramId]);
 
     const getStatusBadge = (status: string) => {
-        const Icon = status === 'Reviewed' || status === 'Graded' ? CheckCircle : status === 'NeedsRevision' ? X : Clock;
-        return (
-            <Badge className={`${getStatusBadgeColor(status)}`}>
-                <Icon className="mr-1 h-3 w-3" />
-                {status}
-            </Badge>
-        );
+        switch (status) {
+            case 'Pending': return <Badge variant="secondary"><Clock className="mr-1 h-3 w-3"/>Pending</Badge>;
+            case 'Submitted': return <Badge className="bg-blue-100 text-blue-800"><CheckCircle className="mr-1 h-3 w-3"/>Submitted</Badge>;
+            case 'Reviewed': return <Badge className="bg-green-100 text-green-800"><CheckCircle className="mr-1 h-3 w-3"/>Reviewed</Badge>; 
+            case 'NeedsRevision': return <Badge variant="destructive"><AlertCircle className="mr-1 h-3 w-3"/>Needs Revision</Badge>;
+            default: return <Badge>{status}</Badge>;
+        }
     };
-
-
-    const filteredSubmissions = useMemo(() => {
-        return mySubmissions.filter(submission => {
-            const assignment = submission.assignment as Assignment; // Assuming assignment is populated
-            const matchesSearch = searchTerm === '' ||
-                                  (assignment?.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                  (submission.program as any)?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-            
-            const matchesStatus = filterStatus === 'all' || submission.status === filterStatus;
-
-            return matchesSearch && matchesStatus;
-        });
-    }, [mySubmissions, searchTerm, filterStatus]);
-
-    const openPreviewModal = (fileUrl: string, fileName: string) => {
-        // Construct the full URL for the file to be previewed
-        const fullPreviewUrl = `${process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '')}/${fileUrl.replace(/\\/g, '/')}`;
-        setPreviewFileUrl(fullPreviewUrl);
-        setPreviewFileName(fileName);
-        setPreviewModalOpen(true);
-    };
-
-
-    if (authLoading || loading) {
-        return (
-            <div className="flex justify-center items-center h-full min-h-[50vh]">
-                <Loader2 className="h-8 w-8 animate-spin" />
-            </div>
-        );
-    }
 
     return (
         <div className="space-y-6">
@@ -191,169 +133,89 @@ export default function SubmitProjectsPage() {
                 <p className="text-muted-foreground">Submit your assignments for approved courses.</p>
             </div>
 
-            <Tabs defaultValue="available-assignments" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="available-assignments">Available Assignments</TabsTrigger>
-                    <TabsTrigger value="my-submissions">My Past Submissions</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="available-assignments" className="mt-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Assignments to Submit</CardTitle>
-                            <CardDescription>Select an assignment and upload your project file. You can re-submit for assignments marked "Submitted" or "Needs Revision".</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {availableAssignments.length === 0 ? (
-                                <p className="text-center text-muted-foreground py-8">No assignments currently available for submission.</p>
-                            ) : (
-                                <>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="assignment-select">Select Assignment</Label>
-                                        <Select 
-                                            value={selectedAssignmentId} 
-                                            onValueChange={setSelectedAssignmentId}
-                                        >
-                                            <SelectTrigger id="assignment-select" className="max-w-xl">
-                                                <SelectValue placeholder="Select an assignment to submit for..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {availableAssignments.map(asg => (
-                                                    <SelectItem key={asg._id} value={asg._id}>
-                                                        {asg.title} (Due: {new Date(asg.dueDate).toLocaleDateString()}) - {(asg.program as any)?.name || 'N/A'}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {selectedAssignmentId && (
-                                            <p className="text-sm text-muted-foreground">
-                                                Assignment Status: <Badge variant="outline">{getOverallProjectStatus(availableAssignments.find(a => a._id === selectedAssignmentId) as Assignment, mySubmissions)}</Badge>
-                                            </p>
-                                        )}
-                                    </div>
-                                    
-                                    <div className="space-y-2">
-                                        <Label htmlFor="project-file">Project File</Label>
-                                        <Input 
-                                            id="project-file" 
-                                            type="file" 
-                                            onChange={handleFileChange} 
-                                            disabled={isSubmitting} 
-                                            accept=".zip,.rar,.7z,.pdf,.docx,.txt" // Common project file types
-                                        />
-                                        {selectedFile && (
-                                            <p className="text-sm text-muted-foreground">Selected: {selectedFile.name} ({ (selectedFile.size / 1024 / 1024).toFixed(2) } MB)</p>
-                                        )}
-                                    </div>
-
-                                    <Button 
-                                        onClick={handleSubmitProject} 
-                                        disabled={isSubmitting || !selectedAssignmentId || !selectedFile}
-                                        className="w-full"
-                                    >
-                                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4"/>}
-                                        Submit Project
-                                    </Button>
-                                </>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Select Program</CardTitle>
+                    <CardDescription>Choose an active program to view and submit assignments.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Select 
+                        value={selectedProgramId} 
+                        onValueChange={setSelectedProgramId}
+                        // Disable dropdown if no active programs are available
+                        disabled={myPrograms.filter(p => p.status === 'Active').length === 0 && !loading}
+                    >
+                        <SelectTrigger className="max-w-md">
+                            <SelectValue placeholder="Select one of your active programs..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {myPrograms
+                                .filter(p => p.status === 'Active') // Only show active programs for submission
+                                .map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}
+                            {myPrograms.filter(p => p.status === 'Active').length === 0 && (
+                                <p className="text-sm text-muted-foreground p-2">No active programs available.</p>
                             )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                        </SelectContent>
+                    </Select>
+                    {/* Provide a clear message if no active programs are found after loading */}
+                    {!loading && myPrograms.filter(p => p.status === 'Active').length === 0 && (
+                        <p className="text-sm text-red-500 mt-2">
+                            You are not currently enrolled in any active programs. You cannot submit projects.
+                        </p>
+                    )}
+                </CardContent>
+            </Card>
 
-                <TabsContent value="my-submissions" className="mt-4">
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <CardTitle>My Past Submissions</CardTitle>
-                                <div className="flex space-x-2">
-                                    <Input 
-                                        placeholder="Search submissions..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="max-w-xs"
-                                    />
-                                    <Select value={filterStatus} onValueChange={setFilterStatus}>
-                                        <SelectTrigger className="w-[180px]">
-                                            <SelectValue placeholder="Filter by Status" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Statuses</SelectItem>
-                                            <SelectItem value="Submitted">Submitted</SelectItem>
-                                            <SelectItem value="Reviewed">Reviewed</SelectItem>
-                                            <SelectItem value="NeedsRevision">Needs Revision</SelectItem>
-                                            <SelectItem value="Graded">Graded</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                            <CardDescription>Review the status and feedback for your submitted projects.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {filteredSubmissions.length === 0 ? (
-                                <p className="text-center text-muted-foreground py-8">
-                                    {searchTerm || filterStatus !== "all" 
-                                        ? "No submissions match your current filters."
-                                        : "You haven't submitted any projects yet."}
+            {loading ? (
+                <div className="text-center py-10"><Loader2 className="h-8 w-8 animate-spin"/></div>
+            ) : (
+                <div className="space-y-4">
+                    {assignments.length === 0 ? (
+                        <Card className="text-center py-12">
+                            <CardContent>
+                                <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                                <h3 className="text-lg font-semibold">No Assignments Found</h3>
+                                <p className="text-muted-foreground">
+                                    No assignments available for the selected program, or the program is not active.
                                 </p>
-                            ) : (
-                                filteredSubmissions.map(sub => (
-                                    <div key={sub._id} className="p-4 border rounded-lg bg-gray-50 flex items-center justify-between">
-                                        <div>
-                                            <h3 className="font-semibold">{(sub.assignment as any)?.title || 'Unknown Assignment'}</h3>
-                                            <p className="text-sm text-muted-foreground">
-                                                Program: {(sub.program as any)?.name || 'N/A'} | Course: {(sub.course as any)?.title || 'N/A'}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground mt-1">Submitted: {new Date(sub.submittedAt).toLocaleDateString()}</p>
-                                            {sub.feedback && <p className="text-sm italic mt-2">Feedback: {sub.feedback}</p>}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {getStatusBadge(sub.status)}
-                                            {sub.grade !== undefined && sub.grade !== null && sub.grade !== '' && (
-                                                <Badge variant="outline" className=" font-bold text-green-500">{sub.grade}</Badge>
-                                            )}
-                                            {sub.fileUrl && (
-                                                <>
-                                                    <Button size="icon" variant="ghost" onClick={() => openPreviewModal(sub.fileUrl, `Submission for ${(sub.assignment as any)?.title || 'Unknown Assignment'}`)}>
-                                                        <Eye className="h-4 w-4"/>
-                                                    </Button>
-                                                </>
-                                            )}
-                                        </div>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        assignments.map(asg => (
+                            <Card key={asg._id}>
+                                <CardHeader>
+                                    <div className="flex justify-between items-start">
+                                        <CardTitle>{asg.title}</CardTitle>
+                                        {getStatusBadge(asg.status)}
                                     </div>
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
-
-            {/* Document Preview Modal */}
-            <Dialog open={isPreviewModalOpen} onOpenChange={setPreviewModalOpen}>
-                <DialogContent className="max-w-4xl max-h-[90vh] w-[95vw]">
-                    <DialogHeader>
-                        <DialogTitle>Preview: {previewFileName}</DialogTitle>
-                        <DialogDescription>
-                            Viewing the submitted document. If the file cannot be rendered, you may need to download it.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="flex-grow w-full h-[calc(80vh-120px)] overflow-hidden rounded-md border bg-muted">
-                        {/* Use iframe to embed the file. Adjust based on common file types. */}
-                        {previewFileUrl.includes('.pdf') || previewFileUrl.includes('.txt') ? (
-                            <iframe src={previewFileUrl} className="w-full h-full border-none"></iframe>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center h-full">
-                                <FileText className="h-16 w-16 text-muted-foreground mb-4" />
-                                <p className="text-muted-foreground">Cannot preview this file type directly.</p>
-                                <Button asChild className="mt-4">
-                                    <a href={previewFileUrl} target="_blank" rel="noopener noreferrer" download={previewFileName}>
-                                        <Download className="mr-2 h-4 w-4" /> Download Anyway
-                                    </a>
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
+                                    <CardDescription>Due: {new Date(asg.dueDate).toLocaleDateString()}</CardDescription>
+                                </CardHeader>
+                                <CardContent className="flex justify-between items-center">
+                                    <div className="flex items-center gap-4">
+                                        {asg.status === 'Reviewed' && asg.grade && <p className="font-bold text-lg text-green-600">Grade: {asg.grade}%</p>}
+                                        {asg.status === 'Reviewed' && asg.feedback && <p className="text-sm text-muted-foreground">Feedback: {asg.feedback}</p>}
+                                        {(asg.status === 'Pending' || asg.status === 'Submitted' || asg.status === 'NeedsRevision') && ( 
+                                            <Input type="file" onChange={handleFileChange} className="max-w-[250px]"/>
+                                        )}
+                                    </div>
+                                    {/* Enable submission button only if program is active AND assignment is in a submit-ready status */}
+                                    {isSelectedProgramActive && (asg.status === 'Pending' || asg.status === 'Submitted' || asg.status === 'NeedsRevision') ? (
+                                        <Button onClick={() => handleSubmission(asg._id, selectedProgramId)} disabled={isSubmitting || !submissionFile}>
+                                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4"/>} 
+                                            {asg.status === 'Submitted' || asg.status === 'NeedsRevision' ? 'Resubmit' : 'Submit Now'}
+                                        </Button>
+                                    ) : (
+                                        <Button disabled={true} title={!isSelectedProgramActive ? "Program not active" : "Assignment already reviewed or submitted"}>
+                                            <Upload className="mr-2 h-4 w-4"/> 
+                                            Submit
+                                        </Button>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ))
+                    )}
+                </div>
+            )}
         </div>
     );
 }
