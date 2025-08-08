@@ -44,7 +44,7 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'https://program-manager-klab.vercel.app',
-    'https://klabfrontend.andasy.dev'
+    'https://frontendklab.andasy.dev'
   ],
   credentials: true
 }));

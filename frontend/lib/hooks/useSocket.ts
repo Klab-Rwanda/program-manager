@@ -10,7 +10,7 @@ if (typeof window !== 'undefined') {
   const hostname = window.location.hostname;
 
   if (hostname.includes('andasy')) {
-    SOCKET_URL = 'https://klabbackend.andasy.dev';
+    SOCKET_URL = 'https://backendklab.andasy.dev';
   } else if (hostname.includes('vercel')) {
     SOCKET_URL = 'https://program-manager-klab.onrender.com';
   } else if (process.env.NEXT_PUBLIC_API_URL) {

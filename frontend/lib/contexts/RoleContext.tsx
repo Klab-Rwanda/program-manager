@@ -62,7 +62,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       } else if (hostname.includes("vercel")) {
         API_URL = "https://program-manager-klab.onrender.com";
       } else {
-        API_URL = "https://klabbackend.andasy.dev";
+        API_URL = "https://backendklab.andasy.dev";
       }
 
     const res = await fetch(`${API_URL}/api/v1/auth/login`, {

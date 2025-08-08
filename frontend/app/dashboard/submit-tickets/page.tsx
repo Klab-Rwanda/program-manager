@@ -72,7 +72,7 @@ const fetchTickets = async () => {
     const hostname = window.location.hostname;
 
     if (hostname.includes("andasy")) {
-      BASE_URL = "https://klabbackend.andasy.dev/api/v1";
+      BASE_URL = "https://backendklab.andasy.dev/api/v1";
     } else if (hostname.includes("vercel")) {
       BASE_URL = "https://program-manager-klab.onrender.com/api/v1";
     }
@@ -136,7 +136,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       const hostname = window.location.hostname;
 
       if (hostname.includes("andasy")) {
-        BASE_URL = "https://klabbackend.andasy.dev/api/v1";
+        BASE_URL = "https://backendklab.andasy.dev/api/v1";
       } else if (hostname.includes("vercel")) {
         BASE_URL = "https://program-manager-klab.onrender.com/api/v1";
       }
@@ -194,7 +194,7 @@ const handleDelete = async (id: string) => {
       const hostname = window.location.hostname;
 
       if (hostname.includes("andasy")) {
-        BASE_URL = "https://klabbackend.andasy.dev/api/v1";
+        BASE_URL = "https://backendklab.andasy.dev/api/v1";
       } else if (hostname.includes("vercel")) {
         BASE_URL = "https://program-manager-klab.onrender.com/api/v1";
       }
