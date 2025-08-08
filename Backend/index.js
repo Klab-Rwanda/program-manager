@@ -23,7 +23,8 @@ const io = new Server(server, {
   cors: {
     origin: [
       'http://localhost:3000',
-      'https://program-manager-klab.vercel.app'
+      'https://program-manager-klab.vercel.app',
+      'https://frontendklab.andasy.dev'
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
