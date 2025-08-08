@@ -1,8 +1,8 @@
-# andasy.hcl app configuration file generated for klabfrontend on Tuesday, 05-Aug-25 16:40:24 EET
+# andasy.hcl app configuration file generated for frontendklab on Friday, 08-Aug-25 10:04:03 EET
 #
 # See https://github.com/quarksgroup/andasy-cli for information about how to use this file.
 
-app_name = "klabfrontend"
+app_name = "frontendklab"
 
 app {
 
@@ -17,7 +17,7 @@ app {
   }
 
   process {
-    name = "klabfrontend"
+    name = "frontendklab"
   }
 
 }
