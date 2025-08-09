@@ -24,7 +24,10 @@ import {
     getProgramAttendanceReport,
     getMyAttendanceHistory,
     endSession,
-    getProgramAttendanceSummary
+    getProgramAttendanceSummary,
+    deleteSession,
+    getProgramSessionCounts,
+    updateSession
 } from '../../controllers/attendance.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole as verifyRole } from '../../middlewares/role.middleware.js';
@@ -44,6 +47,10 @@ router.post('/sessions',
     createSession
 );
 
+router.patch('/sessions/:sessionId',
+    verifyRole(['Facilitator']),
+    updateSession
+);
 // Start an online session and generate QR code
 router.post('/sessions/:sessionId/start-online', 
     verifyRole(['Facilitator']), 
@@ -84,6 +91,10 @@ router.get('/trainee/sessions',
     getTraineeSessions
 );
 
+router.delete('/sessions/:sessionId', 
+    verifyRole(['Facilitator']), 
+    deleteSession
+);
 // ===================================================================
 //   GENERAL ROUTES
 // ===================================================================
@@ -130,7 +141,7 @@ router.get('/report/program/:programId/summary',
 );
 router.get('/report/program/:programId', 
     verifyRole(['Program Manager', 'SuperAdmin']), 
-    getProgramAttendanceReport // The function we just created
+    getProgramAttendanceReport 
 );
 
 router.get('/my-history', 
@@ -140,5 +151,15 @@ router.get('/my-history',
 router.post('/sessions/:sessionId/end', 
     verifyRole(['Facilitator']), 
     endSession
+);
+
+router.get('/sessions/:sessionId/report', 
+    verifyRole(['Facilitator', 'ProgramManager', 'SuperAdmin']), 
+    getSessionAttendance 
+);
+
+router.get('/sessions/program/:programId/counts', 
+    verifyRole(['Facilitator', 'ProgramManager', 'SuperAdmin']), 
+    getProgramSessionCounts
 );
 export default router;

@@ -1,8 +1,8 @@
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { ApiError } from '../../utils/ApiError.js';
+import { ApiResponse } from '../../utils/ApiResponse.js';
 import { Course } from '../models/course.model.js';
 import { Program } from '../models/program.model.js';
-import { ApiResponse } from '../../utils/ApiResponse.js';
 import path from 'path';
 import fs from 'fs';
 import { Assignment } from '../models/assignment.model.js';
@@ -17,6 +17,15 @@ export const createCourse = asyncHandler(async (req, res) => {
 
     if (!req.file) {
         throw new ApiError(400, "Course content document is required.");
+    }
+
+    // NEW: Verify program exists and is 'Active' before creating a course for it
+    const program = await Program.findById(programId);
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
+    }
+    if (program.status !== 'Active') {
+        throw new ApiError(400, "Cannot create a course for an inactive program. Program must be 'Active'.");
     }
 
     const contentUrl = `uploads/${req.file.filename}`;
@@ -55,54 +64,67 @@ export const approveCourse = asyncHandler(async (req, res) => {
 
 export const getCoursesForProgram = asyncHandler(async (req, res) => {
     const { programId } = req.params;
+    // Return all courses for program, but ensure program is Active/Completed
+    const program = await Program.findById(programId);
+    if (!program) throw new ApiError(404, "Program not found.");
+    if (program.status !== 'Active' && program.status !== 'Completed') {
+        throw new ApiError(403, `Access Denied: Courses for program "${program.name}" are not accessible (status: ${program.status}).`);
+    }
+
     const courses = await Course.find({ program: programId }).populate('facilitator', 'name');
     return res.status(200).json(new ApiResponse(200, courses, "Courses fetched successfully."));
 });
 
 export const verifyFacilitatorAccess = async (courseId, facilitatorId) => {
-    const course = await Course.findById(courseId);
+    const course = await Course.findById(courseId).populate('program');
     if (!course) throw new ApiError(404, "Course not found.");
     if (course.facilitator.toString() !== facilitatorId.toString()) {
         throw new ApiError(403, "Forbidden: You do not have permission to modify this course.");
+    }
+    // Check if the course's program is Active for modification actions
+    if (!course.program || course.program.status !== 'Active') {
+        throw new ApiError(400, `Cannot perform this action. The program "${course.program?.name || 'unknown'}" is not active.`);
     }
     return course;
 };
 
 
-
 export const requestCourseApproval = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     const facilitatorId = req.user._id;
-    const course = await Course.findById(courseId);
+    // First, verify the facilitator owns this course
+    const course = await Course.findById(courseId).populate('program'); // Populate program for status check
     if (!course) throw new ApiError(404, 'Course not found.');
     if (course.facilitator.toString() !== facilitatorId.toString()) {
         throw new ApiError(403, 'Forbidden: You can only request approval for your own courses.');
     }
-    if (course.status !== 'Draft' && course.status !== 'Rejected') { 
+    if (course.status !== 'Draft' && course.status !== 'Rejected') { // Allow resubmission from rejected
         throw new ApiError(400, 'Only draft or rejected courses can be submitted for approval.');
     }
+    // Verify program is Active before allowing submission for approval
+    if (!course.program || course.program.status !== 'Active') {
+        throw new ApiError(400, `Cannot submit course for approval. The program "${course.program?.name || 'unknown'}" is not active.`);
+    }
+
+    // Update the status from 'Draft' to 'PendingApproval'
     course.status = 'PendingApproval';
+    course.rejectionReason = undefined; // Clear rejection reason on resubmission
     await course.save();
     return res.status(200).json(new ApiResponse(200, course, 'Course submitted for approval.'));
 });
 
 
 export const getAllCourses = asyncHandler(async (req, res) => {
-    if (!['Facilitator', 'Program Manager', 'SuperAdmin'].includes(req.user.role)) { 
-        throw new ApiError(403, 'Forbidden: Only facilitators, program managers, and super admins can access this resource.');
-    }
+    // This endpoint is for Program Manager/SuperAdmin to see ALL courses, regardless of program status or approval status.
     const courses = await Course.find().populate('program', 'name').populate('facilitator', 'name email');
     return res.status(200).json(new ApiResponse(200, courses, 'All courses fetched successfully.'));
 });
 
 
 export const downloadCourseFile = asyncHandler(async (req, res) => {
-    // Anyone who has access to the course information should be able to download the file.
-    // For simplicity, we allow it for Facilitator, Program Manager, and Trainee.
-    if (!['Facilitator', 'Program Manager', 'Trainee', 'SuperAdmin'].includes(req.user.role)) {
-        throw new ApiError(403, 'Forbidden: You do not have permission to download this resource.');
+    if (!['Facilitator', 'Program Manager', 'Trainee', 'SuperAdmin'].includes(req.user.role)) { // Trainee can also download their course files
+        throw new ApiError(403, 'Forbidden: Only authorized users can access this resource.');
     }
-
     const { courseId } = req.params;
     const course = await Course.findById(courseId);
     if (!course) {
@@ -112,17 +134,27 @@ export const downloadCourseFile = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'No file found for this course.');
     }
 
-    // Construct the absolute path to the file
-    const rootDir = process.cwd(); 
-    const filePath = path.join(rootDir, 'public', course.contentUrl); 
-
-    console.log('Download request - Course ID:', courseId);
-    console.log('File path from database:', course.contentUrl);
-    console.log('Constructed absolute file path:', filePath);
+    // If it's a Trainee, they should only download if the course is Approved AND their program is Active/Completed
+    if (req.user.role === 'Trainee') {
+        const program = await Program.findById(course.program);
+        if (!program || (program.status !== 'Active' && program.status !== 'Completed')) { // Allow completed programs
+            throw new ApiError(403, 'Forbidden: This course belongs to an inactive or non-completed program.');
+        }
+        if (course.status !== 'Approved') {
+            throw new ApiError(403, 'Forbidden: This course is not approved for access.');
+        }
+    }
     
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-        console.log('File does not exist at path:', filePath);
+    const filePath = course.contentUrl;
+    console.log('Download request - Course ID:', courseId);
+    console.log('File path from database:', filePath);
+    console.log('Course type from database:', course.type);
+    
+    // Construct the absolute path
+    const absoluteFilePath = path.resolve('./public', filePath);
+    
+    if (!fs.existsSync(absoluteFilePath)) { // Use absolute path here
+        console.log('File does not exist at absolute path:', absoluteFilePath);
         throw new ApiError(404, 'File not found on server.');
     }
     
@@ -147,22 +179,39 @@ export const downloadCourseFile = asyncHandler(async (req, res) => {
         '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
         '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
+        '.jpeg': 'image/jpeg', 
         '.png': 'image/png',
         '.gif': 'image/gif',
         '.txt': 'text/plain',
         '.mp3': 'audio/mpeg',
-        '.wav': 'audio/wav',
-        '.zip': 'application/zip', 
-        '.rar': 'application/x-rar-compressed', 
-        '.7z': 'application/x-7z-compressed' 
+        '.wav': 'audio/wav'
+    };
+    
+    // Also define MIME types for type field values (without dots)
+    const typeMimeTypes = {
+        'pdf': 'application/pdf',
+        'mp4': 'video/mp4',
+        'avi': 'video/x-msvideo',
+        'mov': 'video/quicktime',
+        'wmv': 'video/x-ms-wmv',
+        'flv': 'video/x-flv',
+        'webm': 'video/webm',
+        'mkv': 'video/x-matroska',
+        'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'txt': 'text/plain',
+        'mp3': 'audio/mpeg',
+        'wav': 'audio/wav'
     };
     
     // Try to get content type from file extension first, then from course type
-    // This is the core part that ensures correct Content-Type for browser preview
     let contentType = mimeTypes[fileExtension];
-    if (!contentType && course.type) { 
-        contentType = mimeTypes[`.${course.type.toLowerCase()}`] || `application/${course.type.toLowerCase()}`;
+    if (!contentType && course.type) {
+        contentType = typeMimeTypes[course.type.toLowerCase()];
         console.log('Using course type for MIME type:', course.type, '->', contentType);
     }
     
@@ -175,14 +224,12 @@ export const downloadCourseFile = asyncHandler(async (req, res) => {
     console.log('Final Content-Type:', contentType);
     
     try {
-        // Set headers for proper download (or direct display if browser supports Content-Type)
+        // Set headers for proper download
         res.setHeader('Content-Type', contentType);
-        // Using `inline` for Content-Disposition encourages browser to display if possible
-        // But the frontend `<a>` tag with `download` attribute or `iframe` handles actual display.
-        res.setHeader('Content-Disposition', `inline; filename="${fileName}"`); 
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
         
         // Stream the file
-        const fileStream = fs.createReadStream(filePath);
+        const fileStream = fs.createReadStream(absoluteFilePath);
         fileStream.pipe(res);
         
         fileStream.on('error', (err) => {
@@ -205,58 +252,73 @@ export const downloadCourseFile = asyncHandler(async (req, res) => {
 });
 
 
-
 export const getMyCourses = asyncHandler(async (req, res) => {
     const userId = req.user._id;
     const userRole = req.user.role;
 
-    let programQuery = {};
+    // Retrieve programs associated with the user, filtering by Active or Completed status
+    const userPrograms = await Program.find({ 
+        $or: [{ trainees: userId }, { facilitators: userId }],
+        status: { $in: ['Active', 'Completed'] } // Include Completed programs
+    }).select('_id status'); // Select status to filter courses later
 
-    if (userRole === 'Trainee') {
-        programQuery = { trainees: userId };
-    } else if (userRole === 'Facilitator') {
-        programQuery = { facilitators: userId };
-    } else {
-        return res.status(200).json(new ApiResponse(200, [], "No courses applicable for your role via this endpoint."));
-    }
-
-    const userPrograms = await Program.find(programQuery).select('_id');
     if (userPrograms.length === 0) {
-        return res.status(200).json(new ApiResponse(200, [], "You are not enrolled in any programs."));
+        return res.status(200).json(new ApiResponse(200, [], "You are not enrolled in any active or completed programs."));
     }
+    
     const programIds = userPrograms.map(p => p._id);
 
     const courseQuery = { program: { $in: programIds } };
+    
+    // For Trainee, only return Approved courses
     if (userRole === 'Trainee') {
         courseQuery.status = 'Approved';
-    } else if (userRole === 'Facilitator') {
-        courseQuery.facilitator = userId;
+    } 
+    // For Facilitator, return all their courses within their programs
+    else if (userRole === 'Facilitator') {
+        courseQuery.facilitator = userId; 
     }
 
     const courses = await Course.find(courseQuery)
-        .populate('program', 'name')
+        .populate('program', 'name status') // Populate program status
         .populate('facilitator', 'name')
-        .sort({ createdAt: -1 }); 
+        .sort({ createdAt: -1 });
         
+    // Send all for frontend to sort into tabs
     return res.status(200).json(new ApiResponse(200, courses, "Your courses fetched successfully."));
 });
-
-
-
 
 
 export const updateCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     const { title, description } = req.body;
 
-    await verifyFacilitatorAccess(courseId, req.user._id);
+    // Verify ownership and ensure the course's program is Active for modification
+    const course = await Course.findById(courseId).populate('program');
+    if (!course) throw new ApiError(404, "Course not found.");
+    if (course.facilitator.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "Forbidden: You do not have permission to modify this course.");
+    }
+
+    if (!course.program || course.program.status !== 'Active') {
+        throw new ApiError(400, `Cannot update course. The program "${course.program?.name || 'unknown'}" is not active.`);
+    }
+
+    // Only allow update if course is Draft or Rejected. Do not edit Approved or PendingApproval.
+    if (course.status === 'Approved' || course.status === 'PendingApproval') {
+        throw new ApiError(400, `Cannot update a course with status '${course.status}'.`);
+    }
+
+    const updateFields = {};
+    if (title !== undefined) updateFields.title = title;
+    if (description !== undefined) updateFields.description = description;
 
     const updatedCourse = await Course.findByIdAndUpdate(
         courseId,
         {
-            $set: { title, description },
-            $unset: { rejectionReason: "" }, 
-            status: 'Draft'
+            $set: updateFields,
+            $unset: { rejectionReason: "" }, // Remove rejection reason if it was rejected
+            status: 'Draft' // Always revert to Draft on edit/resubmission
         },
         { new: true, runValidators: true }
     ).populate('program', 'name');
@@ -269,7 +331,7 @@ export const updateCourse = asyncHandler(async (req, res) => {
 export const deleteCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     
-    const course = await Course.findById(courseId);
+    const course = await Course.findById(courseId).populate('program'); // Populate program for status check
     if (!course) {
         throw new ApiError(404, "Course not found.");
     }
@@ -277,30 +339,18 @@ export const deleteCourse = asyncHandler(async (req, res) => {
         throw new ApiError(403, "Forbidden: You do not have permission to delete this course.");
     }
     
-    await course.deleteOne();
+    // NEW: Only allow deletion if the program is Active
+    if (!course.program || course.program.status !== 'Active') {
+        throw new ApiError(400, `Cannot delete course. The program "${course.program?.name || 'unknown'}" is not active.`);
+    }
 
-     if (course.program?.programManager) {
-        await createNotification({
-            recipient: course.program.programManager,
-            sender: req.user._id,
-            title: "Course Deleted",
-            message: `The course "${course.title}" by ${course.facilitator.name} for program "${course.program.name}" has been deleted.`,
-            link: `/dashboard/Manager/course-management`,
-            type: 'warning'
-        });
+    // Only allow deletion if the course is Draft, Rejected, or PendingApproval
+    // Do not allow deletion of Approved courses via this route (Admin can do it by changing status)
+    if (course.status === 'Approved') {
+        throw new ApiError(400, "Cannot delete an approved course directly.");
     }
-    // Also notify the facilitator whose course was deleted, if the deleter is a SuperAdmin.
-    // (If the facilitator deletes their own course, they don't need a notification from the system.)
-    if (req.user.role === 'SuperAdmin' && course.facilitator._id.toString() !== req.user._id.toString()) {
-         await createNotification({
-            recipient: course.facilitator._id,
-            sender: req.user._id,
-            title: "Your Course Was Deleted",
-            message: `Your course "${course.title}" was deleted by a Super Admin.`,
-            link: `/dashboard/Facilitator/fac-curriculum`, // Link to facilitator's curriculum page
-            type: 'error'
-        });
-    }
+
+    await course.deleteOne();
 
     return res.status(200).json(new ApiResponse(200, {}, "Course deleted successfully."));
 });
@@ -335,6 +385,12 @@ export const rejectCourse = asyncHandler(async (req, res) => {
 });
 
 
+// --- NEW FUNCTION ---
+/**
+ * @desc    Program Manager activates a rejected course.
+ * @route   PATCH /api/v1/courses/{courseId}/activate
+ * @access  Private (ProgramManager)
+ */
 export const activateCourse = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     
@@ -342,7 +398,7 @@ export const activateCourse = asyncHandler(async (req, res) => {
         courseId, 
         { 
             status: 'Approved',
-            $unset: { rejectionReason: "" }
+            $unset: { rejectionReason: "" } // Remove rejection reason when activating
         }, 
         { new: true }
     );
@@ -354,7 +410,12 @@ export const activateCourse = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, course, "Course has been activated."));
 });
 
-
+// --- NEW FUNCTION ---
+/**
+ * @desc    Program Manager gets all courses pending their approval.
+ * @route   GET /api/v1/courses/pending
+ * @access  Private (ProgramManager)
+ */
 export const getPendingCourses = asyncHandler(async (req, res) => {
     const courses = await Course.find({ status: 'PendingApproval' })
         .populate('facilitator', 'name email')
@@ -364,9 +425,16 @@ export const getPendingCourses = asyncHandler(async (req, res) => {
 });
 
 
+// --- NEW FUNCTION ---
+/**
+ * @desc    Program Manager gets courses by status.
+ * @route   GET /api/v1/courses/status/:status
+ * @access  Private (ProgramManager)
+ */
 export const getCoursesByStatus = asyncHandler(async (req, res) => {
     const { status } = req.params;
     
+    // Validate status parameter
     const validStatuses = ['Draft', 'PendingApproval', 'Approved', 'Rejected'];
     if (!validStatuses.includes(status)) {
         throw new ApiError(400, "Invalid status. Must be one of: Draft, PendingApproval, Approved, Rejected");
@@ -380,10 +448,16 @@ export const getCoursesByStatus = asyncHandler(async (req, res) => {
     return res.status(200).json(new ApiResponse(200, courses, `Courses with status '${status}' fetched successfully.`));
 });
 
-
+// --- NEW FUNCTION ---
+/**
+ * @desc    Program Manager gets assignments with student marks and attendance for a course.
+ * @route   GET /api/v1/courses/{courseId}/assignments-with-marks
+ * @access  Private (ProgramManager)
+ */
 export const getCourseAssignmentsWithMarks = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     
+    // Find the course and verify it exists
     const course = await Course.findById(courseId)
         .populate('program', 'name')
         .populate('facilitator', 'name email');
@@ -392,15 +466,22 @@ export const getCourseAssignmentsWithMarks = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Course not found");
     }
 
+    // Get all assignments for this course
     const assignments = await Assignment.find({ course: courseId })
         .populate('facilitator', 'name email')
         .sort({ dueDate: -1 });
 
+    // Get all submissions for this course with trainee info
     const submissions = await Submission.find({ course: courseId })
         .populate('trainee', 'name email')
         .populate('assignment', 'title maxGrade')
         .sort({ submittedAt: -1 });
+    
+    // Get all trainees enrolled in this program
+    const program = await Program.findById(course.program).populate('trainees', 'name email');
+    const allTrainees = program.trainees || [];
 
+    // Get attendance data for trainees in this course's program
     const attendanceData = await Attendance.aggregate([
         {
             $match: {
@@ -458,29 +539,52 @@ export const getCourseAssignmentsWithMarks = asyncHandler(async (req, res) => {
         }
     ]);
 
+    // Organize data by assignment
     const assignmentsWithMarks = assignments.map(assignment => {
         const assignmentSubmissions = submissions.filter(sub => 
             sub.assignment && sub.assignment._id.toString() === assignment._id.toString()
         );
 
-        const submissionsWithAttendance = assignmentSubmissions.map(submission => {
+        const submissionsWithAttendance = allTrainees.map(trainee => {
+            const submission = assignmentSubmissions.find(sub => 
+                sub.trainee._id.toString() === trainee._id.toString()
+            );
+            
             const traineeAttendance = attendanceData.find(att => 
-                att.traineeId.toString() === submission.trainee._id.toString()
+                att.traineeId.toString() === trainee._id.toString()
             );
 
-            return {
-                submissionId: submission._id,
-                traineeName: submission.trainee.name,
-                traineeEmail: submission.trainee.email,
-                submittedAt: submission.submittedAt,
-                status: submission.status,
-                grade: submission.grade || 'Not graded',
-                feedback: submission.feedback || '',
-                attendancePercentage: traineeAttendance ? 
-                    Math.round(traineeAttendance.attendancePercentage) : 0,
-                totalSessions: traineeAttendance ? traineeAttendance.totalSessions : 0,
-                presentSessions: traineeAttendance ? traineeAttendance.presentSessions : 0
-            };
+            if (submission) {
+                return {
+                    submissionId: submission._id,
+                    traineeName: submission.trainee.name,
+                    traineeEmail: submission.trainee.email,
+                    submittedAt: submission.submittedAt,
+                    status: submission.status,
+                    grade: submission.grade || 'Not graded',
+                    feedback: submission.feedback || '',
+                    attendancePercentage: traineeAttendance ? 
+                        Math.round(traineeAttendance.attendancePercentage) : 0,
+                    totalSessions: traineeAttendance ? traineeAttendance.totalSessions : 0,
+                    presentSessions: traineeAttendance ? traineeAttendance.presentSessions : 0,
+                    hasSubmitted: true
+                };
+            } else {
+                return {
+                    submissionId: null,
+                    traineeName: trainee.name,
+                    traineeEmail: trainee.email,
+                    submittedAt: null,
+                    status: 'Not Submitted',
+                    grade: 'Not graded',
+                    feedback: '',
+                    attendancePercentage: traineeAttendance ? 
+                        Math.round(traineeAttendance.attendancePercentage) : 0,
+                    totalSessions: traineeAttendance ? traineeAttendance.totalSessions : 0,
+                    presentSessions: traineeAttendance ? traineeAttendance.presentSessions : 0,
+                    hasSubmitted: false
+                };
+            }
         });
 
         return {
@@ -507,7 +611,7 @@ export const getCourseAssignmentsWithMarks = asyncHandler(async (req, res) => {
 
 
 export const getAllCoursesAdmin = asyncHandler(async (req, res) => {
-    const courses = await Course.find({}) 
+    const courses = await Course.find({}) // Find all courses, no filter
         .populate('program', 'name')
         .populate('facilitator', 'name')
         .sort({ createdAt: -1 });

@@ -1,22 +1,26 @@
-// src/lib/api.ts
+// src/lib/api.ts (or wherever your axios instance is configured)
 import axios from 'axios';
 
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+// Ensure this URL is correct for your backend API
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 const api = axios.create({
   baseURL: API_URL,
-  withCredentials: true,
+  withCredentials: true, // Important for sending cookies, though we prioritize Authorization header
 });
 
+// Request Interceptor: Attach token before sending request
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('accessToken');
+    // Get token from localStorage
+    const token = localStorage.getItem('accessToken'); 
+
+    // If token exists, set the Authorization header
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
-      console.log('🔑 Token being sent:', token.substring(0, 20) + '...');
+      // console.log('🔑 Token being sent:', token.substring(0, 20) + '...'); // For debugging
     } else {
-      console.log('❌ No token found in localStorage');
+      // console.log('❌ No token found in localStorage for this request.'); // For debugging
     }
     return config;
   },
@@ -25,22 +29,25 @@ api.interceptors.request.use(
   }
 );
 
-// Add response interceptor to handle token expiration
+// Response Interceptor: Handle token expiration/invalidation
 api.interceptors.response.use(
   (response) => {
     return response;
   },
   (error) => {
-    console.log('🚨 API Error:', error.response?.status, error.response?.data);
+    console.error('🚨 API Error Response:', error.response?.status, error.response?.data);
+    // Check for 401 Unauthorized or specific JWT expired message
     if (error.response?.status === 401 ||
-        (error.response?.data?.message && error.response.data.message.includes('jwt expired'))) {
-      // Clear the expired token
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('user');
+        (error.response?.data?.message && error.response.data.message.includes('jwt expired')) ||
+        (error.response?.data?.message && error.response.data.message.includes('Unauthorized request'))) {
       
-      // Redirect to login page
-      if (typeof window !== 'undefined') {
-        window.location.href = '/auth/login';
+      // Prevent infinite redirect loops if already on login page
+      if (typeof window !== 'undefined' && window.location.pathname !== '/auth/login') {
+        console.warn('Authentication expired or unauthorized. Clearing token and redirecting to login.');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('user');
+        // Force a full page reload to clear all React state and contexts
+        window.location.href = '/auth/login'; 
       }
     }
     return Promise.reject(error);

@@ -17,6 +17,8 @@ import settingsRouter from './settings.route.js';
 import notificationRouter from './notification.route.js'
 import userTicketRoutes from './userTicket.route.js';
 import itSupportRoutes from './itSupport.route.js';
+import fileRouter from './file.route.js'; 
+
 
 
 const router = Router();
@@ -40,6 +42,7 @@ const defaultRoutes = [
     { path: '/notifications', route: notificationRouter },
     { path: '/tickets', route: userTicketRoutes },
     { path: '/it-support/tickets', route: itSupportRoutes },
+    { path: '/files', route: fileRouter },
 
     
 ];

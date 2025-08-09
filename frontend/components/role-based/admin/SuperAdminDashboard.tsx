@@ -12,7 +12,8 @@ import {
   AlertCircle,
   BarChart3,
   FileText,
-  ArrowRight
+  ArrowRight,
+  Plus // Added Plus for "Create New Program" button
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -82,14 +83,26 @@ export function SuperAdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold tracking-tight">System Overview</h1>
-          <Link href="/dashboard/SuperAdmin/user-management">
-             <Button className="bg-[#1f497d] hover:bg-[#1a3f6b]">
-                <Users className="mr-2 h-4 w-4" />
-                Manage Users
+      {/* Welcome Section - Replaced existing top div */}
+      <div className="rounded-lg bg-gradient-to-r from-[#1f497d] to-[#30588f] p-6 text-white shadow-lg">
+        <h2 className="text-2xl font-bold mb-2">Welcome, Super Admin!</h2>
+        <p className="text-gray-200 mb-4">
+          Here's a comprehensive overview of the system's performance and key operations.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <Link href="/dashboard/Manager/programs">
+            <Button size="lg" className="bg-white text-[#1f497d] hover:bg-gray-100 shadow-md font-semibold">
+              <Plus className="mr-2 h-5 w-5" />
+              Create New Program
             </Button>
           </Link>
+          <Link href="/dashboard/SuperAdmin/user-management">
+            <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-[#1f497d] bg-transparent font-semibold">
+              <Users className="mr-2 h-5 w-5" />
+              Manage All Users
+            </Button>
+          </Link>
+        </div>
       </div>
       
       {/* Key Metric Cards */}
@@ -139,30 +152,38 @@ export function SuperAdminDashboard() {
 
         {/* Sidebar Column: Action Items & Links */}
         <div className="lg:col-span-1 space-y-6">
-            <Card className="bg-yellow-50 border-yellow-200">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-yellow-800">
-                        <AlertCircle />
-                        Action Required
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                    <Link href="/dashboard/SuperAdmin/program-approval" className="block p-3 rounded-md hover:bg-yellow-100">
-                        <div className="flex justify-between items-center">
-                            <span className="font-semibold">{stats.pendingPrograms} Programs</span>
-                            <ArrowRight className="h-4 w-4 text-muted-foreground"/>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Need your approval</p>
-                    </Link>
-                     <Link href="/dashboard/Manager/approvals" className="block p-3 rounded-md hover:bg-yellow-100">
-                        <div className="flex justify-between items-center">
-                            <span className="font-semibold">{stats.pendingCourses} Courses</span>
-                            <ArrowRight className="h-4 w-4 text-muted-foreground"/>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Need your approval</p>
-                    </Link>
-                </CardContent>
-            </Card>
+            <Card className="bg-[#f9fafb] border border-website-secondary/30">
+  <CardHeader>
+    <CardTitle className="flex items-center gap-2 text-website-accent">
+      <AlertCircle />
+      Action Required
+    </CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-3">
+    <Link
+      href="/dashboard/SuperAdmin/program-approval"
+      className="block p-3 rounded-md hover:bg-website-secondary/10"
+    >
+      <div className="flex justify-between items-center">
+        <span className="font-semibold text-website-accent">{stats.pendingPrograms} Programs</span>
+        <ArrowRight className="h-4 w-4 text-website-secondary" />
+      </div>
+      <p className="text-xs text-website-secondary">Need your approval</p>
+    </Link>
+
+    <Link
+      href="/dashboard/Manager/course-management"
+      className="block p-3 rounded-md hover:bg-website-secondary/10"
+    >
+      <div className="flex justify-between items-center">
+        <span className="font-semibold text-website-accent">{stats.pendingCourses} Courses</span>
+        <ArrowRight className="h-4 w-4 text-website-secondary" />
+      </div>
+      <p className="text-xs text-website-secondary">Need your approval</p>
+    </Link>
+  </CardContent>
+</Card>
+
 
             <Card>
                 <CardHeader><CardTitle>Quick Links</CardTitle></CardHeader>

@@ -122,16 +122,16 @@ export default function ReviewsPage() {
 
   // UI Helpers
   const reviewStats = useMemo(() => [
-    { title: "Pending Reviews", value: submissions.filter(s => s.status === 'Submitted').length.toString(), description: "Awaiting your review", icon: Clock, color: "text-yellow-500" },
-    { title: "Approved", value: submissions.filter(s => s.status === 'Reviewed').length.toString(), description: "Graded & Approved", icon: CheckCircle, color: "text-green-500" },
-    { title: "Needs Revision", value: submissions.filter(s => s.status === 'NeedsRevision').length.toString(), description: "Requires changes", icon: XCircle, color: "text-red-500" },
+    { title: "Pending Reviews", value: submissions.filter(s => s.status === 'Submitted').length.toString(), description: "Awaiting your review", icon: Clock, color: "text-custom-blue" },
+    { title: "Approved", value: submissions.filter(s => s.status === 'Reviewed').length.toString(), description: "Graded & Approved", icon: CheckCircle, color: "text-custom-blue" },
+    { title: "Needs Revision", value: submissions.filter(s => s.status === 'NeedsRevision').length.toString(), description: "Requires changes", icon: XCircle, color: "text-custom-blue" },
   ], [submissions]);
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case "Reviewed": return "bg-green-500"
+      case "Reviewed": return "bg-green-300"
       case "NeedsRevision": return "bg-red-500"
-      case "Submitted": return "bg-yellow-500" // For review status, "Submitted" means "Pending Review"
+      case "Submitted": return "bg-custom-blue" // For review status, "Submitted" means "Pending Review"
       case "Graded": return "bg-blue-500" // Should be same as Reviewed typically
       default: return "bg-gray-500"
     }
@@ -385,7 +385,7 @@ export default function ReviewsPage() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                         {submission.grade !== undefined && submission.grade !== null && submission.grade !== '' ? (
-                            <Badge variant="outline" className="text-sm font-semibold text-green-600">
+                            <Badge variant="outline" className="text-sm font-semibold text-green-300">
                                 {submission.grade}{submission.maxGrade ? `/${submission.maxGrade}` : ''}
                             </Badge>
                         ) : 'N/A'}

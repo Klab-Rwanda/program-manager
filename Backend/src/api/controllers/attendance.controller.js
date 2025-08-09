@@ -7,8 +7,9 @@ import { Program } from '../models/program.model.js';
 import { generateSessionQRCode, generateSessionId, verifySessionQRCode } from '../../services/qr.service.js';
 import { isWithinRadius } from '../../services/geolocation.service.js';
 import mongoose from 'mongoose';
-import { User } from '../models/user.model.js';
-import { createNotification } from '../../services/notification.service.js';
+import { User } from '../models/user.model.js'; // Ensure User model is imported
+import { createNotification } from '../../services/notification.service.js'; // Ensure createNotification is imported
+import { scheduleSessionReminder } from '../../services/sessionReminder.service.js';
 
 // A reusable helper function to build robust queries for finding sessions by _id OR sessionId
 const buildSessionQuery = (idFromParams, extraConditions = {}) => {
@@ -26,10 +27,17 @@ const buildSessionQuery = (idFromParams, extraConditions = {}) => {
 // ===================================================================
 
 const createSession = asyncHandler(async (req, res) => {
-    const { type, programId, title, description, latitude, longitude, radius } = req.body; // Added location fields
-    if (!type || !programId || !title) {
-        throw new ApiError(400, "Type, Program ID, and Title are required.");
+    const { type, programId, title, description, latitude, longitude, radius, startTime } = req.body; // NEW: startTime from req.body
+    
+    if (!type || !programId || !title || !startTime) { // NEW: startTime is required
+        throw new ApiError(400, "Type, Program ID, Title, and Start Time are required.");
     }
+
+    const sessionStartTime = new Date(startTime); // Parse the incoming startTime string into a Date object
+    if (isNaN(sessionStartTime.getTime())) {
+        throw new ApiError(400, "Invalid Start Time format provided.");
+    }
+
     const program = await Program.findById(programId);
     if (!program) {
         throw new ApiError(404, "Program not found.");
@@ -42,7 +50,7 @@ const createSession = asyncHandler(async (req, res) => {
         description,
         facilitatorId: req.user._id,
         sessionId: generateSessionId(),
-        startTime: new Date(),
+        startTime: sessionStartTime, // Use the parsed Date object
         status: 'scheduled',
         createdBy: req.user._id,
     };
@@ -60,21 +68,27 @@ const createSession = asyncHandler(async (req, res) => {
 
     const session = await ClassSession.create(sessionData);
 
-    // MOVE NOTIFICATION BLOCK HERE, AFTER 'session' IS DEFINED
     // Notify trainees about the new session
-    const trainees = await User.find({ _id: { $in: program.trainees }, role: 'Trainee' }).select('_id');
-    const notificationPromises = trainees.map(trainee =>
-        createNotification({
-            recipient: trainee._id,
-            sender: req.user._id,
-            title: `New Session Scheduled: ${session.title}`, // 'session' is now defined
-            message: `A new ${session.type} class session "${session.title}" has been scheduled for your program "${program.name}". It starts at ${new Date(session.startTime).toLocaleString()}.`, // 'session' is now defined
-            link: `/dashboard/Trainee/Trattendance`, // Link to trainee attendance page
-            type: 'info'
-        })
-    );
-    await Promise.allSettled(notificationPromises);
-    // END OF MOVED NOTIFICATION BLOCK
+    const populatedProgram = await Program.findById(programId).select('trainees name');
+    if (populatedProgram && populatedProgram.trainees && populatedProgram.trainees.length > 0) {
+        const trainees = await User.find({ _id: { $in: populatedProgram.trainees }, role: 'Trainee' }).select('_id');
+        const notificationPromises = trainees.map(trainee =>
+            createNotification({
+                recipient: trainee._id,
+                sender: req.user._id,
+                title: `New Session Scheduled: ${session.title}`,
+                message: `A new ${session.type} class session "${session.title}" has been scheduled for your program "${populatedProgram.name}". It starts at ${new Date(session.startTime).toLocaleString()}.`,
+                link: `/dashboard/Trainee/Trattendance`,
+                type: 'info'
+            })
+        );
+        await Promise.allSettled(notificationPromises);
+    } else {
+        console.log(`No trainees found in program ${program.name} for session ${session.title}. No notifications sent.`);
+    }
+
+    // NEW: Schedule a reminder for the session
+    scheduleSessionReminder(session);
 
     return res.status(201).json(new ApiResponse(201, session, "Session created successfully."));
 });
@@ -83,7 +97,6 @@ const startOnlineSession = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
     const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'online' });
     
-    // IMPORTANT: Populate programId for notification.
     const session = await ClassSession.findOne(query).populate('programId', 'name trainees');
 
     if (!session) throw new ApiError(404, "Online session not found.");
@@ -94,7 +107,6 @@ const startOnlineSession = asyncHandler(async (req, res) => {
     session.accessLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/classroom/${session.sessionId}`;
     await session.save();
 
-    // Now, AFTER session is confirmed to exist and is saved, proceed with notifications
     if (session.programId && session.programId.trainees && session.programId.trainees.length > 0) {
         const trainees = await User.find({ _id: { $in: session.programId.trainees }, role: 'Trainee' }).select('_id');
         const notificationPromises = trainees.map(trainee =>
@@ -103,7 +115,7 @@ const startOnlineSession = asyncHandler(async (req, res) => {
                 sender: req.user._id,
                 title: `Session Started: ${session.title}`,
                 message: `Your online class session "${session.title}" for program "${session.programId.name}" has just started. Join now!`,
-                link: `/dashboard/classroom/${session.sessionId}`, // Link to the live classroom
+                link: `/dashboard/classroom/${session.sessionId}`,
                 type: 'info'
             })
         );
@@ -117,22 +129,19 @@ const startOnlineSession = asyncHandler(async (req, res) => {
 
 const startPhysicalSession = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
-    const { latitude, longitude, radius = 50 } = req.body; // Facilitator provides their location
+    const { latitude, longitude, radius = 50 } = req.body; 
 
-    // --- GEOLOCATION FIX (This validation is correct and essential) ---
     if (latitude === undefined || longitude === undefined) {
         throw new ApiError(400, "Your location (latitude and longitude) is required to start a physical session.");
     }
 
     const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'physical' });
-    // IMPORTANT: Populate programId for notification.
     const session = await ClassSession.findOne(query).populate('programId', 'name trainees');
 
     if (!session) throw new ApiError(404, "Physical session not found.");
     if (session.status !== 'scheduled') throw new ApiError(400, "Session is already active or completed.");
 
     session.status = 'active';
-    // Save the class location based on where the facilitator started it
     session.location = {
         lat: latitude,
         lng: longitude,
@@ -140,7 +149,6 @@ const startPhysicalSession = asyncHandler(async (req, res) => {
     };
     await session.save();
    
-    // Now, AFTER session is confirmed to exist and is saved, proceed with notifications
     if (session.programId && session.programId.trainees && session.programId.trainees.length > 0) {
         const trainees = await User.find({ _id: { $in: session.programId.trainees }, role: 'Trainee' }).select('_id');
         const notificationPromises = trainees.map(trainee =>
@@ -149,7 +157,7 @@ const startPhysicalSession = asyncHandler(async (req, res) => {
                 sender: req.user._id,
                 title: `Session Started: ${session.title}`,
                 message: `Your physical class session "${session.title}" for program "${session.programId.name}" has just started. Remember to mark attendance!`,
-                link: `/dashboard/Trainee/Trattendance`, // Link to trainee attendance page
+                link: `/dashboard/Trainee/Trattendance`,
                 type: 'info'
             })
         );
@@ -179,40 +187,82 @@ const markPhysicalAttendance = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
     const { latitude, longitude } = req.body;
     const query = buildSessionQuery(idFromParams, { facilitatorId: req.user._id, type: 'physical' });
-    // Populate programId for notification
     const session = await ClassSession.findOne(query).populate('programId', 'name trainees');
 
     if (!session) throw new ApiError(404, "Physical session not found for you.");
 
-    const todayDateString = new Date(session.startTime).toISOString().split('T')[0]; // Use session start time for date
+    const todayDateString = new Date(session.startTime).toISOString().split('T')[0];
 
     const attendance = await Attendance.findOneAndUpdate(
-        { userId: req.user._id, sessionId: session._id }, // Query by sessionId (unique index)
+        { userId: req.user._id, sessionId: session._id },
         {
             $setOnInsert: { userId: req.user._id, sessionId: session._id },
             $set: { 
-                programId: session.programId._id, // Ensure programId is stored as ObjectId
+                programId: session.programId._id, 
                 date: todayDateString,
                 timestamp: new Date(), 
-                method: 'geolocation', // This is now 'geolocation' for facilitator-marked as well
+                method: 'manual', 
                 status: 'Present', 
                 location: { lat: latitude, lng: longitude } 
             }
         }, 
-        { upsert: true, new: true, runValidators: true } // runValidators for enum status
+        { upsert: true, new: true, runValidators: true }
     );
 
-    // Notify facilitator about their own attendance marked via geolocation (optional, but consistent)
     await createNotification({
         recipient: req.user._id,
-        sender: req.user._id, // Self-notification
+        sender: req.user._id, 
         title: `Your Attendance Marked: ${session.title}`,
-        message: `You marked your attendance for session "${session.title}" in program "${session.programId.name}" via geolocation.`,
+        message: `You marked your attendance for session "${session.title}" in program "${session.programId.name}" via manual entry.`,
         link: `/dashboard/Facilitator/Fac-attendance`,
         type: 'info'
     });
 
     return res.status(201).json(new ApiResponse(201, { attendance }));
+});
+
+/**
+ * @desc    Delete a session.
+ * @route   DELETE /api/v1/attendance/sessions/:sessionId
+ * @access  Private (Facilitator)
+ */
+ const deleteSession = asyncHandler(async (req, res) => {
+    const { sessionId: idFromParams } = req.params;
+    const facilitatorId = req.user._id;
+
+    // Build query to find the session and ensure facilitator owns it
+    const query = buildSessionQuery(idFromParams, { facilitatorId: facilitatorId });
+    const session = await ClassSession.findOne(query).populate('programId', 'name');
+
+    if (!session) {
+        throw new ApiError(404, "Session not found or you are not authorized to delete it.");
+    }
+
+    // --- REVISED LOGIC FOR DELETION ---
+    // Only allow deletion if the session is NOT 'active'.
+    // This allows 'scheduled', 'completed', and 'cancelled' sessions to be deleted.
+    if (session.status === 'active') {
+        throw new ApiError(400, "Cannot delete an active session. Please end it first.");
+    }
+    // You could add a specific check here if you ONLY want 'completed' sessions to be deletable:
+    // if (session.status !== 'completed') {
+    //     throw new ApiError(400, "Only completed sessions can be deleted from history.");
+    // }
+    // Based on your latest request ("I want to be able to delete the session created in the past so that i can only delete the completed session"),
+    // let's explicitly allow ONLY 'completed' sessions for deletion here:
+    if (session.status !== 'completed') {
+        throw new ApiError(400, `Session with status '${session.status}' cannot be deleted. Only completed sessions can be deleted.`);
+    }
+    // --- END REVISED LOGIC ---
+
+    // Delete associated attendance records (optional, depending on data retention policy)
+    // In a real system, you might want to consider soft-deletes or archiving for audit trails.
+    await Attendance.deleteMany({ sessionId: session._id });
+
+    // Delete the session itself
+    await session.deleteOne();
+
+    return res.status(200).json(new ApiResponse(200, {}, "Session deleted successfully."));
 });
 
 
@@ -227,25 +277,24 @@ const markQRAttendance = asyncHandler(async (req, res) => {
     const qrResult = verifySessionQRCode(qrData);
     if (!qrResult) throw new ApiError(400, "Invalid or expired QR code.");
 
-    // Populate programId and facilitatorId for notifications
     const session = await ClassSession.findOne({ sessionId: qrResult.sessionId, status: 'active' })
                                         .populate('programId', 'name')
                                         .populate('facilitatorId', 'name email');
 
     if (!session) throw new ApiError(404, "Session not found or not active.");
 
-    const program = await Program.findById(session.programId._id); // Access _id from populated programId
+    const program = await Program.findById(session.programId._id);
     if (!program || !program.trainees.includes(req.user._id)) {
         throw new ApiError(403, "You are not enrolled in this program's session.");
     }
 
     const todayDateString = new Date(session.startTime).toISOString().split('T')[0];
 
-    const query = { userId: req.user._id, sessionId: session._id }; // Query by sessionId (unique index)
+    const query = { userId: req.user._id, sessionId: session._id };
 
     const update = {
         $set: {
-            programId: session.programId._id, // Ensure to use _id from populated object
+            programId: session.programId._id,
             date: todayDateString,
             timestamp: new Date(),
             method: 'qr_code',
@@ -255,14 +304,13 @@ const markQRAttendance = asyncHandler(async (req, res) => {
     
     const attendance = await Attendance.findOneAndUpdate(query, update, { upsert: true, new: true, runValidators: true });
 
-    // Notify facilitator about trainee attendance
     if (session.facilitatorId) {
         await createNotification({
-            recipient: session.facilitatorId._id, // Use _id from populated facilitatorId
+            recipient: session.facilitatorId._id,
             sender: req.user._id,
             title: "Trainee Marked Attendance",
             message: `Trainee ${req.user.name} marked attendance for session "${session.title}" (${session.programId.name}) via QR code.`,
-            link: `/dashboard/Facilitator/Fac-attendance`, // Link to facilitator's attendance report
+            link: `/dashboard/Facilitator/Fac-attendance`,
             type: 'info'
         });
     }
@@ -274,33 +322,32 @@ const markQRAttendance = asyncHandler(async (req, res) => {
 const markGeolocationAttendance = asyncHandler(async (req, res) => {
     const { sessionId, latitude, longitude } = req.body;
     if (!sessionId) throw new ApiError(400, "Session ID is required.");
-    if (latitude === undefined || longitude === undefined) { // Explicitly check location
+    if (latitude === undefined || longitude === undefined) {
         throw new ApiError(400, "Your location (latitude and longitude) is required for geolocation attendance.");
     }
 
-    // Populate programId and facilitatorId for notifications
     const session = await ClassSession.findOne({ sessionId, type: 'physical', status: 'active' })
                                         .populate('programId', 'name')
                                         .populate('facilitatorId', 'name email');
 
     if (!session) throw new ApiError(404, "Active physical session not found.");
 
-    const program = await Program.findById(session.programId._id); // Access _id from populated programId
+    const program = await Program.findById(session.programId._id);
     if (!program || !program.trainees.includes(req.user._id)) {
         throw new ApiError(403, "You are not enrolled in this program.");
     }
     
-    const classLocation = session.location || { lat: -1.9441, lng: 30.0619, radius: 100 }; // Fallback location
+    const classLocation = session.location || { lat: -1.9441, lng: 30.0619, radius: 100 };
     if (!isWithinRadius({ lat: latitude, lng: longitude }, classLocation)) {
         throw new ApiError(400, "You are not within the required class location radius.");
     }
 
     const todayDateString = new Date(session.startTime).toISOString().split('T')[0];
 
-    const query = { userId: req.user._id, sessionId: session._id }; // Query by sessionId (unique index)
+    const query = { userId: req.user._id, sessionId: session._id };
     const update = {
         $set: {
-            programId: session.programId._id, // Ensure to use _id from populated object
+            programId: session.programId._id,
             date: todayDateString,
             timestamp: new Date(),
             method: 'geolocation',
@@ -311,7 +358,6 @@ const markGeolocationAttendance = asyncHandler(async (req, res) => {
     
     const attendance = await Attendance.findOneAndUpdate(query, update, { upsert: true, new: true, runValidators: true });
 
-    // Notify facilitator about trainee attendance
     if (session.facilitatorId) {
         await createNotification({
             recipient: session.facilitatorId._id,
@@ -344,21 +390,88 @@ const getSessionDetails = asyncHandler(async (req, res) => {
 const getSessionAttendance = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
     const query = buildSessionQuery(idFromParams);
-    const session = await ClassSession.findOne(query);
+    
+    const session = await ClassSession.findOne(query)
+        .populate('programId', 'name trainees') // Populate trainees in the program
+        .populate('facilitatorId', 'name email');
+
     if (!session) throw new ApiError(404, "Session not found.");
-    const attendance = await Attendance.find({ sessionId: session._id }).populate('userId', 'name email').populate('markedBy', 'name').sort({ timestamp: -1 });
-    return res.status(200).json(new ApiResponse(200, attendance, "Attendance report retrieved successfully."));
+    
+    // Fetch all current attendance records for this session
+    const currentAttendanceRecords = await Attendance.find({ sessionId: session._id })
+        .populate('userId', 'name email')
+        .populate('markedBy', 'name')
+        .sort({ timestamp: -1 });
+
+    const attendanceMap = new Map();
+    currentAttendanceRecords.forEach(record => {
+        // Only keep the latest status for a user for this session
+        // This ensures if someone was marked 'Absent' then 'Present', 'Present' is kept.
+        if (!attendanceMap.has(record.userId._id.toString()) || new Date(record.timestamp) > new Date(attendanceMap.get(record.userId._id.toString()).timestamp)) {
+            attendanceMap.set(record.userId._id.toString(), record);
+        }
+    });
+
+    const populatedTrainees = await User.find({ 
+        _id: { $in: session.programId.trainees },
+        role: 'Trainee'
+    }).select('name email');
+
+
+    // Prepare a comprehensive list of all trainees and their status for this session
+    const detailedAttendance = populatedTrainees.map(trainee => {
+        const record = attendanceMap.get(trainee._id.toString());
+        return {
+            trainee: {
+                _id: trainee._id,
+                name: trainee.name,
+                email: trainee.email
+            },
+            status: record ? record.status : 'Absent', // Default to 'Absent' if no record
+            method: record ? record.method : 'N/A',
+            timestamp: record ? record.timestamp : null,
+            reason: record ? record.reason : null,
+            markedBy: record?.markedBy ? record.markedBy.name : (record?.method === 'qr_code' || record?.method === 'geolocation' ? 'Self' : 'N/A')
+        };
+    });
+
+
+    return res.status(200).json(new ApiResponse(200, { session, attendance: detailedAttendance }, "Attendance report retrieved successfully."));
 });
 
 const getFacilitatorSessions = asyncHandler(async (req, res) => {
-    const sessions = await ClassSession.find({ facilitatorId: req.user._id }).sort({ startTime: -1 }).populate('programId', 'name');
+    const { startDate, endDate } = req.query;
+    let query = { facilitatorId: req.user._id };
+
+    if (startDate && endDate) {
+        const start = new Date(startDate);
+        start.setUTCHours(0, 0, 0, 0); // Ensure start of day UTC
+        const end = new Date(endDate);
+        end.setUTCHours(23, 59, 59, 999); // Ensure end of day UTC
+        query.startTime = { $gte: start, $lte: end };
+    }
+
+    const sessions = await ClassSession.find(query).sort({ startTime: -1 }).populate('programId', 'name');
     return res.status(200).json(new ApiResponse(200, sessions, "Sessions retrieved successfully."));
 });
 
 const getTraineeSessions = asyncHandler(async (req, res) => {
+    const { startDate, endDate } = req.query;
+    
     const programs = await Program.find({ trainees: req.user._id });
     const programIds = programs.map(p => p._id);
-    const sessions = await ClassSession.find({ programId: { $in: programIds } }).sort({ startTime: -1 }).populate('programId', 'name');
+    
+    let query = { programId: { $in: programIds } };
+
+    if (startDate && endDate) {
+        const start = new Date(startDate);
+        start.setUTCHours(0, 0, 0, 0); // Ensure start of day UTC
+        const end = new Date(endDate);
+        end.setUTCHours(23, 59, 59, 999); // Ensure end of day UTC
+        query.startTime = { $gte: start, $lte: end };
+    }
+
+    const sessions = await ClassSession.find(query).sort({ startTime: -1 }).populate('programId', 'name');
     return res.status(200).json(new ApiResponse(200, sessions, "Your sessions retrieved successfully."));
 });
 
@@ -369,39 +482,58 @@ const getTraineeSessions = asyncHandler(async (req, res) => {
 
 const markManualStudentAttendance = asyncHandler(async (req, res) => {
     const { sessionId } = req.params;
-    const { userId, status = 'Present', reason } = req.body;
+    const { userId, status = 'Present', reason } = req.body; // Default status is 'Present' if not provided
 
     if (!userId) throw new ApiError(400, "User ID is required.");
     // Populate programId and facilitatorId for validation and notifications
     const session = await ClassSession.findOne({ sessionId })
-                                        .populate('programId', 'name')
+                                        .populate('programId', 'name trainees programManager') // Added programManager
                                         .populate('facilitatorId', 'name email'); 
     if (!session) throw new ApiError(404, "Session not found.");
-
-    // Verify current user is facilitator of session or Program Manager/SuperAdmin
-    if (req.user.role === 'Facilitator' && session.facilitatorId.toString() !== req.user._id.toString()) {
-        throw new ApiError(403, "You are not authorized to mark attendance for this session.");
+    
+    // --- AUTHENTICATION LOGIC FOR MANUAL MARKING ---
+    let authorized = false;
+    // SuperAdmins can mark for any session
+    if (req.user.role === 'SuperAdmin') {
+        authorized = true;
+    } 
+    // Program Manager can mark for sessions in programs they manage
+    else if (req.user.role === 'Program Manager' && session.programId && session.programId.programManager?.toString() === req.user._id.toString()) {
+        authorized = true;
     }
-    if (!['Program Manager', 'SuperAdmin', 'Facilitator'].includes(req.user.role)) {
-        throw new ApiError(403, "You do not have permission to manually mark attendance.");
+    // Facilitator can mark for sessions they created
+    else if (req.user.role === 'Facilitator' && session.facilitatorId?._id.toString() === req.user._id.toString()) {
+        authorized = true;
     }
 
-    const todayDateString = new Date(session.startTime).toISOString().split('T')[0];
+    if (!authorized) {
+        throw new ApiError(403, "You are not authorized to manually mark attendance for this session.");
+    }
+    
+    // Ensure the user being marked is actually enrolled in the program
+    const isTraineeEnrolledInProgram = session.programId.trainees.some(t => t.toString() === userId);
+    if (!isTraineeEnrolledInProgram) {
+        throw new ApiError(400, "The specified user is not enrolled in this session's program.");
+    }
+
+    const sessionStartDateString = new Date(session.startTime).toISOString().split('T')[0];
 
     const attendance = await Attendance.findOneAndUpdate(
-        { userId: userId, programId: session.programId._id, date: todayDateString }, // Use _id from populated programId
+        { userId: userId, sessionId: session._id }, // Query fields (define uniqueness)
         { 
             $set: { 
                 status, 
                 reason: reason || null, 
                 method: 'manual', 
                 markedBy: req.user._id, 
-                sessionId: session._id,
-                programId: session.programId._id // Ensure programId is correctly set
+                timestamp: new Date() // Update timestamp whenever record is modified
             },
-            $setOnInsert: { userId: userId, programId: session.programId._id, date: todayDateString }
+            $setOnInsert: { // These fields are only set if a new document is inserted
+                programId: session.programId._id, 
+                date: sessionStartDateString // Date of the session, not necessarily 'today'
+            }
         },
-        { upsert: true, new: true, runValidators: true }
+        { upsert: true, new: true, runValidators: true } // runValidators for enum status
     );
 
     const markedUser = await User.findById(userId).select('name');
@@ -415,6 +547,17 @@ const markManualStudentAttendance = asyncHandler(async (req, res) => {
         type: (status === 'Absent' || status === 'Late') ? 'warning' : 'info'
     });
 
+    // Notify the facilitator if someone else (PM/SA) marked their session's attendance
+    if (session.facilitatorId && session.facilitatorId._id.toString() !== req.user._id.toString()) {
+        await createNotification({
+            recipient: session.facilitatorId._id,
+            sender: req.user._id,
+            title: "Manual Attendance Update",
+            message: `${req.user.name} manually updated attendance for trainee ${markedUser?.name || userId} in session "${session.title}" to "${status}".`,
+            link: `/dashboard/Facilitator/Fac-attendance`,
+            type: 'info'
+        });
+    }
 
     const message = `Attendance for user ${markedUser?.name || userId} has been set to ${status}.`;
     return res.status(200).json(new ApiResponse(200, attendance, message));
@@ -441,30 +584,230 @@ const getProgramAttendanceReport = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Program ID, start date, and end date are required.");
     }
 
-    const attendanceRecords = await Attendance.find({
-        programId: programId,
-        date: { $gte: startDate, $lte: endDate }
-    })
-    .populate('userId', 'name email role')
-    .sort({ date: -1 });
+    const start = new Date(startDate);
+    start.setUTCHours(0, 0, 0, 0); // Ensure start of day UTC
+    const end = new Date(endDate);
+    end.setUTCHours(23, 59, 59, 999); // Ensure end of day UTC
 
-    return res.status(200).json(new ApiResponse(200, attendanceRecords, "Program attendance report fetched successfully."));
-});
-const getMyAttendanceHistory = asyncHandler(async (req, res) => {
-    const traineeId = req.user._id;
-    const { programId } = req.query;
-
-    let query = { userId: traineeId };
-    if (programId) {
-        query.programId = programId;
+    const program = await Program.findById(programId).populate('trainees', 'name email');
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
     }
 
-    const attendanceRecords = await Attendance.find(query)
-        .populate('programId', 'name')
-        .sort({ date: -1 });
+    // Access check for Program Manager (SuperAdmin implicitly allowed by middleware)
+    if (req.user.role === 'Program Manager' && program.programManager?.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "Forbidden: You are not the manager of this program.");
+    }
+
+
+    const traineeIds = program.trainees.map(t => t._id);
+    if (traineeIds.length === 0) {
+        return res.status(200).json(new ApiResponse(200, {
+            programName: program.name,
+            reportDates: [],
+            traineeReports: [],
+            summaryStats: {
+                totalDaysInPeriod: 0,
+                totalPresentCount: 0,
+                totalAbsentCount: 0,
+                totalLateCount: 0,
+                totalExcusedCount: 0,
+                totalTrainees: 0
+            }
+        }, "No trainees in this program."));
+    }
+
+    // Get all unique dates where sessions were held within the period
+    const classSessions = await ClassSession.find({
+        programId: programId,
+        startTime: { $gte: start, $lte: end },
+        status: { $in: ['active', 'completed'] } // Only count active/completed sessions
+    }).select('startTime');
+
+    const reportDatesSet = new Set();
+    classSessions.forEach(session => {
+        reportDatesSet.add(new Date(session.startTime).toISOString().split('T')[0]);
+    });
+    // Sort dates chronologically
+    const reportDates = Array.from(reportDatesSet).sort();
+
+    // Fetch all attendance records for these trainees within the date range
+    const attendanceRecords = await Attendance.find({
+        userId: { $in: traineeIds },
+        programId: programId,
+        timestamp: { $gte: start, $lte: end }
+    }).select('userId date status timestamp'); // Also select timestamp to prioritize latest status if duplicates
+
+    // Map for quick lookup: attendanceByTraineeIdAndDate[traineeId][date] = latest_status
+    const attendanceByTraineeIdAndDate = new Map();
+    attendanceRecords.forEach(record => {
+        const traineeStringId = record.userId.toString();
+        const recordDate = record.date;
+
+        if (!attendanceByTraineeIdAndDate.has(traineeStringId)) {
+            attendanceByTraineeIdAndDate.set(traineeStringId, new Map());
+        }
+
+        const traineeDailyMap = attendanceByTraineeIdAndDate.get(traineeStringId);
+
+        // If there are multiple entries for the same trainee on the same day,
+        // keep the status from the latest timestamp (e.g., if first marked Absent, then Present)
+        if (!traineeDailyMap.has(recordDate) || new Date(record.timestamp) > new Date(traineeDailyMap.get(recordDate).timestamp)) {
+             traineeDailyMap.set(recordDate, { status: record.status, timestamp: record.timestamp });
+        }
+    });
+
+    const traineeReports = program.trainees.map(trainee => {
+        const dailyAttendance = [];
+        let presentCount = 0;
+        let absentCount = 0;
+        let lateCount = 0;
+        let excusedCount = 0;
+
+        for (const date of reportDates) {
+            // Get the status for this trainee on this specific date, defaulting to 'Absent' if no record
+            const status = attendanceByTraineeIdAndDate.get(trainee._id.toString())?.get(date)?.status || 'Absent'; 
+            dailyAttendance.push({ date, status });
+
+            if (status === 'Present') presentCount++;
+            else if (status === 'Absent') absentCount++;
+            else if (status === 'Late') lateCount++;
+            else if (status === 'Excused') excusedCount++;
+        }
+
+        return {
+            trainee: {
+                _id: trainee._id,
+                name: trainee.name,
+                email: trainee.email
+            },
+            dailyAttendance,
+            summary: {
+                present: presentCount,
+                absent: absentCount,
+                late: lateCount,
+                excused: excusedCount,
+                totalDaysInPeriod: reportDates.length // Total days classes were held for this period
+            }
+        };
+    });
     
-    return res.status(200).json(new ApiResponse(200, attendanceRecords, "Your attendance history fetched successfully."));
+    // Calculate overall summary stats across all trainees for the selected period
+    const overallTotalPresent = traineeReports.reduce((sum, tr) => sum + tr.summary.present, 0);
+    const overallTotalAbsent = traineeReports.reduce((sum, tr) => sum + tr.summary.absent, 0);
+    const overallTotalLate = traineeReports.reduce((sum, tr) => sum + tr.summary.late, 0);
+    const overallTotalExcused = traineeReports.reduce((sum, tr) => sum + tr.summary.excused, 0);
+
+    const summaryStats = {
+        totalDaysInPeriod: reportDates.length, // Number of unique class days in the period
+        totalPresentCount: overallTotalPresent,
+        totalAbsentCount: overallTotalAbsent,
+        totalLateCount: overallTotalLate,
+        totalExcusedCount: overallTotalExcused,
+        totalTrainees: program.trainees.length // Total trainees in the program
+    };
+
+    return res.status(200).json(new ApiResponse(200, {
+        programName: program.name,
+        reportDates,
+        traineeReports,
+        summaryStats
+    }, "Program attendance report fetched successfully."));
 });
+
+
+
+const getMyAttendanceHistory = asyncHandler(async (req, res) => {
+    const traineeId = req.user._id;
+    const { programId, startDate, endDate } = req.query; 
+
+    // 1. Determine the programs the trainee is enrolled in
+    const enrolledPrograms = await Program.find({ trainees: traineeId }).select('_id name');
+    const enrolledProgramIds = enrolledPrograms.map(p => p._id);
+
+    // Filter by specific program if provided
+    let programFilterQuery = { $in: enrolledProgramIds };
+    if (programId && programId !== 'all') {
+        if (!enrolledProgramIds.some(id => id.toString() === programId)) {
+            // If the trainee is not enrolled in the requested program, return empty.
+            return res.status(200).json(new ApiResponse(200, [], "Not enrolled in the specified program."));
+        }
+        programFilterQuery = new mongoose.Types.ObjectId(programId);
+    }
+
+    // 2. Determine date range for sessions
+    const queryStartDate = startDate ? new Date(startDate) : new Date(0); // Epoch for very old dates
+    queryStartDate.setUTCHours(0, 0, 0, 0);
+
+    const queryEndDate = endDate ? new Date(endDate) : new Date(); // Today/now
+    queryEndDate.setUTCHours(23, 59, 59, 999);
+
+    // 3. Find all relevant sessions (active or completed in the past) for the trainee's programs within the date range
+    const relevantSessions = await ClassSession.find({
+        programId: programFilterQuery,
+        startTime: { $gte: queryStartDate, $lte: queryEndDate },
+        status: { $in: ['active', 'completed'] } // Include active and completed sessions
+    }).populate('programId', 'name') // Populate program name for display
+      .sort({ startTime: 1 }); // Sort by start time ascending
+
+    // 4. Fetch all attendance records for the trainee for these relevant sessions
+    const attendanceRecords = await Attendance.find({
+        userId: traineeId,
+        sessionId: { $in: relevantSessions.map(s => s._id) }
+    }).sort({ timestamp: -1 }); // Get latest records first if duplicates (though unique index prevents this)
+
+    // 5. Create a map for quick lookup of attendance by session ID
+    const attendanceMap = new Map();
+    attendanceRecords.forEach(record => {
+        attendanceMap.set(record.sessionId.toString(), record);
+    });
+
+    // 6. Construct the final history by iterating through sessions and inferring status
+    const traineeHistory = relevantSessions.map(session => {
+        const record = attendanceMap.get(session._id.toString());
+        
+        // Default to 'Absent' if no record found for the session
+        let status = 'Absent';
+        let method = 'N/A';
+        let timestamp = null;
+        let checkIn = null;
+        let reason = null;
+        let markedBy = null;
+
+        if (record) {
+            status = record.status;
+            method = record.method;
+            timestamp = record.timestamp;
+            checkIn = record.checkIn;
+            reason = record.reason;
+            markedBy = record.markedBy;
+        }
+
+        return {
+            _id: record?._id || new mongoose.Types.ObjectId(), // Use existing _id or generate new for mock records
+            userId: traineeId,
+            sessionId: session._id,
+            programId: session.programId, // Already populated
+            date: new Date(session.startTime).toISOString().split('T')[0], // Date of the session
+            timestamp: timestamp,
+            checkIn: checkIn,
+            location: record?.location || undefined,
+            method: method,
+            status: status,
+            reason: reason,
+            markedBy: markedBy,
+            sessionTitle: session.title, // Add session title for display
+            sessionType: session.type,   // Add session type for display
+            sessionTime: session.startTime // Add session start time for display
+        };
+    });
+    
+    // Sort the final history by session date (descending)
+    traineeHistory.sort((a, b) => new Date(b.sessionTime).getTime() - new Date(a.sessionTime).getTime());
+
+    return res.status(200).json(new ApiResponse(200, traineeHistory, "Your attendance history fetched successfully."));
+});
+
 
 
 const endSession = asyncHandler(async (req, res) => {
@@ -474,7 +817,6 @@ const endSession = asyncHandler(async (req, res) => {
         facilitatorId: req.user._id,
         status: 'active' 
     });
-    // Populate programId for notification
     const session = await ClassSession.findOne(query).populate('programId', 'name trainees');
 
     if (!session) {
@@ -485,7 +827,6 @@ const endSession = asyncHandler(async (req, res) => {
     session.endTime = new Date();
     await session.save();
 
-    // Notify trainees that the session has ended
     if (session.programId && session.programId.trainees && session.programId.trainees.length > 0) {
         const trainees = await User.find({ _id: { $in: session.programId.trainees }, role: 'Trainee' }).select('_id');
         const notificationPromises = trainees.map(trainee =>
@@ -515,85 +856,65 @@ const getProgramAttendanceSummary = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Program ID, start date, and end date are required.");
     }
 
-    // 1. Find the program and its trainees to ensure we list everyone, even those with 0 attendance
     const program = await Program.findById(programId).populate('trainees', 'name email role').lean();
     if (!program) {
         throw new ApiError(404, "Program not found.");
     }
 
-    // 2. Count the total number of sessions held within the date range for this program
+    // Determine the relevant sessions for this period to get total possible attendance days
     const totalSessions = await ClassSession.countDocuments({
-        programId,
+        programId: new mongoose.Types.ObjectId(programId),
         startTime: {
             $gte: new Date(startDate),
-            $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999)) // Include whole end day
-        }
+            $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999)) 
+        },
+        status: { $in: ['active', 'completed'] } // Only count active/completed sessions
     });
 
-    // 3. Aggregate attendance data from the database
     const attendanceSummary = await Attendance.aggregate([
-        // Stage 1: Filter records for the correct program and date range
         {
             $match: {
                 programId: new mongoose.Types.ObjectId(programId),
-                date: { $gte: startDate, $lte: endDate }
+                timestamp: { $gte: new Date(startDate), $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999)) } 
             }
         },
-        // Stage 2: Join with ClassSession to get the session title for context
-        {
-            $lookup: {
-                from: 'classsessions',
-                localField: 'sessionId',
-                foreignField: '_id',
-                as: 'sessionInfo'
-            }
-        },
-        { $unwind: { path: "$sessionInfo", preserveNullAndEmptyArrays: true } },
-        // Stage 3: Group by student (userId)
+        // Group by user and status to count each status type
         {
             $group: {
-                _id: "$userId",
-                present: { $sum: { $cond: [{ $in: ["$status", ["Present", "Late"]] }, 1, 0] } },
-                absent: { $sum: { $cond: [{ $eq: ["$status", "Absent"] }, 1, 0] } },
-                late: { $sum: { $cond: [{ $eq: ["$status", "Late"] }, 1, 0] } },
-                excused: { $sum: { $cond: [{ $eq: ["$status", "Excused"] }, 1, 0] } },
-                // Collect all detailed records for the modal view
-                records: {
-                    $push: {
-                        date: "$date",
-                        status: "$status",
-                        timestamp: "$timestamp",
-                        checkIn: "$checkIn",
-                        sessionTitle: "$sessionInfo.title",
-                        method: "$method"
-                    }
-                }
+                _id: { userId: "$userId", status: "$status" },
+                count: { $sum: 1 }
             }
         },
-        // Stage 4: Sort records within the modal view by date
+        // Re-group by user to consolidate all statuses
         {
-            $addFields: {
-                records: {
-                    $sortArray: {
-                        input: "$records",
-                        sortBy: { date: -1 }
-                    }
-                }
+            $group: {
+                _id: "$_id.userId",
+                present: { $sum: { $cond: [{ $in: ["$_id.status", ["Present", "Late"]] }, "$count", 0] } },
+                absent: { $sum: { $cond: [{ $eq: ["$_id.status", "Absent"] }, "$count", 0] } },
+                late: { $sum: { $cond: [{ $eq: ["$_id.status", "Late"] }, "$count", 0] } },
+                excused: { $sum: { $cond: [{ $eq: ["$_id.status", "Excused"] }, "$count", 0] } },
+                // Store all unique records for detailed view later (optional, might need a different aggregation if performance is an issue)
+                // For this summary, we only need counts, not full records.
             }
         }
     ]);
 
-    // 4. Merge program trainees with their attendance data
     const summaryMap = new Map(attendanceSummary.map(item => [item._id.toString(), item]));
     
     const finalReport = program.trainees.map(trainee => {
         const summary = summaryMap.get(trainee._id.toString());
         const presentCount = summary ? summary.present : 0;
-        const totalPossible = totalSessions > 0 ? totalSessions : 0;
-        // Avoid division by zero, and don't penalize for excused absences in the rate
-        const attendanceRate = totalPossible - (summary?.excused || 0) > 0 
-            ? Math.round((presentCount / (totalPossible - (summary?.excused || 0))) * 100) 
-            : 0;
+        const excusedCount = summary?.excused || 0;
+        
+        // Total possible attendance days is based on actual sessions held in the period
+        const totalPossibleAttendanceDays = totalSessions; 
+        
+        // Calculate attendance rate, excluding excused days from the denominator
+        const actualTotalForRate = totalPossibleAttendanceDays - excusedCount;
+
+        const attendanceRate = actualTotalForRate > 0 
+            ? Math.round((presentCount / actualTotalForRate) * 100) 
+            : 0; // If no actual days, rate is 0
 
         return {
             userId: trainee._id,
@@ -601,18 +922,146 @@ const getProgramAttendanceSummary = asyncHandler(async (req, res) => {
             email: trainee.email,
             role: trainee.role,
             present: presentCount,
-            absent: summary ? summary.absent : totalPossible - presentCount, // Calculate absent if no record
+            absent: summary ? summary.absent : (totalPossibleAttendanceDays - presentCount - excusedCount), // Default to actual possible absent count
             late: summary ? summary.late : 0,
-            excused: summary ? summary.excused : 0,
-            attendanceRate: attendanceRate < 0 ? 0 : attendanceRate,
-            records: summary ? summary.records : [],
+            excused: excusedCount,
+            attendanceRate: attendanceRate < 0 ? 0 : attendanceRate, 
+            totalPossibleSessions: totalPossibleAttendanceDays // Include this for clarity
         };
     });
 
     res.status(200).json(new ApiResponse(200, {
-        totalSessions,
+        totalSessions, // Total number of sessions in the selected period for the program
         report: finalReport
     }));
+});
+
+
+const getProgramSessionCounts = asyncHandler(async (req, res) => {
+    const { programId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(programId)) {
+        throw new ApiError(400, "Invalid Program ID.");
+    }
+
+    const program = await Program.findById(programId);
+    if (!program) {
+        throw new ApiError(404, "Program not found.");
+    }
+
+    // Ensure the requesting facilitator is associated with this program
+    if (req.user.role === 'Facilitator' && !program.facilitators.includes(req.user._id)) {
+        throw new ApiError(403, "Forbidden: You are not a facilitator for this program.");
+    }
+
+    const totalSessions = await ClassSession.countDocuments({ programId });
+    const completedSessions = await ClassSession.countDocuments({ programId, status: 'completed' });
+    const activeSessions = await ClassSession.countDocuments({ programId, status: 'active' });
+    const scheduledSessions = await ClassSession.countDocuments({ programId, status: 'scheduled' });
+
+    // Find the next upcoming session that is scheduled or active
+    const nextSession = await ClassSession.findOne({
+        programId,
+        status: { $in: ['scheduled', 'active'] },
+        startTime: { $gte: new Date() } // Future sessions
+    }).sort({ startTime: 1 }) // Closest first
+      .select('startTime');
+
+    return res.status(200).json(new ApiResponse(200, {
+        totalSessions,
+        completedSessions,
+        activeSessions,
+        scheduledSessions,
+        nextSessionTime: nextSession ? nextSession.startTime : null,
+    }, "Program session counts fetched successfully."));
+});
+
+const updateSession = asyncHandler(async (req, res) => {
+    const { sessionId: idFromParams } = req.params;
+    const facilitatorId = req.user._id;
+    const { title, description, startTime, duration, type, latitude, longitude, radius } = req.body;
+
+    const query = buildSessionQuery(idFromParams, { facilitatorId: facilitatorId });
+    const session = await ClassSession.findOne(query).populate('programId', 'name trainees');
+
+    if (!session) {
+        throw new ApiError(404, "Session not found or you are not authorized to update it.");
+    }
+
+    // Only allow updates if session is scheduled
+    if (session.status !== 'scheduled') {
+        throw new ApiError(400, `Cannot update a session with status '${session.status}'. Only scheduled sessions can be updated.`);
+    }
+
+    const updateFields = {};
+
+    if (title !== undefined) updateFields.title = title;
+    if (description !== undefined) updateFields.description = description;
+    if (duration !== undefined) {
+        const parsedDuration = parseInt(duration);
+        if (isNaN(parsedDuration) || parsedDuration <= 0) {
+            throw new ApiError(400, "Duration must be a positive number.");
+        }
+        updateFields.duration = parsedDuration;
+    }
+    
+    // If start time is updated, re-schedule the reminder
+    if (startTime !== undefined) {
+        const newStartTime = new Date(startTime);
+        if (isNaN(newStartTime.getTime())) {
+            throw new ApiError(400, "Invalid Start Time format provided.");
+        }
+        updateFields.startTime = newStartTime;
+        // Reschedule reminder
+        scheduleSessionReminder({ ...session.toObject(), startTime: newStartTime }); // Pass updated startTime
+    }
+
+    // If type is changed, and it becomes physical, validate location
+    // Or if it's already physical and location fields are provided, update them.
+    if (type !== undefined) updateFields.type = type;
+
+    if (type === 'physical' || (session.type === 'physical' && (latitude !== undefined || longitude !== undefined || radius !== undefined))) {
+        // Ensure location object exists or is created
+        if (!updateFields.location) updateFields.location = { ...session.location?.toObject() }; 
+        
+        if (latitude !== undefined) updateFields.location.lat = latitude;
+        if (longitude !== undefined) updateFields.location.lng = longitude;
+        if (radius !== undefined) updateFields.location.radius = radius;
+
+        // If changing to physical, and location isn't fully provided, it's an error.
+        if (updateFields.type === 'physical' && (updateFields.location.lat === undefined || updateFields.location.lng === undefined)) {
+             throw new ApiError(400, "Latitude and longitude are required for a physical session.");
+        }
+    }
+
+
+    const updatedSession = await ClassSession.findByIdAndUpdate(
+        session._id,
+        { $set: updateFields },
+        { new: true, runValidators: true } // Run validators to ensure data integrity
+    ).populate('programId', 'name'); // Populate for response
+
+    if (!updatedSession) {
+        throw new ApiError(500, "Failed to update session unexpectedly.");
+    }
+    
+    // Notify trainees about the session update
+    if (updatedSession.programId && updatedSession.programId.trainees && updatedSession.programId.trainees.length > 0) {
+        const trainees = await User.find({ _id: { $in: updatedSession.programId.trainees }, role: 'Trainee' }).select('_id');
+        const notificationPromises = trainees.map(trainee =>
+            createNotification({
+                recipient: trainee._id,
+                sender: req.user._id,
+                title: `Session Updated: ${updatedSession.title}`,
+                message: `The class session "${updatedSession.title}" for your program "${updatedSession.programId.name}" has been updated. It is now scheduled for ${new Date(updatedSession.startTime).toLocaleString()}.`,
+                link: `/dashboard/Trainee/Trattendance`,
+                type: 'info'
+            })
+        );
+        await Promise.allSettled(notificationPromises);
+    }
+
+    return res.status(200).json(new ApiResponse(200, updatedSession, "Session updated successfully."));
 });
 
 
@@ -623,6 +1072,8 @@ export {
     startPhysicalSession,
     markPhysicalAttendance,
     openQrForSession,
+    deleteSession, 
+    updateSession,
     
     // Trainee
     markQRAttendance,
@@ -641,5 +1092,6 @@ export {
     markManualStudentAttendance,
     getProgramAttendanceReport,
     getMyAttendanceHistory,
+    getProgramSessionCounts,
     getProgramAttendanceSummary,
 };

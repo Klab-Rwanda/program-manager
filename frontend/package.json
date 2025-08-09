@@ -68,13 +68,14 @@
     "react-toastify": "^11.0.5",
     "recharts": "2.12.7",
     "socket.io-client": "^4.7.5",
-    "sonner": "^1.5.0",
+    "sonner": "^1.7.4",
     "tailwind-merge": "^2.4.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@flydotio/dockerfile": "^0.7.10",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

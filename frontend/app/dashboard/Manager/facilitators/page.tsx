@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   Plus,
   Search,
@@ -22,6 +22,10 @@ import {
   GraduationCap,
   BookOpen,
   TrendingUp,
+  ArrowRight, 
+  AlertTriangle,
+  UserX, // Import UserX icon for unassign
+  Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -50,14 +54,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  AlertDialog, // Import AlertDialog
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+
 import { Facilitator } from "@/types/index"
-import { createUser, getUsersByRole, updateFacilitatorProfile } from "@/lib/services/user.service"
+import { createUser, getUsersByRole, updateFacilitatorProfile, deleteUser } from "@/lib/services/user.service" 
 import { toast } from "sonner"
-import { enrollFacilitator, getAllPrograms } from "@/lib/services/program.service"
+import { enrollFacilitator, getAllPrograms, unenrollFacilitator } from "@/lib/services/program.service" 
 
 export default function FacilitatorsPage() {
-  const [programs, setPrograms] = useState<{ _id: string; name: string }[]>([])
-  const [selectedProgramId, setSelectedProgramId] = useState<string>("")
+  // Enhanced Program type for frontend use to include populated facilitators
+  // This helps check if a facilitator is assigned to a program in the frontend filter
+  const [programs, setPrograms] = useState<{ _id: string; name: string; facilitators: (string | { _id: string })[] }[]>([])
+  const [selectedProgramId, setSelectedProgramId] = useState<string>("all") // Default to 'all'
   const [facilitators, setFacilitators] = useState<Facilitator[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -74,11 +91,41 @@ export default function FacilitatorsPage() {
     email: "",
   })
   const [hireMethod, setHireMethod] = useState<"existing" | "new">("existing")
+  const [isSubmitting, setIsSubmitting] = useState(false) // For general submission loading
+
+  // State for confirmation dialogs
+  const [confirmationDialog, setConfirmationDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({ open: false, title: '', description: '', onConfirm: () => {} });
+
+  // Helper to refresh all data (programs and facilitators)
+  const refreshAllData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Programs are fetched with populated facilitators
+      const progs = await getAllPrograms(); 
+      setPrograms(progs);
+      
+      const facs = await fetchFacilitators();
+      setFacilitators(facs);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || "Failed to load data.");
+      toast.error(err.message || "Failed to load data.");
+    } finally {
+      setLoading(false);
+    }
+  }, []); // Depend on nothing for a full refresh
+
 
   // Fetch all programs using the service
   const fetchPrograms = async () => {
     try {
-      const programs = await getAllPrograms()
+      // Ensure facilitators are populated to check assignment
+      const programs = await getAllPrograms() 
       return programs
     } catch (error: any) {
       console.error("Error fetching programs:", error)
@@ -97,68 +144,51 @@ export default function FacilitatorsPage() {
     }
   }
 
-  // Fetch available facilitators for hiring
+  // Fetch available facilitators for hiring (those not assigned to selected program)
   const fetchAvailableFacilitators = async () => {
     try {
-      const facilitators = await getUsersByRole("Facilitator")
-      setAvailableFacilitators(facilitators)
+      const facilitators = await getUsersByRole("Facilitator");
+      if (selectedProgramId !== "all") {
+        const currentProgram = programs.find(p => p._id === selectedProgramId);
+        // Ensure program.facilitators contains populated objects to get _id
+        const assignedFacilitatorIds = currentProgram?.facilitators?.map(f => typeof f === 'object' ? f._id : f.toString()) || [];
+        const notAssigned = facilitators.filter(f => !assignedFacilitatorIds.includes(f._id));
+        setAvailableFacilitators(notAssigned);
+      } else {
+        setAvailableFacilitators(facilitators); // If no program selected, all are "available" for assignment
+      }
     } catch (error) {
-      console.error("Error fetching available facilitators:", error)
-      toast.error("Failed to load available facilitators")
+      console.error("Error fetching available facilitators:", error);
+      toast.error("Failed to load available facilitators");
     }
   }
 
-  // Load programs on mount
+  // Load data on mount
   useEffect(() => {
-    const loadPrograms = async () => {
-      setLoading(true)
-      try {
-        const progs = await fetchPrograms()
-        setPrograms(progs)
-        if (progs.length > 0) {
-          setSelectedProgramId(progs[0]._id)
-        }
-        setError(null)
-      } catch (err: any) {
-        setError(err.message)
-        toast.error(err.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadPrograms()
-  }, [])
-
-  // Load all facilitators once (not tied to programId)
-  useEffect(() => {
-    const loadFacilitators = async () => {
-      setLoading(true)
-      try {
-        const facs = await fetchFacilitators()
-        setFacilitators(facs)
-        setError(null)
-      } catch (err: any) {
-        setError(err.message)
-        toast.error(err.message)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadFacilitators()
-  }, [])
+    refreshAllData();
+  }, [refreshAllData]);
 
   // Filter helpers
   const filteredFacilitators = facilitators.filter((facilitator) => {
     const matchesSearch = facilitator.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = filterStatus === "all" || facilitator.status === filterStatus
-    return matchesSearch && matchesStatus
-  })
+    const matchesStatus = filterStatus === "all" || facilitator.status === filterStatus;
+    
+    // Filter by selected program
+    let matchesProgram = true;
+    if (selectedProgramId !== "all") {
+        const program = programs.find(p => p._id === selectedProgramId);
+        if (program) {
+             const isAssignedToSelectedProgram = program.facilitators?.some(f => 
+                 (typeof f === 'object' ? f._id : f.toString()) === facilitator._id
+             );
+            matchesProgram = !!isAssignedToSelectedProgram; // Only show if assigned to selected program
+        } else {
+            matchesProgram = false; // Program not found, so facilitator can't be assigned
+        }
+    }
 
-  const handleDeleteFacilitator = (id: string) => {
-    setFacilitators((prev) => prev.filter((f) => f._id !== id))
-  }
+    return matchesSearch && matchesStatus && matchesProgram;
+  });
 
   // UI helpers
   const getStatusBadge = (status: string) => {
@@ -180,67 +210,99 @@ export default function FacilitatorsPage() {
     }
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "Active":
-        return <CheckCircle className="h-4 w-4 text-green-600" />
-      case "Pending":
-        return <Clock className="h-4 w-4 text-yellow-600" />
-      default:
-        return <Clock className="h-4 w-4 text-gray-600" />
-    }
-  }
-
   // Handlers
   const handleHireFacilitator = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedProgramId) {
-      toast.error("Please select a program first")
-      return
+    e.preventDefault();
+    if (!selectedProgramId || selectedProgramId === "all") {
+      toast.error("Please select a specific program to hire for.");
+      return;
     }
 
-    setLoading(true)
+    setIsSubmitting(true);
     try {
       if (hireMethod === "existing") {
         if (!hireFacilitatorId.trim()) {
-          toast.error("Please select a facilitator")
-          return
+          toast.error("Please select a facilitator to assign.");
+          return;
         }
-        await enrollFacilitator(selectedProgramId, hireFacilitatorId.trim())
-        toast.success("Facilitator hired successfully!")
-      } else {
-        // Create new facilitator
+        await enrollFacilitator(selectedProgramId, hireFacilitatorId.trim());
+        toast.success("Facilitator assigned successfully!");
+      } else { // New facilitator
         if (!newFacilitatorData.name.trim() || !newFacilitatorData.email.trim()) {
-          toast.error("Please fill in all required fields")
-          return
+          toast.error("Please fill in all required fields for the new facilitator.");
+          return;
         }
-        
         const newUser = await createUser({
           name: newFacilitatorData.name.trim(),
           email: newFacilitatorData.email.trim(),
           role: "Facilitator"
-        })
-        
-        // Enroll the newly created facilitator
-        await enrollFacilitator(selectedProgramId, newUser._id)
-        toast.success("New facilitator created and hired successfully! Login credentials have been sent to their email.")
+        });
+        await enrollFacilitator(selectedProgramId, newUser._id);
+        toast.success("New facilitator created and assigned! Login credentials sent to their email.");
       }
 
-      // Fetch all facilitators again
-      const updatedFacilitators = await fetchFacilitators()
-      setFacilitators(updatedFacilitators)
-
-      setShowHireModal(false)
-      setHireFacilitatorId("")
-      setNewFacilitatorData({ name: "", email: "" })
-      setHireMethod("existing")
+      setShowHireModal(false);
+      setHireFacilitatorId("");
+      setNewFacilitatorData({ name: "", email: "" });
+      setHireMethod("existing");
+      refreshAllData(); // Re-fetch to update lists
     } catch (err: any) {
-      console.error("Error hiring facilitator:", err)
-      toast.error("Error: " + (err.response?.data?.message || err.message))
+      console.error("Error hiring/assigning facilitator:", err);
+      toast.error("Error: " + (err.response?.data?.message || err.message));
     } finally {
-      setLoading(false)
+      setIsSubmitting(false);
     }
-  }
+  };
+
+  const handleUnassignFacilitator = (facilitator: Facilitator) => {
+    if (!selectedProgramId || selectedProgramId === "all") {
+        toast.error("Please select a program first in the filter dropdown to unassign from.");
+        return;
+    }
+
+    setConfirmationDialog({
+        open: true,
+        title: "Unassign Facilitator",
+        description: `Are you sure you want to unassign ${facilitator.name} from program "${programs.find(p => p._id === selectedProgramId)?.name || 'the selected program'}"? This will not delete their account.`,
+        onConfirm: async () => {
+            setIsSubmitting(true);
+            try {
+                await unenrollFacilitator(selectedProgramId, facilitator._id);
+                toast.success(`${facilitator.name} unassigned from the program.`);
+                refreshAllData();
+            } catch (err: any) {
+                console.error("Error unassigning facilitator:", err);
+                toast.error("Error unassigning: " + (err.response?.data?.message || err.message));
+            } finally {
+                setIsSubmitting(false);
+                setConfirmationDialog({ open: false, title: '', description: '', onConfirm: () => {} }); // Close dialog
+            }
+        }
+    });
+  };
+
+  const handleDeleteFacilitator = (facilitator: Facilitator) => {
+    setConfirmationDialog({
+        open: true,
+        title: "Delete Facilitator Account",
+        description: `Are you sure you want to delete ${facilitator.name}'s account? This action cannot be undone and will permanently remove them from the system.`,
+        onConfirm: async () => {
+            setIsSubmitting(true);
+            try {
+                await deleteUser(facilitator._id); // Call the backend delete service
+                toast.success(`${facilitator.name}'s account deleted successfully.`);
+                refreshAllData(); // Re-fetch all data to update lists
+            } catch (err: any) {
+                console.error("Error deleting facilitator:", err);
+                toast.error("Error deleting account: " + (err.response?.data?.message || err.message));
+            } finally {
+                setConfirmationDialog({ open: false, title: '', description: '', onConfirm: () => {} }); // Close dialog
+                setIsSubmitting(false);
+            }
+        }
+    });
+  };
+
 
   const handleOpenHireModal = () => {
     setShowHireModal(true)
@@ -258,27 +320,30 @@ export default function FacilitatorsPage() {
         </div>
         <Button onClick={handleOpenHireModal} disabled={loading}>
           <Plus className="mr-2 h-4 w-4" />
-          Hire Facilitator
+          Hire / Assign Facilitator
         </Button>
       </div>
 
       {/* Program selector */}
       <div className="mb-4 max-w-xs">
-        <Label htmlFor="program-select">Select Program</Label>
-        <select
-          id="program-select"
-          className="border p-2 rounded w-full"
+        <Label htmlFor="program-select">Filter by Program Assignment</Label>
+        <Select
           value={selectedProgramId}
-          onChange={(e) => setSelectedProgramId(e.target.value)}
-          disabled={loading}
+          onValueChange={setSelectedProgramId}
+          disabled={loading || programs.length === 0}
         >
-          <option value="">-- Select Program --</option>
-          {programs.map((prog) => (
-            <option key={prog._id} value={prog._id}>
-              {prog.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="program-select">
+            <SelectValue placeholder="All Programs" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Programs</SelectItem>
+            {programs.map((prog) => (
+              <SelectItem key={prog._id} value={prog._id}>
+                {prog.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {error && (
@@ -298,181 +363,237 @@ export default function FacilitatorsPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="Active">Active</SelectItem>
             <SelectItem value="Pending">Pending</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredFacilitators.map((facilitator) => (
-          <Card key={facilitator._id} className="relative">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">{facilitator.name || "N/A"}</CardTitle>
-                {getStatusBadge(facilitator.status || "pending")}
-              </div>
-              <CardDescription>{facilitator.specialization || "No specialization"}</CardDescription>
-            </CardHeader>
+      {loading ? (
+        <div className="flex justify-center items-center h-48"><Loader2 className="h-8 w-8 animate-spin"/></div>
+      ) : filteredFacilitators.length === 0 ? (
+        <Card className="text-center py-10">
             <CardContent>
-              <div className="space-y-3">
-                {/* Essential contact info */}
-                <div className="flex items-center space-x-2">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{facilitator.email || "No email"}</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{facilitator.phone || "No phone"}</span>
-                </div>
-                
-                {/* Key metrics for management decisions */}
-                <div className="flex items-center space-x-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">
-                    {facilitator.studentsCount ? `${facilitator.studentsCount} students` : "0 students"}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">
-                    Joined: {facilitator.joinDate ? new Date(facilitator.joinDate).toLocaleDateString() : "N/A"}
-                  </span>
-                </div>
-
-                {facilitator.type === "promoted" && (
-                  <div className="bg-blue-50 p-2 rounded-md">
-                    <p className="text-xs text-blue-800">
-                      Promoted from {facilitator.previousProgram} on{" "}
-                      {facilitator.promotionDate}
-                    </p>
-                  </div>
-                )}
-              </div>
-              <div className="flex space-x-2 mt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedFacilitator(facilitator)
-                    setShowViewModal(true)
-                  }}
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedFacilitator(facilitator)
-                    setShowEditModal(true)
-                  }}
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDeleteFacilitator(facilitator._id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+                <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4"/>
+                <p className="text-muted-foreground">No facilitators found matching your filters.</p>
             </CardContent>
-          </Card>
-        ))}
-      </div>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredFacilitators.map((facilitator) => (
+              <Card key={facilitator._id} className="relative">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-lg">{facilitator.name || "N/A"}</CardTitle>
+                    {getStatusBadge(facilitator.status || "pending")}
+                  </div>
+                  <CardDescription>{facilitator.specialization || "No specialization"}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {/* Essential contact info */}
+                    <div className="flex items-center space-x-2">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{facilitator.email || "No email"}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{facilitator.phone || "No phone"}</span>
+                    </div>
+                    
+                    {/* Key metrics for management decisions */}
+                    <div className="flex items-center space-x-2">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        {facilitator.studentsCount ? `${facilitator.studentsCount} students` : "0 students"}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        Joined: {facilitator.joinDate ? new Date(facilitator.joinDate).toLocaleDateString() : "N/A"}
+                      </span>
+                    </div>
+
+                    {facilitator.type === "promoted" && (
+                      <div className="bg-blue-50 p-2 rounded-md">
+                        <p className="text-xs text-blue-800">
+                          Promoted from {facilitator.previousProgram} on{" "}
+                          {facilitator.promotionDate}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex space-x-2 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedFacilitator(facilitator)
+                        setShowViewModal(true)
+                      }}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedFacilitator(facilitator)
+                        setShowEditModal(true)
+                      }}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    {/* Unassign button - Conditionally rendered */}
+                    {selectedProgramId !== "all" && facilitator.programs?.includes(selectedProgramId) && ( 
+                        <Button
+                            variant="destructive" // Use destructive for unassign for clarity
+                            size="sm"
+                            onClick={() => handleUnassignFacilitator(facilitator)}
+                            disabled={isSubmitting} // Disable during any submission
+                        >
+                            <UserX className="h-4 w-4" /> {/* UserX icon for unassign */}
+                        </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteFacilitator(facilitator)}
+                      disabled={isSubmitting}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+      )}
 
       {/* Hire Facilitator Modal */}
       <Dialog open={showHireModal} onOpenChange={setShowHireModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Hire Facilitator</DialogTitle>
+            <DialogTitle>Hire / Assign Facilitator</DialogTitle>
             <DialogDescription>
-              Choose how you want to hire a facilitator for the selected program.
+              Choose how you want to assign a facilitator to a program.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
-            {/* Method Selection */}
-            <div className="flex space-x-2">
-              <Button
-                type="button"
-                variant={hireMethod === "existing" ? "default" : "outline"}
-                onClick={() => setHireMethod("existing")}
-                className="flex-1"
-              >
-                <UserCheck className="mr-2 h-4 w-4" />
-                Existing Facilitator
-              </Button>
-              <Button
-                type="button"
-                variant={hireMethod === "new" ? "default" : "outline"}
-                onClick={() => setHireMethod("new")}
-                className="flex-1"
-              >
-                <UserPlus className="mr-2 h-4 w-4" />
-                New Facilitator
-              </Button>
-            </div>
-
-            <form onSubmit={handleHireFacilitator} className="space-y-4">
-              {hireMethod === "existing" ? (
-                <div>
-                  <Label htmlFor="facilitator-select">Select Facilitator</Label>
-                  <Select value={hireFacilitatorId} onValueChange={setHireFacilitatorId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a facilitator..." />
+            <div className="space-y-2">
+                <Label htmlFor="program-select-hire">Select Program</Label>
+                <Select
+                    value={selectedProgramId}
+                    onValueChange={setSelectedProgramId}
+                    disabled={programs.length === 0}
+                >
+                    <SelectTrigger id="program-select-hire">
+                        <SelectValue placeholder="Select a program to assign to..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableFacilitators.map((facilitator) => (
-                        <SelectItem key={facilitator._id} value={facilitator._id}>
-                          {facilitator.name} ({facilitator.email})
-                        </SelectItem>
-                      ))}
+                        {programs.map((prog) => (
+                            <SelectItem key={prog._id} value={prog._id}>
+                                {prog.name}
+                            </SelectItem>
+                        ))}
                     </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Select from existing facilitators in the system
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div>
-                    <Label htmlFor="facilitator-name">Full Name</Label>
-                    <Input
-                      id="facilitator-name"
-                      type="text"
-                      value={newFacilitatorData.name}
-                      onChange={(e) => setNewFacilitatorData(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="Enter facilitator's full name"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="facilitator-email">Email Address</Label>
-                    <Input
-                      id="facilitator-email"
-                      type="email"
-                      value={newFacilitatorData.email}
-                      onChange={(e) => setNewFacilitatorData(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="Enter facilitator's email"
-                      required
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    A new account will be created and login credentials will be sent to their email
-                  </p>
-                </div>
-              )}
-              
-              <DialogFooter>
-                <Button type="submit" disabled={loading}>
-                  {loading ? "Processing..." : hireMethod === "existing" ? "Hire Facilitator" : "Create & Hire"}
-                </Button>
-              </DialogFooter>
-            </form>
+                </Select>
+                {selectedProgramId === "all" && programs.length > 0 && (
+                    <p className="text-red-500 text-xs">Please select a specific program to assign facilitators.</p>
+                )}
+                {programs.length === 0 && (
+                     <p className="text-muted-foreground text-xs">No programs available. Create a program first.</p>
+                )}
+            </div>
+
+            {selectedProgramId !== "all" && ( // Only show assignment methods if a program is selected
+                <>
+                    {/* Method Selection */}
+                    <div className="flex space-x-2">
+                        <Button
+                            type="button"
+                            variant={hireMethod === "existing" ? "default" : "outline"}
+                            onClick={() => setHireMethod("existing")}
+                            className="flex-1"
+                        >
+                            <UserCheck className="mr-2 h-4 w-4" />
+                            Existing Facilitator
+                        </Button>
+                        <Button
+                            type="button"
+                            variant={hireMethod === "new" ? "default" : "outline"}
+                            onClick={() => setHireMethod("new")}
+                            className="flex-1"
+                        >
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            New Facilitator
+                        </Button>
+                    </div>
+
+                    <form onSubmit={handleHireFacilitator} className="space-y-4">
+                        {hireMethod === "existing" ? (
+                            <div>
+                                <Label htmlFor="facilitator-select">Select Facilitator</Label>
+                                <Select value={hireFacilitatorId} onValueChange={setHireFacilitatorId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Choose a facilitator..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableFacilitators.map((facilitator) => (
+                                            <SelectItem key={facilitator._id} value={facilitator._id}>
+                                                {facilitator.name} ({facilitator.email})
+                                            </SelectItem>
+                                        ))}
+                                        {availableFacilitators.length === 0 && (
+                                            <div className="p-2 text-center text-muted-foreground text-sm">No unassigned facilitators.</div>
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Select from existing facilitators not yet assigned to this program.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <div>
+                                    <Label htmlFor="facilitator-name">Full Name</Label>
+                                    <Input
+                                        id="facilitator-name"
+                                        type="text"
+                                        value={newFacilitatorData.name}
+                                        onChange={(e) => setNewFacilitatorData(prev => ({ ...prev, name: e.target.value }))}
+                                        placeholder="Enter facilitator's full name"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <Label htmlFor="facilitator-email">Email Address</Label>
+                                    <Input
+                                        id="facilitator-email"
+                                        type="email"
+                                        value={newFacilitatorData.email}
+                                        onChange={(e) => setNewFacilitatorData(prev => ({ ...prev, email: e.target.value }))}
+                                        placeholder="Enter facilitator's email"
+                                        required
+                                    />
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    A new account will be created and login credentials will be sent to their email.
+                                </p>
+                            </div>
+                        )}
+                        
+                        <DialogFooter>
+                            <Button type="submit" disabled={isSubmitting || (hireMethod === 'existing' && !hireFacilitatorId) || (hireMethod === 'new' && (!newFacilitatorData.name || !newFacilitatorData.email))}>
+                                {isSubmitting ? "Processing..." : hireMethod === "existing" ? "Assign Facilitator" : "Create & Assign"}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -510,7 +631,7 @@ export default function FacilitatorsPage() {
                       <span className="text-sm">{selectedFacilitator.email || "N/A"}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-gray-500" />
+                      <Phone className="h-4 w-4 text-muted-foreground" /> {/* Changed text-gray-500 to text-muted-foreground for consistency */}
                       <span className="font-medium text-sm text-gray-600">Phone:</span>
                       <span className="text-sm">{selectedFacilitator.phone || "N/A"}</span>
                     </div>
@@ -521,7 +642,7 @@ export default function FacilitatorsPage() {
                       {getStatusBadge(selectedFacilitator.status || "pending")}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-gray-500" />
+                      <Calendar className="h-4 w-4 text-muted-foreground" /> {/* Changed text-gray-500 to text-muted-foreground */}
                       <span className="font-medium text-sm text-gray-600">Join Date:</span>
                       <span className="text-sm">
                         {selectedFacilitator.joinDate 
@@ -585,23 +706,28 @@ export default function FacilitatorsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-gray-500" />
+                      <Users className="h-4 w-4 text-muted-foreground" /> {/* Changed text-gray-500 to text-muted-foreground */}
                       <span className="font-medium text-sm text-gray-600">Students:</span>
                       <span className="text-sm">{selectedFacilitator.studentsCount || "0"}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm text-gray-600">Programs:</span>
-                      <span className="text-sm">{selectedFacilitator.programs || "N/A"}</span>
+                      {/* Display a list of program names */}
+                      <span className="text-sm">
+                        {Array.isArray(selectedFacilitator.programs) && selectedFacilitator.programs.length > 0 ? (
+                            selectedFacilitator.programs.map(p => typeof p === 'object' ? p.name : p).join(', ') // Handle both string and object types
+                        ) : "N/A"}
+                      </span>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-gray-500" />
+                      <FileText className="h-4 w-4 text-muted-foreground" /> {/* Changed text-gray-500 to text-muted-foreground */}
                       <span className="font-medium text-sm text-gray-600">Submissions:</span>
                       <span className="text-sm">{selectedFacilitator.contentSubmissions || "0"}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-gray-500" />
+                      <CheckCircle className="h-4 w-4 text-muted-foreground" /> {/* Changed text-gray-500 to text-muted-foreground */}
                       <span className="font-medium text-sm text-gray-600">Approved:</span>
                       <span className="text-sm">{selectedFacilitator.approvedContent || "0"}</span>
                     </div>
@@ -625,8 +751,8 @@ export default function FacilitatorsPage() {
             </div>
           ) : (
             <div className="text-center py-8">
-              <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">No facilitator selected</p>
+              <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" /> {/* Changed text-gray-400 to text-muted-foreground */}
+              <p className="text-muted-foreground">No facilitator selected</p>
             </div>
           )}
           
@@ -645,7 +771,6 @@ export default function FacilitatorsPage() {
               Edit facilitator details here.
             </DialogDescription>
           </DialogHeader>
-          {/* For demonstration, only editing specialization and experience */}
           {selectedFacilitator ? (
             <EditFacilitatorForm
               facilitator={selectedFacilitator}
@@ -662,6 +787,22 @@ export default function FacilitatorsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Reusable Confirmation Dialog */}
+      <AlertDialog open={confirmationDialog.open} onOpenChange={(open) => setConfirmationDialog({ ...confirmationDialog, open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="text-destructive"/>{confirmationDialog.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmationDialog.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmationDialog.onConfirm} disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
