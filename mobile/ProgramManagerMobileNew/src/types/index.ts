@@ -1,14 +1,15 @@
 // User types
 export interface User {
   _id: string;
-  firstName: string;
-  lastName: string;
+  name: string;
   email: string;
   role: 'SuperAdmin' | 'Program Manager' | 'Facilitator' | 'Trainee' | 'ItSupport';
   phone?: string;
   avatar?: string;
   department?: string;
   joinDate: string;
+  status?: 'Pending' | 'Active';
+  isActive?: boolean;
 }
 
 // Program types
@@ -90,6 +91,38 @@ export interface Attendance {
     longitude: number;
   };
   qrCode?: string;
+}
+
+// Attendance Record types
+export interface AttendanceRecord {
+  _id: string;
+  trainee: string | User;
+  programId: string | Program;
+  date: string;
+  status: 'Present' | 'Absent' | 'Late' | 'Excused';
+  checkIn?: string;
+  checkOut?: string;
+  method?: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
+}
+
+// Class Session types
+export interface ClassSession {
+  _id: string;
+  sessionId: string;
+  title: string;
+  description?: string;
+  programId: string | Program;
+  startTime: string;
+  endTime: string;
+  type: 'physical' | 'virtual';
+  status: 'active' | 'scheduled' | 'completed' | 'cancelled';
+  facilitator?: string | User;
+  location?: string;
+  meetingLink?: string;
 }
 
 // Notification types

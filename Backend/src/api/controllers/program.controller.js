@@ -263,7 +263,6 @@ const getAllPrograms = asyncHandler(async (req, res) => {
         .populate('trainees', 'name email'); // Already populated for trainees
 
     console.log('Found programs count:', programs.length);
-    // console.log('Sample program (first one):', programs[0]); // Debug populated data
     
     return res.status(200).json(new ApiResponse(200, programs, "Programs fetched successfully."));
 });
