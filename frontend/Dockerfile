@@ -14,14 +14,18 @@ ENV NODE_ENV=production \
 # ---------- Build stage ----------
 FROM base AS build
 
-# Fix apt GPG issues: force HTTPS and install CA/GPG before anything else
+# System deps for native builds (force HTTPS mirrors; install CA/GPG first)
 RUN set -eux; \
-    sed -i 's|http://|https://|g' /etc/apt/sources.list; \
+    # switch any http -> https across all apt source files safely
+    if [ -f /etc/apt/sources.list ]; then sed -i 's|http://|https://|g' /etc/apt/sources.list; fi; \
+    if [ -d /etc/apt/sources.list.d ]; then find /etc/apt/sources.list.d -type f -name '*.list' -exec sed -i 's|http://|https://|g' {} +; fi; \
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then sed -i 's|URIs: http://|URIs: https://|g' /etc/apt/sources.list.d/debian.sources; fi; \
     apt-get update -qq; \
     apt-get install --no-install-recommends -y ca-certificates gnupg dirmngr; \
     apt-get update -qq; \
     apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3; \
     rm -rf /var/lib/apt/lists/*
+
 
 # Copy lockfiles first for better caching
 COPY package.json package-lock.json ./
