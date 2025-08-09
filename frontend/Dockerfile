@@ -1,32 +1,22 @@
-# syntax=docker/dockerfile:1.7
+# syntax = docker/dockerfile:1
 
+# Adjust NODE_VERSION as desired
 ARG NODE_VERSION=22.16.0
-FROM node:${NODE_VERSION}-slim
+FROM node:${NODE_VERSION}-slim AS base
 
 LABEL andasy_launch_runtime="Next.js"
+
+# Next.js app lives here
 WORKDIR /app
 
-# Runtime env
-ENV NODE_ENV=production \
-    NEXT_TELEMETRY_DISABLED=1 \
-    NPM_CONFIG_FUND=false \
-    NPM_CONFIG_AUDIT=false \
-    HOST=0.0.0.0
+# Set production environment
+ENV NODE_ENV="production"
 
-# 1) Copy lockfiles first for caching
-COPY package.json package-lock.json ./
-
-# 2) Install ONLY production deps (tiny footprint = avoids ENOSPC)
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev --omit=optional --no-audit --no-fund && \
-    npm cache clean --force
-
-# 3) Copy the rest of the app
 COPY . .
 
-# 4) Build with prod deps (works because "next" is in dependencies)
-RUN npm run build
+# Install packages needed to build node modules
+RUN npm ci --include=dev
 
-EXPOSE 3000
-# Pass -p and -H via npm args to ensure proper binding in container
-CMD ["npm","run","start","--","-p","3000","-H","0.0.0.0"]
+RUN npx next build --experimental-build-mode compile
+
+ENTRYPOINT ["npx", "next", "start", "--port", "3000", "-H", "::"]
