@@ -1,51 +1,55 @@
-# syntax = docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 
-# Adjust NODE_VERSION as desired
-ARG NODE_VERSION=22.13.1
+ARG NODE_VERSION=22.16.0
 FROM node:${NODE_VERSION}-slim AS base
-
 LABEL andasy_launch_runtime="Next.js"
-
-# Next.js app lives here
 WORKDIR /app
 
-# Set production environment
-ENV NODE_ENV="production"
+# Runtime env
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    NPM_CONFIG_FUND=false \
+    NPM_CONFIG_AUDIT=false
 
-
-# Throw-away build stage to reduce size of final image
+# ---------- Build stage ----------
 FROM base AS build
 
-# Install packages needed to build node modules
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
+# Fix apt GPG issues: force HTTPS and install CA/GPG before anything else
+RUN set -eux; \
+    sed -i 's|http://|https://|g' /etc/apt/sources.list; \
+    apt-get update -qq; \
+    apt-get install --no-install-recommends -y ca-certificates gnupg dirmngr; \
+    apt-get update -qq; \
+    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3; \
+    rm -rf /var/lib/apt/lists/*
 
-# Install node modules
-COPY package-lock.json package.json ./
-RUN npm ci --include=dev
+# Copy lockfiles first for better caching
+COPY package.json package-lock.json ./
 
-# Copy application code
+# Install deps with cache mount; keep layer small; save space
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --include=dev --omit=optional --no-audit --no-fund && \
+    npm cache clean --force
+
+# Copy the rest of the app
 COPY . .
 
-# Build application
+# Build Next app (compile mode)
 RUN npx next build --experimental-build-mode compile
 
-# Remove development dependencies
-RUN npm prune --omit=dev
+# Drop dev deps for runtime
+RUN npm prune --omit=dev && \
+    npm cache clean --force
 
-
-# Final stage for app image
+# ---------- Runtime stage ----------
 FROM base
 
-# Copy built application
+# Copy built app from build stage
 COPY --from=build /app /app
 
-# Adjust entrypoint to be executable on Linux
-RUN chmod +x ./docker-entrypoint.js
+# Ensure entrypoint is executable
+RUN chmod +x /app/docker-entrypoint.js
 
-# Entrypoint sets up the container.
-ENTRYPOINT [ "/app/docker-entrypoint.js" ]
-
-# Start the server by default, this can be overwritten at runtime
 EXPOSE 3000
-CMD [ "npm", "run", "start" ]
+ENTRYPOINT ["/app/docker-entrypoint.js"]
+CMD ["npm", "run", "start"]
