@@ -170,19 +170,34 @@ function ManagerTabNavigator() {
 
 // Main App Navigator
 export default function AppNavigator() {
-  const { isAuthenticated, loading, role } = useAuth();
+  const { isAuthenticated, loading, role, user } = useAuth();
+
+  console.log('🔍 AppNavigator Debug:');
+  console.log('Loading:', loading);
+  console.log('IsAuthenticated:', isAuthenticated);
+  console.log('User:', user ? 'exists' : 'null');
+  console.log('Role:', role);
 
   // Show loading screen while checking authentication
   if (loading) {
+    console.log('🔄 Showing loading screen');
     return <LoadingScreen />;
   }
 
-  // Show login screen if not authenticated
-  if (!isAuthenticated) {
+  // Show login screen if not authenticated or user is null
+  if (!isAuthenticated || !user || !user._id || !user.name) {
+    console.log('🔐 Showing login screen - user data incomplete');
+    return <LoginScreen />;
+  }
+
+  // Additional safety check - ensure user data is complete
+  if (!user.email || !user.role) {
+    console.log('🔐 Showing login screen - user data missing required fields');
     return <LoginScreen />;
   }
 
   // Route to appropriate dashboard based on role
+  console.log('📱 Rendering dashboard for role:', role);
   return (
     <NavigationContainer>
       {role === 'trainee' ? <TraineeTabNavigator /> : <ManagerTabNavigator />}

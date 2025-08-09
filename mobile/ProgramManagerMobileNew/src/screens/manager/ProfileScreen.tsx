@@ -1,13 +1,38 @@
 import React from 'react';
-import { View, StyleSheet, Alert } from 'react-native';
-import { Text, Card, Button, Avatar, useTheme } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { 
+  Text, 
+  Card, 
+  Button, 
+  useTheme, 
+  Avatar,
+  List,
+  Divider,
+  Surface,
+} from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+
 import { useAuth } from '../../contexts/AuthContext';
+import ModernHeader from '../../components/ModernHeader';
 
 export default function ProfileScreen() {
   const theme = useTheme();
   const { user, logout } = useAuth();
+
+  // Safety check - if user is null, show loading
+  if (!user) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View style={styles.content}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant, marginTop: 16 }}>
+            Loading user data...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const handleLogout = () => {
     Alert.alert(
@@ -35,23 +60,35 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <ModernHeader
+          title="My Profile"
+          subtitle="Manage your account and preferences"
+          icon="account"
+          showAvatar={true}
+          userInitials={user?.name ? user.name.substring(0, 2).toUpperCase() : 'U'}
+          gradient={true}
+        />
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={2}>
           <Card.Content style={styles.cardContent}>
             <Avatar.Text 
               size={80} 
-              label={user?.firstName?.charAt(0) + user?.lastName?.charAt(0) || 'U'} 
+              label={user?.name ? user.name.substring(0, 2).toUpperCase() : 'U'} 
               style={[styles.avatar, { backgroundColor: theme.colors.primary }]}
               color={theme.colors.onPrimary}
             />
             <Text variant="headlineSmall" style={[styles.title, { color: theme.colors.onSurface }]}>
-              {user?.firstName} {user?.lastName}
+              {user?.name || 'User'}
             </Text>
             <Text variant="bodyMedium" style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
-              {user?.email}
+              {user?.email || 'No email'}
             </Text>
             <Text variant="bodyMedium" style={[styles.role, { color: theme.colors.primary }]}>
-              {user?.role}
+              {user?.role || 'Manager'}
             </Text>
             <Text variant="bodyMedium" style={[styles.description, { color: theme.colors.onSurfaceVariant }]}>
               Manage your profile, settings, and administrative preferences.
@@ -93,7 +130,7 @@ export default function ProfileScreen() {
             </View>
           </Card.Content>
         </Card>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -107,6 +144,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  scrollView: {
+    flex: 1,
   },
   card: {
     borderRadius: 16,
