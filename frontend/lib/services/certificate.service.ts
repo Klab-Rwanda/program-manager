@@ -46,7 +46,7 @@ export interface Template {
 
 // Trainee eligible for certificates (from backend aggregate)
 export interface TraineeForCert {
-    _id: string;
+    _id: string; // Trainee User ID
     name: string;
     email: string;
     program: string; // Program name (from backend aggregation $project)
@@ -55,6 +55,7 @@ export interface TraineeForCert {
     attendanceRate: number;
     completionDate: string;
     isEligible: boolean; // True if passed eligibility criteria
+    eligibilityReason: string; // NEW: Reason for eligibility/non-eligibility
 }
 
 // --- Backend API calls ---
@@ -70,9 +71,8 @@ export const fetchCertificates = async (): Promise<DisplayCertificate[]> => {
 
     // Transform backend certs to DisplayCertificate format
     const transformedCerts: DisplayCertificate[] = backendCerts.map((cert: BackendCertificate) => {
-        // Ensure trainee and program are objects for safe access
-        const trainee = typeof cert.trainee === 'object' && cert.trainee !== null ? cert.trainee : { _id: '', name: 'Unknown', email: '' };
-        const program = typeof cert.program === 'object' && cert.program !== null ? cert.program : { _id: '', name: 'Unknown' };
+        const trainee = typeof cert.trainee === 'object' ? cert.trainee : { _id: '', name: 'Unknown', email: '' };
+        const program = typeof cert.program === 'object' ? cert.program : { _id: '', name: 'Unknown' };
 
         return {
             _id: cert._id,
@@ -101,11 +101,11 @@ export const fetchTemplates = async (): Promise<Template[]> => {
 };
 
 /**
- * Fetches trainees eligible for certificates (calculated by backend).
+ * Fetches all students in relevant programs with their eligibility status (calculated by backend).
  * @returns A promise that resolves to an array of TraineeForCert objects.
  */
-export const fetchEligibleTrainees = async (): Promise<TraineeForCert[]> => {
-    const response = await api.get('/certificates/eligible-students');
+export const fetchStudentsEligibility = async (): Promise<TraineeForCert[]> => { // <-- ADDED 'export' HERE!
+    const response = await api.get('/certificates/students-eligibility'); // Renamed endpoint
     return response.data.data;
 };
 
@@ -159,4 +159,8 @@ export const updateCertificateTemplate = async (id: string, data: Partial<Templa
  */
 export const deleteCertificateTemplate = async (id: string): Promise<void> => {
     await api.delete(`/certificates/templates/${id}`);
+};
+
+export const resendCertificateNotification = async (certificateId: string): Promise<void> => {
+    await api.post(`/certificates/${certificateId}/resend-notification`);
 };

@@ -125,3 +125,7 @@ export const reactivateProgram = async (id: string, newEndDate: string): Promise
   const response = await api.patch(`/programs/${id}/reactivate`, { newEndDate });
   return response.data.data;
 };
+export const unenrollFacilitator = async (programId: string, facilitatorId: string): Promise<Program> => {
+  const response = await api.post(`/programs/${programId}/unenroll-facilitator`, { facilitatorId });
+  return response.data.data;
+};

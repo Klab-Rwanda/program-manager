@@ -1,4 +1,22 @@
 import PDFDocument from 'pdfkit';
+import path from 'path'; 
+import fs from 'fs';
+
+function getContrastColor(hexcolor) {
+    if (!hexcolor || hexcolor === 'transparent') return '#000000';
+    const cleanHex = hexcolor.startsWith('#') ? hexcolor.substring(1) : hexcolor;
+    if (cleanHex.length !== 6) {
+        console.warn(`Invalid hex color for contrast calculation: ${hexcolor}`);
+        return '#000000';
+    }
+
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    
+    const hsp = Math.sqrt(0.299 * (r * r) + 0.587 * (g * g) + 0.114 * (b * b));
+    return (hsp > 127.5) ? '#000000' : '#ffffff';
+}
 
 export const generateProgramReportPDF = (programData, attendanceData, stream) => {
     const doc = new PDFDocument({ margin: 50 });
@@ -183,4 +201,179 @@ export const generateLogReportPDF = (logs, filters, stream) => {
     });
 
     doc.end();
+};
+
+
+// Updated in pdf.service.js
+export const generateCertificatePDF = (certificateData, templateData, stream) => {
+    try {
+        const doc = new PDFDocument({
+            size: 'LETTER',
+            layout: 'landscape',
+            margin: 0
+        });
+
+        // Error handling for the stream
+        doc.on('error', (err) => {
+            console.error('PDF generation error:', err);
+            if (!stream.destroyed) {
+                stream.emit('error', err);
+            }
+        });
+
+        stream.on('error', (err) => {
+            console.error('Stream error:', err);
+            doc.end();
+        });
+
+        doc.pipe(stream);
+
+        // Use only standard PDF fonts
+        const primaryColor = '#1f497d';
+        const secondaryColor = '#d4af37';
+        const backgroundColor = '#f9f9f9';
+        const textColor = '#333333';
+
+        const width = doc.page.width;
+        const height = doc.page.height;
+
+        // --- Background ---
+        doc.rect(0, 0, width, height).fill(backgroundColor);
+        
+        // Border
+        doc.lineWidth(8)
+           .moveTo(40, 40)
+           .lineTo(width-40, 40)
+           .lineTo(width-40, height-40)
+           .lineTo(40, height-40)
+           .lineTo(40, 40)
+           .stroke(secondaryColor);
+
+        // --- Content ---
+        // Logo (if available)
+        const logoPath = path.resolve('./public/images/klab-logo.png');
+        if (fs.existsSync(logoPath)) {
+            doc.image(logoPath, 60, 60, { width: 80 });
+        }
+
+        // Title
+        doc.font('Helvetica-Bold')
+           .fontSize(36)
+           .fillColor(primaryColor)
+           .text('CERTIFICATE OF ACHIEVEMENT', 0, 100, {
+               align: 'center',
+               width: width
+           });
+
+        // Recipient
+        doc.font('Helvetica')
+           .fontSize(18)
+           .fillColor(textColor)
+           .text('This is to certify that', { align: 'center' });
+
+        doc.font('Helvetica-Bold')
+           .fontSize(42)
+           .fillColor(primaryColor)
+           .text(certificateData.trainee.name.toUpperCase(), { 
+               align: 'center',
+               paragraphGap: 5
+           });
+
+        // Program
+        const programDescription = certificateData.program.description || 
+                                 'Has successfully completed all requirements of the program';
+        
+        doc.font('Helvetica')
+           .fontSize(16)
+           .text(`for the completion of ${certificateData.program.name}`, { align: 'center' });
+
+        // Description box
+        const descBoxHeight = 100;
+        doc.roundedRect(width/2 - 250, doc.y + 20, 500, descBoxHeight, 10)
+           .fill('#ffffff')
+           .stroke(secondaryColor);
+        
+        doc.font('Helvetica')
+           .fontSize(12)
+           .fillColor('#555555')
+           .text(programDescription, width/2 - 230, doc.y + 40, {
+               width: 460,
+               align: 'center'
+           });
+
+        // Completion date
+        doc.font('Helvetica')
+           .fontSize(14)
+           .fillColor(textColor)
+           .text(`Completed on: ${new Date(certificateData.issueDate).toLocaleDateString('en-US', { 
+               year: 'numeric', 
+               month: 'long', 
+               day: 'numeric' 
+           })}`, { align: 'center' });
+
+        // --- Signatures ---
+        const signatureY = height - 180;
+        const signatureWidth = 200;
+
+        // Program Manager
+        doc.moveTo(width/4 - signatureWidth/2, signatureY)
+           .lineTo(width/4 + signatureWidth/2, signatureY)
+           .stroke(primaryColor);
+        
+        doc.font('Helvetica-Bold')
+           .fontSize(12)
+           .fillColor(primaryColor)
+           .text(certificateData.program.programManager?.name || 'Program Manager', 
+               width/4 - signatureWidth/2, signatureY - 30, {
+                   width: signatureWidth,
+                   align: 'center'
+               });
+        
+        doc.font('Helvetica')
+           .fontSize(10)
+           .text('Program Manager', width/4 - signatureWidth/2, signatureY + 10, {
+               width: signatureWidth,
+               align: 'center'
+           });
+
+        // General Manager
+        doc.moveTo(3*width/4 - signatureWidth/2, signatureY)
+           .lineTo(3*width/4 + signatureWidth/2, signatureY)
+           .stroke(primaryColor);
+        
+        doc.font('Helvetica-Bold')
+           .fontSize(12)
+           .fillColor(primaryColor)
+           .text(templateData.superAdminName || 'General Manager', 
+               3*width/4 - signatureWidth/2, signatureY - 30, {
+                   width: signatureWidth,
+                   align: 'center'
+               });
+        
+        doc.font('Helvetica')
+           .fontSize(10)
+           .text('General Manager', 3*width/4 - signatureWidth/2, signatureY + 10, {
+               width: signatureWidth,
+               align: 'center'
+           });
+
+        // Footer
+        doc.font('Helvetica')
+           .fontSize(10)
+           .fillColor('#777777')
+           .text(`Certificate ID: ${certificateData.certificateId} | Issued by KLab`, 
+               0, height - 50, {
+                   align: 'center',
+                   width: width
+               });
+
+        doc.end();
+
+    } catch (err) {
+        console.error('Certificate generation failed:', err);
+        if (!stream.destroyed) {
+            stream.emit('error', new Error('Failed to generate certificate'));
+        }
+        throw err;
+    }
 };

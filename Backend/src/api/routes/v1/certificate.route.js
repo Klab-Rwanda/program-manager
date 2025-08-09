@@ -73,7 +73,11 @@ router.route('/my-certificates').get(checkRole(['Trainee']), certController.getM
  *     responses:
  *       200: { description: 'A list of eligible students.' }
  */
-router.route('/eligible-students').get(checkRole(['Program Manager', 'SuperAdmin']), certController.getEligibleStudents);
+router.route('/eligible-students').get(checkRole(['Program Manager', 'SuperAdmin']), certController.getStudentsEligibility);
+
+
+router.route('/:id/download').get(checkRole(['Trainee', 'Program Manager', 'SuperAdmin']), certController.downloadCertificate);
+router.route('/:id/resend-notification').post(checkRole(['Program Manager', 'SuperAdmin']), certController.resendCertificateNotification);
 
 /**
  * @openapi

@@ -103,20 +103,18 @@ export default function ReportsExportPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col sm:flex-row gap-4">
-                     <Button 
-                        onClick={() => handleExport('archived-pdf')} 
+                      <Button 
+                        onClick={() => handleExport('programs-pdf')} 
                         disabled={!!loading}
                         className="w-full sm:w-auto"
-                        variant="secondary"
                     >
                         {loading === 'archived-pdf' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
                         Export as PDF
                     </Button>
-                     <Button 
-                        onClick={() => handleExport('archived-excel')} 
+                      <Button 
+                        onClick={() => handleExport('programs-excel')} 
                         disabled={!!loading}
                         className="w-full sm:w-auto"
-                        variant="secondary"
                     >
                         {loading === 'archived-excel' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                         Export as Excel

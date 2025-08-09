@@ -6,23 +6,23 @@ import { toast } from "sonner";
 
 import { useAuth } from "@/lib/contexts/RoleContext";
 import { getAllPrograms, getProgramById } from "@/lib/services/program.service";
-import { Program as BackendProgram, Trainee } from "@/types";
+import { Program as BackendProgram, Trainee, Facilitator, Course } from "@/types";
+import { getProgramSessionCounts } from "@/lib/services/attendance.service"; // Import the new service
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Progress } from "@/components/ui/progress"; // Keep Progress for now, but remove its data points
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+// Updated Program interface to hold actual session counts and next session time
 interface Program extends BackendProgram {
-  progress: number;
-  rating: number;
-  sessionsCompleted: number;
-  totalSessions: number;
-  nextSession: string;
+  totalSessionsCount?: number;
+  completedSessionsCount?: number;
+  nextSessionTime?: string | null; // Date string or null
 }
 
 export default function FacilitatorProgramsPage() {
@@ -34,25 +34,36 @@ export default function FacilitatorProgramsPage() {
 
   // State for the "View Students" modal
   const [isStudentsModalOpen, setStudentsModalOpen] = useState(false);
-  const [selectedProgramForModal, setSelectedProgramForModal] = useState<Program | null>(null);
+  const [selectedProgramForStudentsModal, setSelectedProgramForStudentsModal] = useState<Program | null>(null);
   const [studentList, setStudentList] = useState<Trainee[]>([]);
   const [isStudentsLoading, setIsStudentsLoading] = useState(false);
+
+  // State for the "Details" modal
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedProgramForDetailsModal, setSelectedProgramForDetailsModal] = useState<Program | null>(null);
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+
 
   const fetchFacilitatorPrograms = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const backendPrograms: BackendProgram[] = await getAllPrograms();
-      const transformedPrograms: Program[] = backendPrograms.map(p => ({
-        ...p,
-        status: new Date(p.endDate) < new Date() ? 'Completed' : 'Active',
-        progress: new Date(p.endDate) < new Date() ? 100 : Math.floor(40 + Math.random() * 50),
-        rating: 4.5 + Math.random() * 0.5,
-        sessionsCompleted: Math.floor(Math.random() * 40),
-        totalSessions: 45,
-        nextSession: `Tomorrow, ${Math.floor(9 + Math.random() * 5)}:00 AM`,
-      }));
-      setPrograms(transformedPrograms);
+      
+      const programsWithSessionCounts: Program[] = await Promise.all(
+        backendPrograms.map(async (p) => {
+          // Fetch session counts for each program
+          const sessionStats = await getProgramSessionCounts(p._id);
+          return {
+            ...p,
+            totalSessionsCount: sessionStats.totalSessions,
+            completedSessionsCount: sessionStats.completedSessions,
+            nextSessionTime: sessionStats.nextSessionTime,
+            // `status` is already from backend, so no change here unless you want frontend-derived.
+          };
+        })
+      );
+      setPrograms(programsWithSessionCounts);
     } catch (err: any) {
       const message = err.response?.data?.message || "Failed to load your programs.";
       setError(message);
@@ -68,9 +79,9 @@ export default function FacilitatorProgramsPage() {
     }
   }, [authLoading, role, fetchFacilitatorPrograms]);
   
-  // Function to open the modal and fetch students
+  // Function to open the students modal and fetch student list
   const openStudentsModal = async (program: Program) => {
-    setSelectedProgramForModal(program);
+    setSelectedProgramForStudentsModal(program);
     setStudentsModalOpen(true);
     setIsStudentsLoading(true);
     try {
@@ -84,12 +95,32 @@ export default function FacilitatorProgramsPage() {
     }
   };
 
+  // Function to open the details modal and fetch detailed program info
+  const openDetailsModal = async (program: Program) => {
+    setSelectedProgramForDetailsModal(program);
+    setIsDetailsModalOpen(true);
+    setIsDetailsLoading(true);
+    try {
+      // Fetch the full program details, which includes populated trainees, facilitators, courses
+      const detailedProgram = await getProgramById(program._id);
+      setSelectedProgramForDetailsModal(detailedProgram); // Update with full data
+    } catch (err) {
+      toast.error("Failed to load program details.");
+      setSelectedProgramForDetailsModal(null);
+    } finally {
+      setIsDetailsLoading(false);
+    }
+  };
+
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "active": return "bg-green-100 text-green-800";
       case "upcoming": return "bg-blue-100 text-blue-800";
       case "completed": return "bg-gray-100 text-gray-800";
+      case "draft": return "bg-yellow-100 text-yellow-800";
+      case "pendingapproval": return "bg-purple-100 text-purple-800";
+      case "rejected": return "bg-red-100 text-red-800";
       default: return "bg-gray-100 text-gray-800";
     }
   };
@@ -141,23 +172,19 @@ export default function FacilitatorProgramsPage() {
                             <CardDescription className="text-xs line-clamp-2">{program.description}</CardDescription>
                         </CardHeader>
                         <CardContent className="flex-grow space-y-4">
-                            <div className="space-y-2">
-                                <div className="flex items-center justify-between text-xs">
-                                    <span className="text-muted-foreground">Progress</span>
-                                    <span className="font-bold text-primary">{program.progress}%</span>
-                                </div>
-                                <Progress value={program.progress} className="h-2" />
-                            </div>
+                            {/* Removed Progress and Rating entirely */}
                             <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm border-t pt-3">
                                 <div className="flex items-center gap-2 text-muted-foreground"><Users className="h-4 w-4" /><span>{program.trainees?.length || 0} Students</span></div>
-                                <div className="flex items-center gap-2 text-muted-foreground"><Clock className="h-4 w-4" /><span>{program.sessionsCompleted}/{program.totalSessions} Sessions</span></div>
-                                <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4" /><span className="truncate">Next: {program.nextSession}</span></div>
-                                <div className="flex items-center gap-2 text-muted-foreground"><Star className="h-4 w-4 text-yellow-400"/><span>{program.rating.toFixed(1)} Rating</span></div>
+                                <div className="flex items-center gap-2 text-muted-foreground"><Clock className="h-4 w-4" /><span>{program.completedSessionsCount || 0}/{program.totalSessionsCount || 0} Sessions</span></div>
+                                <div className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4" /><span className="truncate">Next: {program.nextSessionTime ? new Date(program.nextSessionTime).toLocaleDateString() : 'N/A'}</span></div>
+                                {/* Removed Rating - Star icon and related text */}
+                                {/* <div className="flex items-center gap-2 text-muted-foreground"><Star className="h-4 w-4 text-yellow-400"/><span>N/A Rating</span></div> */}
                             </div>
                         </CardContent>
                         <div className="p-4 pt-0 mt-auto">
                             <div className="flex gap-2">
-                                <Button className="flex-1 bg-[#1f497d] hover:bg-[#1a3f6b]" size="sm"><BookOpen className="mr-2 h-4 w-4" />Details</Button>
+                                {/* Details button to open new modal with program details */}
+                                <Button className="flex-1 bg-[#1f497d] hover:bg-[#1a3f6b]" size="sm" onClick={() => openDetailsModal(program)}><BookOpen className="mr-2 h-4 w-4" />Details</Button>
                                 <Button variant="outline" size="sm" className="flex-1" onClick={() => openStudentsModal(program)}><Users className="mr-2 h-4 w-4" />Students</Button>
                             </div>
                         </div>
@@ -173,7 +200,7 @@ export default function FacilitatorProgramsPage() {
       <Dialog open={isStudentsModalOpen} onOpenChange={setStudentsModalOpen}>
         <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
-                <DialogTitle>Students in {selectedProgramForModal?.name}</DialogTitle>
+                <DialogTitle>Students in {selectedProgramForStudentsModal?.name}</DialogTitle>
                 <DialogDescription>List of all trainees currently enrolled in this program.</DialogDescription>
             </DialogHeader>
             <div className="max-h-[60vh] overflow-y-auto">
@@ -216,6 +243,96 @@ export default function FacilitatorProgramsPage() {
             </div>
             <DialogFooter>
                 <Button variant="outline" onClick={() => setStudentsModalOpen(false)}>Close</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Details Modal */}
+      <Dialog open={isDetailsModalOpen} onOpenChange={setIsDetailsModalOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+                <DialogTitle>Program Details: {selectedProgramForDetailsModal?.name}</DialogTitle>
+                <DialogDescription>{selectedProgramForDetailsModal?.description}</DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-6">
+                {isDetailsLoading ? (
+                    <div className="flex justify-center items-center h-48"><Loader2 className="h-8 w-8 animate-spin"/></div>
+                ) : selectedProgramForDetailsModal ? (
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <h3 className="font-semibold text-lg mb-2">Basic Info</h3>
+                                <div className="space-y-2 text-sm">
+                                    <p><strong>Status:</strong> {selectedProgramForDetailsModal.status && <Badge className={getStatusColor(selectedProgramForDetailsModal.status)}>{selectedProgramForDetailsModal.status}</Badge>}</p>
+                                    <p><strong>Start Date:</strong> {new Date(selectedProgramForDetailsModal.startDate).toLocaleDateString()}</p>
+                                    <p><strong>End Date:</strong> {new Date(selectedProgramForDetailsModal.endDate).toLocaleDateString()}</p>
+                                    <p><strong>Manager:</strong> {selectedProgramForDetailsModal.programManager?.name || 'N/A'}</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-lg mb-2">Participants</h3>
+                                <div className="space-y-2 text-sm">
+                                    <p><strong>Total Trainees:</strong> {selectedProgramForDetailsModal.trainees?.length || 0}</p>
+                                    <p><strong>Total Facilitators:</strong> {selectedProgramForDetailsModal.facilitators?.length || 0}</p>
+                                    <p><strong>Total Courses:</strong> {selectedProgramForDetailsModal.courses?.length || 0}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {selectedProgramForDetailsModal.rejectionReason && (
+                            <Card className="bg-red-50 border-red-200">
+                                <CardHeader><CardTitle className="text-red-800 text-base">Rejection Reason</CardTitle></CardHeader>
+                                <CardContent className="text-sm text-red-700">
+                                    {selectedProgramForDetailsModal.rejectionReason}
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        <div>
+                            <h3 className="font-semibold text-lg mb-2">Assigned Facilitators</h3>
+                            {selectedProgramForDetailsModal.facilitators?.length > 0 ? (
+                                <Table>
+                                    <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {selectedProgramForDetailsModal.facilitators.map(f => (
+                                            <TableRow key={f._id}>
+                                                <TableCell>{f.name}</TableCell>
+                                                <TableCell>{f.email}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">No facilitators assigned to this program yet.</p>
+                            )}
+                        </div>
+
+                        <div>
+                            <h3 className="font-semibold text-lg mb-2">Enrolled Courses</h3>
+                            {selectedProgramForDetailsModal.courses?.length > 0 ? (
+                                <Table>
+                                    <TableHeader><TableRow><TableHead>Title</TableHead><TableHead>Facilitator</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {selectedProgramForDetailsModal.courses.map(c => (
+                                            <TableRow key={c._id}>
+                                                <TableCell>{c.title}</TableCell>
+                                                <TableCell>{c.facilitator?.name || 'N/A'}</TableCell>
+                                                <TableCell><Badge className={getStatusColor(c.status)}>{c.status}</Badge></TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">No courses created for this program yet.</p>
+                            )}
+                        </div>
+                    </>
+                ) : (
+                    <p className="text-center text-muted-foreground">No program details available.</p>
+                )}
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDetailsModalOpen(false)}>Close</Button>
             </DialogFooter>
         </DialogContent>
       </Dialog>

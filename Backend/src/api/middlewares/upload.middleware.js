@@ -1,9 +1,9 @@
 import multer from "multer";
 import fs from "fs";
+import path from "path"; // Import path module
 
-// --- THIS IS THE FIX ---
 // Use a persistent 'uploads' directory instead of 'temp'
-const uploadDir = './public/uploads';
+const uploadDir = path.resolve('./public/uploads'); // Use path.resolve for absolute path
 // Ensure the directory exists
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });

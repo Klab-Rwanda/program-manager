@@ -1,5 +1,8 @@
 import api from '../api';
 
+// Existing imports
+import { ProgramAttendanceReportData } from './attendance.service'; 
+
 // Export all programs as PDF
 export const exportProgramsPDF = async (): Promise<Blob> => {
   const response = await api.get('/export/programs/pdf', {
@@ -79,7 +82,7 @@ export const downloadBlob = (blob: Blob, filename: string) => {
   window.URL.revokeObjectURL(url);
 };
 
-// Export templates
+// Export templates (these are example structures, actual implementation depends on your template system)
 export const exportTemplates = {
   basic: {
     title: 'Basic Program Report',
@@ -125,6 +128,37 @@ export const exportMasterLog = async (
     format,
     filters
   }, {
+    responseType: 'blob'
+  });
+  return response.data;
+};
+
+// --- NEW EXPORT FUNCTIONS FOR PROGRAM ATTENDANCE REPORT ---
+/**
+ * Exports a program's attendance report as PDF.
+ * @param programId The ID of the program.
+ * @param startDate The start date for the report (YYYY-MM-DD).
+ * @param endDate The end date for the report (YYYY-MM-DD).
+ * @returns A promise that resolves to a Blob containing the PDF.
+ */
+export const exportProgramAttendancePDF = async (programId: string, startDate: string, endDate: string): Promise<Blob> => {
+  const response = await api.get(`/export/attendance/program/${programId}`, {
+    params: { startDate, endDate, format: 'pdf' },
+    responseType: 'blob'
+  });
+  return response.data;
+};
+
+/**
+ * Exports a program's attendance report as Excel.
+ * @param programId The ID of the program.
+ * @param startDate The start date for the report (YYYY-MM-DD).
+ * @param endDate The end date for the report (YYYY-MM-DD).
+ * @returns A promise that resolves to a Blob containing the Excel file.
+ */
+export const exportProgramAttendanceExcel = async (programId: string, startDate: string, endDate: string): Promise<Blob> => {
+  const response = await api.get(`/export/attendance/program/${programId}`, {
+    params: { startDate, endDate, format: 'excel' },
     responseType: 'blob'
   });
   return response.data;

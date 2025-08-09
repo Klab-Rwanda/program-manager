@@ -78,8 +78,6 @@ export const deleteCourse = async (courseId: string): Promise<void> => {
     await api.delete(`/courses/${courseId}`);
 };
 
-
-// --- NEW FUNCTION ---
 // Program Manager: Get assignments with student marks and attendance for a course
 export const getCourseAssignmentsWithMarks = async (courseId: string): Promise<any> => {
     const response = await api.get(`/courses/${courseId}/assignments-with-marks`);
@@ -90,3 +88,39 @@ export const getAllCoursesForAdmin = async (): Promise<Course[]> => {
     const response = await api.get('/courses/all');
     return response.data.data;
 };
+
+
+
+
+export const getCourseFileViewUrlAsync = async (course: Course): Promise<string> => {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:8000';
+    
+    // Get token from your auth context or storage
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    
+    if (!token) {
+        throw new Error('Authentication token not found');
+    }
+    
+    const tokenParam = `&token=${encodeURIComponent(token)}`;
+    
+    return `${API_BASE_URL}/api/v1/files/serve?path=${encodeURIComponent(course.contentUrl)}${tokenParam}`;
+};
+
+export const getCourseFileViewUrl = (course: Course): string => {
+    if (!course.contentUrl) {
+        return '#'; // Or a placeholder indicating no file
+    }
+    // Correctly constructs the URL for direct static file access
+    // `process.env.NEXT_PUBLIC_API_URL` should be something like `http://localhost:8000/api/v1`
+    // We need the base URL without the `/api/v1` part.
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:8000';
+    
+    // The `course.contentUrl` should be in the format 'uploads/filename.pdf'
+    // It already has the correct path relative to your `public` folder.
+    // Ensure backslashes are replaced with forward slashes for URLs.
+    const filePath = course.contentUrl.replace(/\\/g, '/');
+    
+    return `${baseUrl}/${filePath}`;
+};
+

@@ -12,11 +12,12 @@ const router = express.Router();
 
 // All routes require authentication and IT Support or SuperAdmin role
 router.use(verifyJWT);
-router.use(checkRole(["it_support", "SuperAdmin"]));
+router.use(checkRole(["ItSupport", "SuperAdmin"]));
+
 
 // Get all tickets (IT Support sees all)
 router.get("/", (req, res, next) => {
-  console.log("REQ USER:", req.user); // ✅ This is now safe inside a route
+  console.log("REQ USER:", req.user); 
   return fetchAllTickets(req, res, next);
 });
 

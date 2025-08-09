@@ -36,6 +36,6 @@ router.route('/facilitator-stats').get(checkRole(['Facilitator']), getFacilitato
 router.route('/admin-overview').get(checkRole(['SuperAdmin', 'Program Manager']), getAdminOverview);
 
 // Recent activity for dashboard
-router.route('/recent-activity').get(checkRole(['SuperAdmin', 'Program Manager']), getRecentActivity);
+router.route('/recent-activity').get(checkRole(['SuperAdmin', 'Program Manager', 'Facilitator']), getRecentActivity);
 
 export default router;

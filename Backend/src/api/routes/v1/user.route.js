@@ -157,9 +157,43 @@ manageRouter.route('/').get(checkRole(['SuperAdmin', 'Program Manager']), userCo
  *     responses:
  *       200: { description: 'User details fetched successfully.' }
  *       404: { description: 'User not found.' }
+ *   patch:
+ *     tags: [User Management (Admin)]
+ *     summary: Update user details (name and role)
+ *     description: (SuperAdmin only) Updates a user's name and/or role. This is the missing route that was causing your error.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string }, description: 'The ID of the user.' }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string, example: 'Updated Name' }
+ *               role: { type: string, example: 'Facilitator' }
+ *     responses:
+ *       200: { description: 'User details updated successfully.' }
+ *       404: { description: 'User not found.' }
+ *       400: { description: 'Invalid role or validation error.' }
+ *   delete:
+ *     tags: [User Management (Admin)]
+ *     summary: Delete a user
+ *     description: (SuperAdmin only) Marks a user as deleted and inactive.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string }, description: 'The ID of the user.' }
+ *     responses:
+ *       200: { description: 'User deleted successfully.' }
+ *       404: { description: 'User not found.' }
  */
-manageRouter.route('/:id').get(checkRole(['SuperAdmin']), userController.getUserById)
-     .delete(checkRole(['SuperAdmin']), userController.deleteUserByAdmin);
+manageRouter.route('/:id')
+    .get(checkRole(['SuperAdmin']), userController.getUserById)
+    .patch(checkRole(['SuperAdmin']), userController.updateUserDetailsByAdmin) // ✅ THIS WAS MISSING!
+    .delete(checkRole(['SuperAdmin']), userController.deleteUserByAdmin);
 
 /**
  * @openapi
@@ -184,6 +218,20 @@ manageRouter.route('/:id').get(checkRole(['SuperAdmin']), userController.getUser
  */
 manageRouter.route('/:id/status').patch(checkRole(['SuperAdmin']), userController.updateUserStatus);
 
+/**
+ * @openapi
+ * /users/manage/{id}/facilitator-profile:
+ *   patch:
+ *     tags: [User Management (Admin)]
+ *     summary: Update facilitator profile
+ *     description: (SuperAdmin & Program Manager) Updates facilitator-specific profile information.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { name: id, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: 'Facilitator profile updated successfully.' }
+ */
 manageRouter.route('/:id/facilitator-profile').patch(checkRole(['SuperAdmin', 'Program Manager']), userController.updateFacilitatorProfile);
 
 // Mount all the management routes under the /manage path

@@ -67,4 +67,5 @@ router.route('/:id/reactivate')
       .patch(checkRole(['Program Manager', 'SuperAdmin']), programController.reactivateProgram);
 
 
+      router.route('/:id/unenroll-facilitator').post(checkRole(['Program Manager', 'SuperAdmin']), programController.unenrollFacilitator);
 export default router;

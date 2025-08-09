@@ -1,12 +1,23 @@
 // src/lib/contexts/RoleContext.tsx
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '@/types'; // Import your new User type
-import api from '@/lib/api'; // Import the configured api client
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import { User } from "@/types";
+import api from "@/lib/api"; // (optional) still imported if you use it elsewhere
 
-// Make sure your UserRole type covers all roles from the backend
-export type UserRole = 'super_admin' | 'program_manager' | 'facilitator' | 'trainee' | 'it_support';
+// Define supported backend roles
+export type UserRole =
+  | "super_admin"
+  | "program_manager"
+  | "facilitator"
+  | "trainee"
+  | "it_support";
 
 export interface AuthContextType {
   user: User | null;
@@ -15,7 +26,7 @@ export interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
-   setUser: (user: User | null) => void;
+  setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,66 +34,68 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function RoleProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true); // Add loading state
-
-   const [hasMounted, setHasMounted] = useState(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
-      setHasMounted(true);
+    setHasMounted(true);
   }, []);
+
   const normalizeRole = (role: string): UserRole => {
-      // Convert backend role names to frontend format
-      const roleMap: Record<string, UserRole> = {
-        'SuperAdmin': 'super_admin',
-        'Program Manager': 'program_manager',
-        'Facilitator': 'facilitator',
-        'Trainee': 'trainee',
-
-        'ItSupport': 'it_support'
-
-
-      };
-      return roleMap[role] || role as UserRole;
+    const roleMap: Record<string, UserRole> = {
+      "SuperAdmin": "super_admin",
+      "Program Manager": "program_manager",
+      "Facilitator": "facilitator",
+      "Trainee": "trainee",
+      "ItSupport": "it_support",
+    };
+    return roleMap[role] || (role as UserRole);
   };
 
-const login = async (email: string, password: string) => {
-const API_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:8000' 
-  : 'https://program-manager-klab.onrender.com';
+  const login = async (email: string, password: string) => {
+    let API_URL = "";
 
-const res = await fetch(`${API_URL}/api/v1/auth/login`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  credentials: "include",
-  body: JSON.stringify({ email, password }),
-});
-  const data = await res.json();
+    const hostname = window.location.hostname;
 
-  if (!res.ok) {
-    throw new Error(data.message || "Login failed");
-  }
+    if (hostname === "localhost") {
+        API_URL = "http://localhost:8000";
+      } else if (hostname.includes("vercel")) {
+        API_URL = "https://program-manager-klab.onrender.com";
+      } else {
+        API_URL = "https://backendklab.andasy.dev";
+      }
 
-  // ✅ Save token + user to localStorage
-  localStorage.setItem("accessToken", data.data.accessToken);
-  localStorage.setItem("user", JSON.stringify(data.data.user));
-  setUser(data.data.user); // Update global user state
-  setIsAuthenticated(true); // Set authentication status to true
-};
+    const res = await fetch(`${API_URL}/api/v1/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({ email, password }),
+    });
 
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.message || "Login failed");
+    }
+
+    localStorage.setItem("accessToken", data.data.accessToken);
+    localStorage.setItem("user", JSON.stringify(data.data.user));
+    setUser(data.data.user);
+    setIsAuthenticated(true);
+  };
 
   const logout = (): void => {
     setUser(null);
     setIsAuthenticated(false);
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('user');
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("user");
   };
 
   useEffect(() => {
-    // This effect runs once on app load to check for an existing session
-    const token = localStorage.getItem('accessToken');
-    const storedUser = localStorage.getItem('user');
+    const token = localStorage.getItem("accessToken");
+    const storedUser = localStorage.getItem("user");
 
     if (token && storedUser) {
       try {
@@ -90,10 +103,10 @@ const res = await fetch(`${API_URL}/api/v1/auth/login`, {
         setIsAuthenticated(true);
       } catch (e) {
         console.error("Failed to parse user data from localStorage", e);
-        logout(); // Clear invalid data
+        logout();
       }
     }
-    setLoading(false); // Finished checking auth status
+    setLoading(false);
   }, []);
 
   const value: AuthContextType = {
@@ -103,7 +116,7 @@ const res = await fetch(`${API_URL}/api/v1/auth/login`, {
     loading,
     login,
     logout,
-      setUser,
+    setUser,
   };
 
   return (
@@ -116,7 +129,7 @@ const res = await fetch(`${API_URL}/api/v1/auth/login`, {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within a RoleProvider');
+    throw new Error("useAuth must be used within a RoleProvider");
   }
   return context;
 }

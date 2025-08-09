@@ -40,3 +40,8 @@ export const resendAssignmentToTrainees = async (assignmentId: string): Promise<
     const response = await api.post(`/assignments/${assignmentId}/resend-notifications`);
     return response.data.data;
 };
+
+export const getAssignmentsForProgram = async (programId: string): Promise<Assignment[]> => {
+    const response = await api.get(`/assignments/program/${programId}`);
+    return response.data.data;
+};

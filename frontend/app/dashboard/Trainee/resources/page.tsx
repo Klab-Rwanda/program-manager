@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { getCourseFileViewUrl } from "@/lib/services/course.service"; // NEW: Import the helper
 
 export default function TraineeResourcesPage() {
     const { user, loading: authLoading } = useAuth();
@@ -130,15 +131,14 @@ export default function TraineeResourcesPage() {
                             <CardContent>
                                 <p className="text-sm text-muted-foreground mb-4 line-clamp-3 h-14">{course.description}</p>
                                 <Button className="w-full" asChild>
-                                    {/* --- THIS IS THE FUNCTIONAL DOWNLOAD LINK --- */}
+                                    {/* --- UPDATED: Use getCourseFileViewUrl and target="_blank" --- */}
                                     <a 
-                                      href={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '')}/${course.contentUrl.replace(/\\/g, '/')}`}
+                                      href={getCourseFileViewUrl(course)}
                                       target="_blank" 
                                       rel="noopener noreferrer"
-                                      download
                                     >
                                         <Download className="mr-2 h-4 w-4"/>
-                                        Download Material
+                                        View Material
                                     </a>
                                 </Button>
                             </CardContent>

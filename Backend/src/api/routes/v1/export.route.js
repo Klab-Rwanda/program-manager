@@ -195,4 +195,6 @@ router.route('/custom').post(exportController.customExport);
 router.route('/logs')
     .post(checkRole(['SuperAdmin']), exportController.exportLogs);
 
+    router.route('/attendance/program/:programId').get(exportController.exportProgramAttendance);
+
 export default router; 

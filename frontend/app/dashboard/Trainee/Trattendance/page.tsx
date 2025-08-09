@@ -10,25 +10,64 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { getTraineeSessions, getMyAttendanceHistory, markGeolocationAttendance, ClassSession } from "@/lib/services/attendance.service";
-import { AttendanceRecord } from "@/types";
+import { 
+    getTraineeSessions, 
+    getMyAttendanceHistory, 
+    markGeolocationAttendance, 
+    ClassSession 
+} from "@/lib/services/attendance.service";
+import { Program, AttendanceRecord as BackendAttendanceRecord } from "@/types"; // Import original AttendanceRecord
+import { getAllPrograms } from "@/lib/services/program.service"; // To get list of programs for filter
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+// Extend the AttendanceRecord interface to include session details
+interface ExtendedAttendanceRecord extends BackendAttendanceRecord {
+  sessionTitle: string;
+  sessionType: 'physical' | 'online';
+  sessionTime: string;
+}
 
 export default function TraineeAttendancePage() {
   const [sessions, setSessions] = useState<ClassSession[]>([]);
-  const [history, setHistory] = useState<AttendanceRecord[]>([]);
+  const [history, setHistory] = useState<ExtendedAttendanceRecord[]>([]); // Use extended interface
+  const [programs, setPrograms] = useState<Program[]>([]); // New state for programs
   const [loading, setLoading] = useState(true);
   const [activeGeoSession, setActiveGeoSession] = useState<ClassSession | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // New state for history filters
+  const today = new Date();
+  const defaultStartDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]; // Start of current month
+  const defaultEndDate = today.toISOString().split('T')[0]; // Today's date
+  const [historyFilters, setHistoryFilters] = useState({
+      programId: 'all', // 'all' for all programs, or program _id
+      startDate: defaultStartDate,
+      endDate: defaultEndDate,
+  });
+  const [activeTab, setActiveTab] = useState("actions"); // State to manage active tab
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch both current sessions and past history in parallel
-      const [sessionsData, historyData] = await Promise.all([
-        getTraineeSessions(),
-        getMyAttendanceHistory()
-      ]);
+      // Fetch available sessions (active/upcoming) using current date filters
+      const sessionsData = await getTraineeSessions(
+          historyFilters.startDate, // Pass start date for sessions
+          historyFilters.endDate    // Pass end date for sessions
+      );
       setSessions(sessionsData);
+
+      // Fetch all programs the trainee is associated with (for filter dropdown)
+      const allPrograms = await getAllPrograms(); // This should filter by trainee's enrollment
+      setPrograms(allPrograms);
+
+      // Fetch history based on current filters
+      const historyData = await getMyAttendanceHistory(
+          historyFilters.programId === 'all' ? undefined : historyFilters.programId,
+          historyFilters.startDate,
+          historyFilters.endDate
+      ) as ExtendedAttendanceRecord[]; // Cast to ExtendedAttendanceRecord
       setHistory(historyData);
     } catch (err) {
       toast.error("Failed to load your attendance data.");
@@ -36,7 +75,7 @@ export default function TraineeAttendancePage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [historyFilters]); // Re-fetch when filters change
 
   useEffect(() => { fetchData(); }, [fetchData]);
   
@@ -44,9 +83,23 @@ export default function TraineeAttendancePage() {
     setIsProcessing(true);
     toast.info("Getting your location...");
     
-    // *** REMOVED DEVELOPMENT ONLY MOCK BLOCK ***
-    // Now, always execute the production geolocation logic
-
+    // DEVELOPMENT ONLY MOCK (If you still use this, you can remove it for production)
+    // if (process.env.NODE_ENV === 'development') {
+    //   try {
+    //     await new Promise(res => setTimeout(res, 1000));
+    //     await markGeolocationAttendance(session.sessionId, -1.9441, 30.0619); // Mock kLab location
+    //     toast.success("Attendance marked (dev mock)!");
+    //     setActiveGeoSession(null);
+    //     fetchData(); // Refetch both sessions and history
+    //   } catch (err: any) {
+    //     toast.error(err.response?.data?.message || "Mock attendance failed.");
+    //   } finally {
+    //     setIsProcessing(false);
+    //   }
+    //   return;
+    // }
+    
+    // Production code
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
@@ -86,7 +139,12 @@ export default function TraineeAttendancePage() {
   const upcomingSessions = useMemo(() => sessions.filter(s => s.status === 'scheduled'), [sessions]);
 
   const getStatusBadge = (status: string) => {
-      const map: { [key: string]: string } = { 'Present': 'bg-green-100 text-green-800', 'Absent': 'bg-red-100 text-red-800', 'Excused': 'bg-blue-100 text-blue-800', 'Late': 'bg-yellow-100 text-yellow-800' };
+      const map: { [key: string]: string } = { 
+          'Present': 'bg-green-100 text-green-800', 
+          'Absent': 'bg-red-100 text-red-800', 
+          'Excused': 'bg-blue-100 text-blue-800', 
+          'Late': 'bg-yellow-100 text-yellow-800' 
+      };
       return <Badge className={map[status] || 'bg-gray-100 text-gray-800'}>{status}</Badge>;
   };
 
@@ -101,7 +159,7 @@ export default function TraineeAttendancePage() {
         <p className="text-muted-foreground">Manage your session attendance and view your history.</p>
       </div>
       
-      <Tabs defaultValue="actions">
+      <Tabs value={activeTab} onValueChange={setActiveTab}> {/* Controlled Tab */}
         <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="actions">Actions</TabsTrigger>
             <TabsTrigger value="history">My History</TabsTrigger>
@@ -151,19 +209,61 @@ export default function TraineeAttendancePage() {
 
         <TabsContent value="history" className="mt-4">
             <Card>
-                <CardHeader><CardTitle>Full Attendance Log</CardTitle><CardDescription>Your complete attendance record for all programs.</CardDescription></CardHeader>
+                <CardHeader>
+                    <CardTitle>Full Attendance Log</CardTitle>
+                    <CardDescription>Your complete attendance record for all programs.</CardDescription>
+                </CardHeader>
                 <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="programFilter">Filter by Program</Label>
+                            <Select 
+                                value={historyFilters.programId} 
+                                onValueChange={(value) => setHistoryFilters(prev => ({ ...prev, programId: value }))}
+                            >
+                                <SelectTrigger id="programFilter">
+                                    <SelectValue placeholder="All Programs" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Programs</SelectItem>
+                                    {programs.map(p => (
+                                        <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="startDate">Start Date</Label>
+                            <Input 
+                                id="startDate" 
+                                type="date" 
+                                value={historyFilters.startDate} 
+                                onChange={(e) => setHistoryFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="endDate">End Date</Label>
+                            <Input 
+                                id="endDate" 
+                                type="date" 
+                                value={historyFilters.endDate} 
+                                onChange={(e) => setHistoryFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                            />
+                        </div>
+                    </div>
+
                     <Table>
-                        <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Program</TableHead><TableHead>Status</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>Session Title</TableHead><TableHead>Program</TableHead><TableHead>Date</TableHead><TableHead>Time</TableHead><TableHead>Status</TableHead><TableHead>Method</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {history.length === 0 ? <TableRow><TableCell colSpan={4} className="h-24 text-center">No attendance history found.</TableCell></TableRow> :
+                            {history.length === 0 ? <TableRow><TableCell colSpan={6} className="h-24 text-center">No attendance history found for the selected filters.</TableCell></TableRow> :
                             history.map(record => (
-                                <TableRow key={record._id}>
-                                    <TableCell className="font-medium">{record.date}</TableCell>
+                                <TableRow key={record._id.toString()}> {/* Ensure _id is converted to string for key */}
+                                    <TableCell className="font-medium">{record.sessionTitle}</TableCell>
                                     <TableCell>{record.programId?.name || 'N/A'}</TableCell>
+                                    <TableCell>{record.date}</TableCell>
+                                    <TableCell>{new Date(record.sessionTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</TableCell>
                                     <TableCell>{getStatusBadge(record.status)}</TableCell>
-                                    <TableCell>{record.checkIn ? new Date(record.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</TableCell>
-                                    <TableCell className="capitalize">{record.method?.replace('_', ' ')}</TableCell>
+                                    <TableCell className="capitalize">{record.method?.replace('_', ' ') || 'N/A'}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>

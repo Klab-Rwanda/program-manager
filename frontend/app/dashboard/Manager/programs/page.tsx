@@ -1016,7 +1016,7 @@ const ProgramsPage: React.FC = () => {
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Currently Assigned:</h4>
                   <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
                     {assigningProgram?.facilitators?.length > 0 ? (
-                      assigningProgram.facilitators.map((f, idx) => (
+                      assigningProgram.facilitators.map((f:any, idx:any) => (
                         <div key={f._id || f.email || idx} className="flex flex-col p-1">
                           <span className="font-medium text-sm">{f.name}</span>
                           <span className="text-xs text-gray-500">{f.email}</span>
@@ -1073,7 +1073,7 @@ const ProgramsPage: React.FC = () => {
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Currently Assigned:</h4>
                   <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
                     {assigningProgram?.trainees?.length > 0 ? (
-                      assigningProgram.trainees.map((t, idx) => (
+                      assigningProgram.trainees.map((t:any, idx:any) => (
                         <div key={t._id || t.email || idx} className="flex flex-col p-1">
                           <span className="font-medium text-sm">{t.name}</span>
                           <span className="text-xs text-gray-500">{t.email}</span>
@@ -1142,7 +1142,7 @@ const ProgramsPage: React.FC = () => {
                   <h4 className="font-medium mb-2">Facilitators ({previewingProgram.facilitators?.length || 0})</h4>
                   <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
                     {previewingProgram.facilitators?.length > 0 ? (
-                      previewingProgram.facilitators.map((f, idx) => (
+                      previewingProgram.facilitators.map((f:any, idx:number) => (
                         <div key={f._id || f.email || idx} className="flex flex-col p-1">
                           <span className="font-medium text-sm">{f.name}</span>
                           <span className="text-xs text-gray-500">{f.email}</span>
@@ -1158,7 +1158,7 @@ const ProgramsPage: React.FC = () => {
                   <h4 className="font-medium mb-2">Trainees ({previewingProgram.trainees?.length || 0})</h4>
                   <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-gray-50">
                     {previewingProgram.trainees?.length > 0 ? (
-                      previewingProgram.trainees.map((t, idx) => (
+                      previewingProgram.trainees.map((t:any, idx:any) => (
                         <div key={t._id || t.email || idx} className="flex flex-col p-1">
                           <span className="font-medium text-sm">{t.name}</span>
                           <span className="text-xs text-gray-500">{t.email}</span>

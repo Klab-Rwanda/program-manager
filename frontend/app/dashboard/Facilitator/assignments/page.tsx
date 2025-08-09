@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Plus, Edit, Trash2, Loader2, Calendar, BookOpen, CheckCircle, Clock, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,36 +10,45 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // NEW: Import Tabs components
+import { Badge } from "@/components/ui/badge";
 import { getMyCreatedAssignments, createAssignment, updateAssignment, deleteAssignment, resendAssignmentToTrainees } from "@/lib/services/assignment.service";
 import { getMyCourses } from "@/lib/services/course.service"; // To get courses for the dropdown
 import { getApprovedRoadmaps } from "@/lib/services/roadmap.service"; // To get approved roadmaps for the dropdown
-import { Assignment, Course, Roadmap } from "@/types";
+import { Assignment, Course, Roadmap, Program as BackendProgram } from "@/types"; // Import Program type for status
+
+// Extend Assignment type to ensure program is populated with status
+interface EnhancedAssignment extends Assignment {
+    program: BackendProgram; // Ensure program is populated with status
+}
 
 const initialFormData = { title: "", description: "", courseId: "", roadmapId: "", dueDate: "", maxGrade: 100 };
 
 export default function AssignmentManagementPage() {
-    const [assignments, setAssignments] = useState<Assignment[]>([]);
+    const [assignments, setAssignments] = useState<EnhancedAssignment[]>([]); // Use EnhancedAssignment
     const [myCourses, setMyCourses] = useState<Course[]>([]);
     const [approvedRoadmaps, setApprovedRoadmaps] = useState<Roadmap[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+    const [editingAssignment, setEditingAssignment] = useState<EnhancedAssignment | null>(null); // Use EnhancedAssignment
     const [formData, setFormData] = useState<any>(initialFormData);
+    const [activeTab, setActiveTab] = useState("active"); // NEW: State for active tab
 
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
             const [assignmentsData, coursesData, roadmapsData] = await Promise.all([
-                getMyCreatedAssignments(), 
-                getMyCourses(),
-                getApprovedRoadmaps()
+                getMyCreatedAssignments(), // This now fetches assignments for Active/Completed programs
+                getMyCourses(), // This fetches courses for Active/Completed programs
+                getApprovedRoadmaps() // This fetches approved roadmaps for Active programs
             ]);
-            setAssignments(assignmentsData);
+            setAssignments(assignmentsData as EnhancedAssignment[]); // Cast to EnhancedAssignment
             setMyCourses(coursesData);
             setApprovedRoadmaps(roadmapsData);
         } catch (err) {
             toast.error("Failed to load data.");
+            console.error("Fetch Data Error:", err);
         } finally {
             setLoading(false);
         }
@@ -47,14 +56,24 @@ export default function AssignmentManagementPage() {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    const handleOpenModal = (assignment: Assignment | null = null) => {
+    // NEW: Memoized lists for active and completed assignments
+    const activeAssignments = useMemo(() => 
+        assignments.filter(assign => assign.program?.status === 'Active'), 
+        [assignments]
+    );
+    const completedAssignments = useMemo(() => 
+        assignments.filter(assign => assign.program?.status === 'Completed'), 
+        [assignments]
+    );
+
+    const handleOpenModal = (assignment: EnhancedAssignment | null = null) => { // Use EnhancedAssignment
         setEditingAssignment(assignment);
         if (assignment) {
             setFormData({
                 title: assignment.title,
                 description: assignment.description,
-                courseId: typeof assignment.course === 'string' ? assignment.course : assignment.course?._id || '',
-                roadmapId: typeof assignment.roadmap === 'string' ? assignment.roadmap : assignment.roadmap?._id || '',
+                courseId: typeof assignment.course === 'string' ? assignment.course : assignment.course._id,
+                roadmapId: typeof assignment.roadmap === 'string' ? assignment.roadmap : assignment.roadmap._id,
                 dueDate: new Date(assignment.dueDate).toISOString().split('T')[0],
                 maxGrade: assignment.maxGrade,
             });
@@ -64,20 +83,24 @@ export default function AssignmentManagementPage() {
         setIsModalOpen(true);
     };
 
-    const handleDelete = (assignment: Assignment) => {
+    const handleDelete = (assignment: EnhancedAssignment) => { // Use EnhancedAssignment
         toast("Are you sure you want to delete this assignment?", {
+            description: "This action cannot be undone.",
             action: { label: "Delete", onClick: async () => {
                 try {
                     await deleteAssignment(assignment._id);
                     toast.success("Assignment deleted.");
                     fetchData();
-                } catch (err) { toast.error("Failed to delete assignment."); }
+                } catch (err: any) { 
+                    toast.error(err.response?.data?.message || "Failed to delete assignment.");
+                    console.error("Delete Error:", err);
+                }
             }},
             cancel: { label: "Cancel" }
         });
     };
 
-    const handleResendNotifications = async (assignment: Assignment) => {
+    const handleResendNotifications = async (assignment: EnhancedAssignment) => { // Use EnhancedAssignment
         try {
             const result = await resendAssignmentToTrainees(assignment._id);
             if (result.success) {
@@ -88,6 +111,7 @@ export default function AssignmentManagementPage() {
             }
         } catch (err: any) {
             toast.error(err.response?.data?.message || "Failed to resend notifications.");
+            console.error("Resend Error:", err);
         }
     };
 
@@ -131,13 +155,13 @@ export default function AssignmentManagementPage() {
                 await updateAssignment(editingAssignment._id, formData);
                 toast.success("Assignment updated.");
             } else {
-                const result = await createAssignment(formData);
+                await createAssignment(formData);
                 toast.success("Assignment created and sent to trainees!");
             }
             setIsModalOpen(false);
             fetchData();
         } catch (err: any) {
-            console.error('Assignment creation error:', err);
+            console.error('Assignment creation/update error:', err);
             console.error('Error response:', err.response?.data);
             toast.error(err.response?.data?.message || "Operation failed.");
         } finally {
@@ -152,72 +176,129 @@ export default function AssignmentManagementPage() {
                     <h1 className="text-3xl font-bold tracking-tight">Assignment Management</h1>
                     <p className="text-muted-foreground">Create and manage assignments for your courses.</p>
                 </div>
-                <Button onClick={() => handleOpenModal()}><Plus className="mr-2 h-4 w-4"/>Create Assignment</Button>
+                {/* Only allow creating new assignments if the 'Active' tab is selected,
+                    implying they are creating for active programs. */}
+                <Button onClick={() => handleOpenModal()} disabled={activeTab !== 'active'}>
+                    <Plus className="mr-2 h-4 w-4"/>Create Assignment
+                </Button>
             </div>
 
-            <Card>
-                <CardHeader><CardTitle>My Assignments</CardTitle></CardHeader>
-                <CardContent>
-                    {loading ? <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div> :
-                    assignments.length === 0 ? <p className="text-center py-10 text-muted-foreground">You haven't created any assignments yet.</p> :
-                    <div className="space-y-3">
-                        {assignments.map(assignment => (
-                            <div key={assignment._id} className="flex items-center justify-between p-4 border rounded-lg">
-                                <div>
-                                    <h4 className="font-semibold">{assignment.title}</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        <BookOpen className="inline h-4 w-4 mr-1"/>
-                                        {(assignment.course as any)?.title} - {(assignment.program as any)?.name}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        <Calendar className="inline h-4 w-4 mr-1"/>
-                                        Week {(assignment.roadmap as any)?.weekNumber}: {(assignment.roadmap as any)?.title}
-                                    </p>
-                                                                         <p className="text-xs text-muted-foreground mt-1">
-                                         <Calendar className="inline h-4 w-4 mr-1"/>
-                                         Due: {new Date(assignment.dueDate).toLocaleDateString()}
-                                     </p>
-                                     <div className="mt-2 flex items-center gap-2">
-                                         {assignment.sentToTrainees ? (
-                                             <div className="flex items-center gap-1 text-xs text-green-600">
-                                                 <CheckCircle className="h-3 w-3" />
-                                                 <span>Sent to trainees</span>
-                                                 {assignment.sentToTraineesAt && (
-                                                     <span className="text-gray-500">
-                                                         ({new Date(assignment.sentToTraineesAt).toLocaleDateString()})
-                                                     </span>
-                                                 )}
-                                             </div>
-                                         ) : (
-                                             <div className="flex items-center gap-1 text-xs text-orange-600">
-                                                 <Clock className="h-3 w-3" />
-                                                 <span>Not sent to trainees</span>
-                                             </div>
-                                         )}
-                                     </div>
-                                     <div className="mt-2 text-sm text-gray-600 prose prose-sm max-w-none">
-                                         <div dangerouslySetInnerHTML={{ __html: assignment.description }} />
-                                     </div>
-                                </div>
-                                                                 <div className="flex gap-2">
-                                     <Button variant="ghost" size="icon" onClick={() => handleOpenModal(assignment)}><Edit className="h-4 w-4"/></Button>
-                                     <Button 
-                                         variant="ghost" 
-                                         size="icon" 
-                                         className="text-blue-500" 
-                                         onClick={() => handleResendNotifications(assignment)}
-                                         title="Resend to trainees"
-                                     >
-                                         <Send className="h-4 w-4"/>
-                                     </Button>
-                                     <Button variant="ghost" size="icon" className="text-red-500" onClick={() => handleDelete(assignment)}><Trash2 className="h-4 w-4"/></Button>
-                                 </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="active">Active Assignments ({activeAssignments.length})</TabsTrigger>
+                    <TabsTrigger value="completed">Completed Programs Assignments ({completedAssignments.length})</TabsTrigger>
+                </TabsList>
+
+                {/* Active Assignments Tab Content */}
+                <TabsContent value="active" className="mt-4">
+                    <Card>
+                        <CardHeader><CardTitle>Active Programs Assignments</CardTitle></CardHeader>
+                        <CardContent>
+                            {loading ? <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div> :
+                            activeAssignments.length === 0 ? <p className="text-center py-10 text-muted-foreground">No active assignments found.</p> :
+                            <div className="space-y-3">
+                                {activeAssignments.map(assignment => (
+                                    <div key={assignment._id} className="flex items-center justify-between p-4 border rounded-lg">
+                                        <div>
+                                            <h4 className="font-semibold">{assignment.title}</h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                <BookOpen className="inline h-4 w-4 mr-1"/>
+                                                {(assignment.course as any)?.title} - {(assignment.program as any)?.name}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                <Calendar className="inline h-4 w-4 mr-1"/>
+                                                Week {(assignment.roadmap as any)?.weekNumber}: {(assignment.roadmap as any)?.title}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                <Calendar className="inline h-4 w-4 mr-1"/>
+                                                Due: {new Date(assignment.dueDate).toLocaleDateString()}
+                                            </p>
+                                            <div className="mt-2 flex items-center gap-2">
+                                                {assignment.sentToTrainees ? (
+                                                    <div className="flex items-center gap-1 text-xs text-green-600">
+                                                        <CheckCircle className="h-3 w-3" />
+                                                        <span>Sent to trainees</span>
+                                                        {assignment.sentToTraineesAt && (
+                                                            <span className="text-gray-500">
+                                                                ({new Date(assignment.sentToTraineesAt).toLocaleDateString()})
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1 text-xs text-orange-600">
+                                                        <Clock className="h-3 w-3" />
+                                                        <span>Not sent to trainees</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="mt-2 text-sm text-gray-600 prose prose-sm max-w-none">
+                                                <div dangerouslySetInnerHTML={{ __html: assignment.description }} />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {/* Action buttons always enabled for active assignments */}
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenModal(assignment)}><Edit className="h-4 w-4"/></Button>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="text-blue-500" 
+                                                onClick={() => handleResendNotifications(assignment)}
+                                                title="Resend to trainees"
+                                            >
+                                                <Send className="h-4 w-4"/>
+                                            </Button>
+                                            <Button variant="ghost" size="icon" className="text-red-500" onClick={() => handleDelete(assignment)}><Trash2 className="h-4 w-4"/></Button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
-                    }
-                </CardContent>
-            </Card>
+                        }
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Completed Programs Assignments Tab Content */}
+                <TabsContent value="completed" className="mt-4">
+                    <Card>
+                        <CardHeader><CardTitle>Assignments from Completed Programs</CardTitle></CardHeader>
+                        <CardContent>
+                            {loading ? <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div> :
+                            completedAssignments.length === 0 ? <p className="text-center py-10 text-muted-foreground">No assignments found for completed programs.</p> :
+                            <div className="space-y-3">
+                                {completedAssignments.map(assignment => (
+                                    <div key={assignment._id} className="flex items-center justify-between p-4 border rounded-lg opacity-70"> {/* Visual cue for disabled */}
+                                        <div>
+                                            <h4 className="font-semibold">{assignment.title}</h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                <BookOpen className="inline h-4 w-4 mr-1"/>
+                                                {(assignment.course as any)?.title} - {(assignment.program as any)?.name} (Completed)
+                                            </p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                <Calendar className="inline h-4 w-4 mr-1"/>
+                                                Week {(assignment.roadmap as any)?.weekNumber}: {(assignment.roadmap as any)?.title}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                <Calendar className="inline h-4 w-4 mr-1"/>
+                                                Due: {new Date(assignment.dueDate).toLocaleDateString()}
+                                            </p>
+                                            <div className="mt-2 text-sm text-gray-600 prose prose-sm max-w-none">
+                                                <div dangerouslySetInnerHTML={{ __html: assignment.description }} />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {/* Action buttons disabled for completed program assignments */}
+                                            <Button variant="ghost" size="icon" disabled title="Cannot edit completed assignment"><Edit className="h-4 w-4"/></Button>
+                                            <Button variant="ghost" size="icon" disabled title="Cannot resend for completed program"><Send className="h-4 w-4"/></Button>
+                                            <Button variant="ghost" size="icon" disabled title="Cannot delete completed assignment"><Trash2 className="h-4 w-4"/></Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        }
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
 
                          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -228,7 +309,11 @@ export default function AssignmentManagementPage() {
                                  <Label className="text-sm">Course</Label>
                                  <Select value={formData.courseId} onValueChange={(v) => setFormData(f => ({...f, courseId: v, roadmapId: ""}))} required>
                                      <SelectTrigger className="h-9"><SelectValue placeholder="Select a course"/></SelectTrigger>
-                                     <SelectContent>{myCourses.map(c => <SelectItem key={c._id} value={c._id}>{c.title}</SelectItem>)}</SelectContent>
+                                     <SelectContent>
+                                         {myCourses
+                                             .filter(course => (course.program as BackendProgram)?.status === 'Active') // Filter courses to only active programs
+                                             .map(c => <SelectItem key={c._id} value={c._id}>{c.title} ({ (c.program as BackendProgram)?.name })</SelectItem>)}
+                                     </SelectContent>
                                  </Select>
                              </div>
                              <div className="space-y-1">
@@ -237,9 +322,12 @@ export default function AssignmentManagementPage() {
                                      <SelectTrigger className="h-9"><SelectValue placeholder="Select a weekly roadmap"/></SelectTrigger>
                                      <SelectContent>
                                          {approvedRoadmaps
-                                             .filter(roadmap => !formData.courseId || 
+                                             .filter(roadmap => 
                                                  (typeof roadmap.course === 'object' && roadmap.course._id === formData.courseId) ||
-                                                 (typeof roadmap.course === 'string' && roadmap.course === formData.courseId))
+                                                 (typeof roadmap.course === 'string' && roadmap.course === formData.courseId)
+                                             )
+                                             // Only show roadmaps whose programs are Active
+                                             .filter(roadmap => (roadmap.program as BackendProgram)?.status === 'Active')
                                              .map(roadmap => (
                                                  <SelectItem key={roadmap._id} value={roadmap._id}>
                                                      Week {roadmap.weekNumber}: {roadmap.title} 
