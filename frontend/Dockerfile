@@ -10,24 +10,23 @@ WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     NPM_CONFIG_FUND=false \
-    NPM_CONFIG_AUDIT=false
+    NPM_CONFIG_AUDIT=false \
+    HOST=0.0.0.0
 
-# 1) Copy lockfiles first for better caching
+# 1) Copy lockfiles first for caching
 COPY package.json package-lock.json ./
 
-# 2) Install deps (skip optional), cache if BuildKit is on
+# 2) Install ONLY production deps (tiny footprint = avoids ENOSPC)
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --include=dev --omit=optional --no-audit --no-fund && \
+    npm ci --omit=dev --omit=optional --no-audit --no-fund && \
     npm cache clean --force
 
 # 3) Copy the rest of the app
 COPY . .
 
-# 4) Build and then drop dev deps for a smaller image
-RUN npx next build --experimental-build-mode compile && \
-    npm prune --omit=dev && \
-    npm cache clean --force
+# 4) Build with prod deps (works because "next" is in dependencies)
+RUN npm run build
 
 EXPOSE 3000
-# Next binds to 0.0.0.0 by default in containers. Use your package.json start script.
-CMD ["npm", "run", "start"]
+# Pass -p and -H via npm args to ensure proper binding in container
+CMD ["npm","run","start","--","-p","3000","-H","0.0.0.0"]
