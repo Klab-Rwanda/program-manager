@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Loader2, QrCode, Play, Eye, Download, StopCircle, UserCheck, Edit, Save, Trash2, Calendar, Clock as ClockIcon } from "lucide-react"; 
+import { Plus, Loader2, QrCode, Play, Eye, Download, StopCircle, UserCheck, Edit, Save, Trash2, Calendar, Clock as ClockIcon, MapPin } from "lucide-react"; 
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,6 +53,8 @@ export default function FacilitatorAttendancePage() {
   const [isSubmitting, setIsSubmitting] = useState<string | boolean>(false); // Used for session creation/start/end/delete
   const [formData, setFormData] = useState(initialFormState);
   const [activeQrCode, setActiveQrCode] = useState<string | null>(null);
+  const [isGettingLocation, setIsGettingLocation] = useState(false); // NEW: State for location fetching
+  const [locationError, setLocationError] = useState<string | null>(null); // NEW: State for location errors
   
   // State for manual attendance marking
   const [isManualMarkModalOpen, setManualMarkModalOpen] = useState(false);
@@ -68,6 +70,52 @@ export default function FacilitatorAttendancePage() {
   const defaultEndDate = today.toISOString().split('T')[0]; // Today's date
   const [filterDates, setFilterDates] = useState({ startDate: defaultStartDate, endDate: defaultEndDate });
 
+  // NEW: Function to get user's current location
+  const getCurrentLocation = useCallback(async () => {
+    setIsGettingLocation(true);
+    setLocationError(null);
+    
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        if (!navigator.geolocation) {
+          return reject(new Error('Geolocation is not supported by your browser.'));
+        }
+        navigator.geolocation.getCurrentPosition(resolve, reject, { 
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
+        });
+      });
+
+      setFormData(prev => ({
+        ...prev,
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+      }));
+      
+      toast.success('Location captured successfully!');
+    } catch (error: any) {
+      const errorMessage = error.code === 1 ? 
+        'Location access denied. Please allow location access to create physical sessions.' :
+        error.code === 2 ? 
+        'Location unavailable. Please try again.' :
+        error.code === 3 ? 
+        'Location request timed out. Please try again.' :
+        error.message || 'Failed to get location.';
+      
+      setLocationError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsGettingLocation(false);
+    }
+  }, []);
+
+  // NEW: Auto-get location when switching to physical session type
+  useEffect(() => {
+    if (formData.type === 'physical' && !formData.latitude && !formData.longitude && isCreateModalOpen) {
+      getCurrentLocation();
+    }
+  }, [formData.type, getCurrentLocation, isCreateModalOpen]);
 
   const fetchSessionsAndPrograms = useCallback(async () => {
     setLoading(true);
@@ -94,6 +142,13 @@ export default function FacilitatorAttendancePage() {
         return;
     }
 
+    // Validate location for physical sessions
+    if (formData.type === 'physical' && (!formData.latitude || !formData.longitude)) {
+        toast.error("Location is required for physical sessions. Please allow location access or try again.");
+        setIsSubmitting(false);
+        return;
+    }
+
     // Combine date and time into a single ISO string for startTime
     const combinedStartTime = `${formData.sessionDate}T${formData.sessionTime}:00`;
 
@@ -105,6 +160,7 @@ export default function FacilitatorAttendancePage() {
       toast.success("Session created successfully!");
       setCreateModalOpen(false);
       setFormData(initialFormState); // Reset form
+      setLocationError(null); // Reset location error
       fetchSessionsAndPrograms(); // Re-fetch all sessions
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to create session.");
@@ -239,7 +295,6 @@ export default function FacilitatorAttendancePage() {
     });
   };
 
-
   // Manual marking logic
   const handleOpenManualMarkModal = useCallback(async (session: ClassSession) => {
     setSelectedSessionForManualMark(session);
@@ -334,6 +389,15 @@ export default function FacilitatorAttendancePage() {
         radius: session.location?.radius
     });
     setEditModalOpen(true);
+  };
+
+  // NEW: Reset form and location error when create modal is closed
+  const handleCreateModalClose = (open: boolean) => {
+    setCreateModalOpen(open);
+    if (!open) {
+      setFormData(initialFormState);
+      setLocationError(null);
+    }
   };
 
   const activeOrScheduledSessions = useMemo(() => sessions.filter(s => s.status === 'active' || s.status === 'scheduled'), [sessions]);
@@ -487,90 +551,336 @@ export default function FacilitatorAttendancePage() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-        <DialogContent>
-            <DialogHeader><DialogTitle>Create New Session</DialogTitle></DialogHeader>
-            <form onSubmit={handleCreateSession} className="space-y-4 py-4">
-                 <div className="space-y-2"><Label>Session Type</Label><Select value={formData.type} onValueChange={(v) => setFormData(f => ({...f, type: v as any}))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="online">Online</SelectItem><SelectItem value="physical">Physical</SelectItem></SelectContent></Select></div>
-                 <div className="space-y-2"><Label>Program</Label><Select value={formData.programId} onValueChange={(v) => setFormData(f => ({...f, programId: v}))}><SelectTrigger><SelectValue placeholder="Select program"/></SelectTrigger><SelectContent>{programs.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-                 <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData(f => ({...f, title: e.target.value}))} required/></div>
-                 <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData(f => ({...f, description: e.target.value}))} /></div>
-                 
-                 {/* Date and Time Pickers */}
-                 <div className="grid grid-cols-2 gap-4">
-                     <div className="space-y-2">
-                         <Label>Session Date</Label>
-                         <Input type="date" value={formData.sessionDate} onChange={(e) => setFormData(f => ({...f, sessionDate: e.target.value}))} required />
-                     </div>
-                     <div className="space-y-2">
-                         <Label>Session Time</Label>
-                         <Input type="time" value={formData.sessionTime} onChange={(e) => setFormData(f => ({...f, sessionTime: e.target.value}))} required />
-                     </div>
-                 </div>
-                 {formData.type === 'physical' && (
-                     <div className="grid grid-cols-2 gap-4">
-                         <div className="space-y-2">
-                             <Label>Latitude</Label>
-                             <Input type="number" step="any" value={formData.latitude ?? ''} onChange={(e) => setFormData(f => ({...f, latitude: parseFloat(e.target.value)}))} placeholder="e.g., -1.9441" />
-                         </div>
-                         <div className="space-y-2">
-                             <Label>Longitude</Label>
-                             <Input type="number" step="any" value={formData.longitude ?? ''} onChange={(e) => setFormData(f => ({...f, longitude: parseFloat(e.target.value)}))} placeholder="e.g., 30.0619" />
-                         </div>
-                         <div className="space-y-2 col-span-2">
-                             <Label>Location Radius (meters)</Label>
-                             <Input type="number" value={formData.radius ?? 50} onChange={(e) => setFormData(f => ({...f, radius: parseInt(e.target.value)}))} placeholder="Default: 50" />
-                         </div>
-                     </div>
-                 )}
+      {/* UPDATED: Create Session Modal with scrollable content and auto location */}
+      <Dialog open={isCreateModalOpen} onOpenChange={handleCreateModalClose}>
+        <DialogContent className="max-h-[90vh] flex flex-col">
+            <DialogHeader>
+                <DialogTitle>Create New Session</DialogTitle>
+                <DialogDescription>
+                    Create a new training session for your students.
+                </DialogDescription>
+            </DialogHeader>
+            
+            {/* Scrollable form content */}
+            <div className="flex-1 overflow-y-auto py-4">
+                <form onSubmit={handleCreateSession} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Session Type</Label>
+                        <Select value={formData.type} onValueChange={(v) => setFormData(f => ({...f, type: v as any}))}>
+                            <SelectTrigger>
+                                <SelectValue/>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="online">Online</SelectItem>
+                                <SelectItem value="physical">Physical</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label>Program</Label>
+                        <Select value={formData.programId} onValueChange={(v) => setFormData(f => ({...f, programId: v}))}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select program"/>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {programs.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label>Title</Label>
+                        <Input 
+                            value={formData.title} 
+                            onChange={(e) => setFormData(f => ({...f, title: e.target.value}))} 
+                            placeholder="Enter session title"
+                            required
+                        />
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label>Description</Label>
+                        <Textarea 
+                            value={formData.description} 
+                            onChange={(e) => setFormData(f => ({...f, description: e.target.value}))}
+                            placeholder="Enter session description (optional)"
+                        />
+                    </div>
+                    
+                    {/* Date and Time Pickers */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Session Date</Label>
+                            <Input 
+                                type="date" 
+                                value={formData.sessionDate} 
+                                onChange={(e) => setFormData(f => ({...f, sessionDate: e.target.value}))} 
+                                required 
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Session Time</Label>
+                            <Input 
+                                type="time" 
+                                value={formData.sessionTime} 
+                                onChange={(e) => setFormData(f => ({...f, sessionTime: e.target.value}))} 
+                                required 
+                            />
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label>Duration (minutes)</Label>
+                        <Input 
+                            type="number" 
+                            value={formData.duration} 
+                            onChange={(e) => setFormData(f => ({...f, duration: parseInt(e.target.value)}))} 
+                            min="15"
+                            step="15"
+                            required
+                        />
+                    </div>
+                    
+                    {/* Location section for physical sessions */}
+                    {formData.type === 'physical' && (
+                        <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <Label className="text-base font-medium">Session Location</Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Location will be automatically detected from your device
+                                    </p>
+                                </div>
+                                <Button 
+                                    type="button"
+                                    variant="outline" 
+                                    size="sm"
+                                    onClick={getCurrentLocation}
+                                    disabled={isGettingLocation}
+                                >
+                                    {isGettingLocation ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <MapPin className="mr-2 h-4 w-4" />
+                                    )}
+                                    {isGettingLocation ? 'Getting Location...' : 'Update Location'}
+                                </Button>
+                            </div>
+                            
+                            {/* Location status display */}
+                            {formData.latitude && formData.longitude ? (
+                                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                                    <div className="flex items-center gap-2 text-green-800">
+                                        <MapPin className="h-4 w-4" />
+                                        <span className="text-sm font-medium">Location captured</span>
+                                    </div>
+                                    <p className="text-xs text-green-600 mt-1">
+                                        Lat: {formData.latitude.toFixed(6)}, Lng: {formData.longitude.toFixed(6)}
+                                    </p>
+                                </div>
+                            ) : locationError ? (
+                                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                                    <div className="flex items-center gap-2 text-red-800">
+                                        <MapPin className="h-4 w-4" />
+                                        <span className="text-sm font-medium">Location Error</span>
+                                    </div>
+                                    <p className="text-xs text-red-600 mt-1">{locationError}</p>
+                                </div>
+                            ) : (
+                                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                                    <div className="flex items-center gap-2 text-yellow-800">
+                                        <MapPin className="h-4 w-4" />
+                                        <span className="text-sm font-medium">Location required</span>
+                                    </div>
+                                    <p className="text-xs text-yellow-600 mt-1">
+                                        Please allow location access to create a physical session
+                                    </p>
+                                </div>
+                            )}
+                            
+                            <div className="space-y-2">
+                                <Label>Location Radius (meters)</Label>
+                                <Input 
+                                    type="number" 
+                                    value={formData.radius ?? 50} 
+                                    onChange={(e) => setFormData(f => ({...f, radius: parseInt(e.target.value)}))} 
+                                    placeholder="Default: 50"
+                                    min="10"
+                                    max="1000"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Students must be within this radius to mark attendance
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
-                 <div className="space-y-2"><Label>Duration (minutes)</Label><Input type="number" value={formData.duration} onChange={(e) => setFormData(f => ({...f, duration: parseInt(e.target.value)}))} required/></div>
-                 <DialogFooter><Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>Cancel</Button><Button type="submit" disabled={!!isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Create Session</Button></DialogFooter>
-            </form>
+                    {/* Form buttons moved outside of scrollable area */}
+                </form>
+            </div>
+            
+            <DialogFooter className="pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => handleCreateModalClose(false)}>
+                    Cancel
+                </Button>
+                <Button 
+                    onClick={handleCreateSession} 
+                    disabled={!!isSubmitting || (formData.type === 'physical' && (!formData.latitude || !formData.longitude))}
+                >
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    Create Session
+                </Button>
+            </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* NEW: Edit Session Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent>
-            <DialogHeader><DialogTitle>Edit Session: {editingSession?.title}</DialogTitle></DialogHeader>
-            <form onSubmit={handleUpdateSession} className="space-y-4 py-4">
-                 <div className="space-y-2"><Label>Session Type</Label><Select value={formData.type} onValueChange={(v) => setFormData(f => ({...f, type: v as any}))} disabled><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="online">Online</SelectItem><SelectItem value="physical">Physical</SelectItem></SelectContent></Select></div>
-                 <div className="space-y-2"><Label>Program</Label><Select value={formData.programId} onValueChange={(v) => setFormData(f => ({...f, programId: v}))} disabled><SelectTrigger><SelectValue placeholder="Select program"/></SelectTrigger><SelectContent>{programs.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}</SelectContent></Select></div>
-                 <div className="space-y-2"><Label>Title</Label><Input value={formData.title} onChange={(e) => setFormData(f => ({...f, title: e.target.value}))} required/></div>
-                 <div className="space-y-2"><Label>Description</Label><Textarea value={formData.description} onChange={(e) => setFormData(f => ({...f, description: e.target.value}))} /></div>
-                 
-                 {/* Date and Time Pickers */}
-                 <div className="grid grid-cols-2 gap-4">
-                     <div className="space-y-2">
-                         <Label>Session Date</Label>
-                         <Input type="date" value={formData.sessionDate} onChange={(e) => setFormData(f => ({...f, sessionDate: e.target.value}))} required />
-                     </div>
-                     <div className="space-y-2">
-                         <Label>Session Time</Label>
-                         <Input type="time" value={formData.sessionTime} onChange={(e) => setFormData(f => ({...f, sessionTime: e.target.value}))} required />
-                     </div>
-                 </div>
-                 {formData.type === 'physical' && (
-                     <div className="grid grid-cols-2 gap-4">
-                         <div className="space-y-2">
-                             <Label>Latitude</Label>
-                             <Input type="number" step="any" value={formData.latitude ?? ''} onChange={(e) => setFormData(f => ({...f, latitude: parseFloat(e.target.value)}))} placeholder="e.g., -1.9441" />
-                         </div>
-                         <div className="space-y-2">
-                             <Label>Longitude</Label>
-                             <Input type="number" step="any" value={formData.longitude ?? ''} onChange={(e) => setFormData(f => ({...f, longitude: parseFloat(e.target.value)}))} placeholder="e.g., 30.0619" />
-                         </div>
-                         <div className="space-y-2 col-span-2">
-                             <Label>Location Radius (meters)</Label>
-                             <Input type="number" value={formData.radius ?? 50} onChange={(e) => setFormData(f => ({...f, radius: parseInt(e.target.value)}))} placeholder="Default: 50" />
-                         </div>
-                     </div>
-                 )}
-
-                 <div className="space-y-2"><Label>Duration (minutes)</Label><Input type="number" value={formData.duration} onChange={(e) => setFormData(f => ({...f, duration: parseInt(e.target.value)}))} required/></div>
-                 <DialogFooter><Button type="button" variant="outline" onClick={() => setEditModalOpen(false)}>Cancel</Button><Button type="submit" disabled={!!isSubmitting}>{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Save Changes</Button></DialogFooter>
-            </form>
+        <DialogContent className="max-h-[90vh] flex flex-col">
+            <DialogHeader>
+                <DialogTitle>Edit Session: {editingSession?.title}</DialogTitle>
+                <DialogDescription>
+                    Update session details. Note: Session type and program cannot be changed.
+                </DialogDescription>
+            </DialogHeader>
+            
+            {/* Scrollable form content */}
+            <div className="flex-1 overflow-y-auto py-4">
+                <form onSubmit={handleUpdateSession} className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Session Type</Label>
+                        <Select value={formData.type} onValueChange={(v) => setFormData(f => ({...f, type: v as any}))} disabled>
+                            <SelectTrigger>
+                                <SelectValue/>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="online">Online</SelectItem>
+                                <SelectItem value="physical">Physical</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label>Program</Label>
+                        <Select value={formData.programId} onValueChange={(v) => setFormData(f => ({...f, programId: v}))} disabled>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select program"/>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {programs.map(p => <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label>Title</Label>
+                        <Input 
+                            value={formData.title} 
+                            onChange={(e) => setFormData(f => ({...f, title: e.target.value}))} 
+                            required
+                        />
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label>Description</Label>
+                        <Textarea 
+                            value={formData.description} 
+                            onChange={(e) => setFormData(f => ({...f, description: e.target.value}))} 
+                        />
+                    </div>
+                    
+                    {/* Date and Time Pickers */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Session Date</Label>
+                            <Input 
+                                type="date" 
+                                value={formData.sessionDate} 
+                                onChange={(e) => setFormData(f => ({...f, sessionDate: e.target.value}))} 
+                                required 
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Session Time</Label>
+                            <Input 
+                                type="time" 
+                                value={formData.sessionTime} 
+                                onChange={(e) => setFormData(f => ({...f, sessionTime: e.target.value}))} 
+                                required 
+                            />
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        <Label>Duration (minutes)</Label>
+                        <Input 
+                            type="number" 
+                            value={formData.duration} 
+                            onChange={(e) => setFormData(f => ({...f, duration: parseInt(e.target.value)}))} 
+                            required
+                        />
+                    </div>
+                    
+                    {/* Location section for physical sessions in edit mode */}
+                    {formData.type === 'physical' && (
+                        <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <Label className="text-base font-medium">Session Location</Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Current session location (cannot be changed)
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {formData.latitude && formData.longitude ? (
+                                <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                    <div className="flex items-center gap-2 text-blue-800">
+                                        <MapPin className="h-4 w-4" />
+                                        <span className="text-sm font-medium">Current location</span>
+                                    </div>
+                                    <p className="text-xs text-blue-600 mt-1">
+                                        Lat: {formData.latitude.toFixed(6)}, Lng: {formData.longitude.toFixed(6)}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                                    <p className="text-sm text-gray-600">No location data available</p>
+                                </div>
+                            )}
+                            
+                            <div className="space-y-2">
+                                <Label>Location Radius (meters)</Label>
+                                <Input 
+                                    type="number" 
+                                    value={formData.radius ?? 50} 
+                                    onChange={(e) => setFormData(f => ({...f, radius: parseInt(e.target.value)}))} 
+                                    placeholder="Default: 50"
+                                    min="10"
+                                    max="1000"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Students must be within this radius to mark attendance
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </form>
+            </div>
+            
+            <DialogFooter className="pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => setEditModalOpen(false)}>
+                    Cancel
+                </Button>
+                <Button 
+                    onClick={handleUpdateSession} 
+                    disabled={!!isSubmitting}
+                >
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    Save Changes
+                </Button>
+            </DialogFooter>
         </DialogContent>
       </Dialog>
       {/* END NEW: Edit Session Modal */}
