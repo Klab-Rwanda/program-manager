@@ -420,20 +420,21 @@ const getSessionAttendance = asyncHandler(async (req, res) => {
 
     // Prepare a comprehensive list of all trainees and their status for this session
     const detailedAttendance = populatedTrainees.map(trainee => {
-        const record = attendanceMap.get(trainee._id.toString());
-        return {
-            trainee: {
-                _id: trainee._id,
-                name: trainee.name,
-                email: trainee.email
-            },
-            status: record ? record.status : 'Absent', // Default to 'Absent' if no record
-            method: record ? record.method : 'N/A',
-            timestamp: record ? record.timestamp : null,
-            reason: record ? record.reason : null,
-            markedBy: record?.markedBy ? record.markedBy.name : (record?.method === 'qr_code' || record?.method === 'geolocation' ? 'Self' : 'N/A')
-        };
-    });
+    const record = attendanceMap.get(trainee._id.toString());
+    return {
+        _id: record?._id || new mongoose.Types.ObjectId(), // Add an _id for the table key
+        userId: {  // ✅ Change 'trainee' to 'userId'
+            _id: trainee._id,
+            name: trainee.name,
+            email: trainee.email
+        },
+        status: record ? record.status : 'Absent',
+        method: record ? record.method : 'N/A',
+        timestamp: record ? record.timestamp : null,
+        reason: record ? record.reason : null,
+        markedBy: record?.markedBy ? record.markedBy.name : (record?.method === 'qr_code' || record?.method === 'geolocation' ? 'Self' : 'N/A')
+    };
+});
 
 
     return res.status(200).json(new ApiResponse(200, { session, attendance: detailedAttendance }, "Attendance report retrieved successfully."));
