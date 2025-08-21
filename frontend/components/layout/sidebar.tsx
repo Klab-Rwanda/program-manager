@@ -30,7 +30,7 @@ const menuItems = [
    
     // Super Admin
     { title: "User Management", url: "/dashboard/SuperAdmin/user-management", icon: Users, roles: ['super_admin'] },
-    { title: "Program Approval", url: "/dashboard/SuperAdmin/program-approval", icon: TicketCheck, roles: ['super_admin'] },
+    { title: "Program Management", url: "/dashboard/SuperAdmin/program-approval", icon: TicketCheck, roles: ['super_admin'] },
     { title: "Master Log", url: "/dashboard/SuperAdmin/master-log", icon: Activity, roles: ['super_admin'] },
     { title: "Reports & Export", url: "/dashboard/SuperAdmin/reports-export", icon: BarChart3, roles: ['super_admin'] },
     { title: "System Monitoring", url: "/dashboard/SuperAdmin/system-monitoring", icon: Activity, roles: [ 'it_support'] },

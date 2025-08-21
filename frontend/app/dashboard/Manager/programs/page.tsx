@@ -3,7 +3,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Plus,
   Search,
   Edit,
   Trash2,
@@ -11,9 +10,7 @@ import {
   Users,
   CheckCircle,
   Clock,
-  AlertTriangle,
   Award,
-  Send,
   XCircle,
   Calendar,
   BookOpen,
@@ -21,20 +18,19 @@ import {
   Archive,
   Download,
   FileText,
-  RefreshCw, // Added for reactivate button icon
-  ClipboardCheck, // Added for Mark as Complete button icon
+  RefreshCw,
+  ClipboardCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { 
   Program, 
   getAllPrograms, 
-  createProgram, 
   updateProgram, 
   deleteProgram, 
-  requestApproval, 
   enrollFacilitator, 
   enrollTrainee,
-  reactivateProgram, // Import reactivate service
-  markProgramAsCompleted // Import mark complete service
+  reactivateProgram,
+  markProgramAsCompleted
 } from "@/lib/services/program.service";
 import { archiveProgram } from "@/lib/services/archive.service";
 import { exportProgramsPDF, exportProgramsExcel, downloadBlob } from "@/lib/services/export.service";
@@ -68,7 +64,6 @@ const ProgramsPage: React.FC = () => {
   const [sortBy, setSortBy] = useState("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -77,20 +72,14 @@ const ProgramsPage: React.FC = () => {
   const [previewingProgram, setPreviewingProgram] = useState<Program | null>(null);
   const [facilitators, setFacilitators] = useState<User[]>([]);
   const [trainees, setTrainees] = useState<User[]>([]);
-  const [selectedFacilitator, setSelectedFacilitator] = useState<string>("");
-  const [selectedTrainee, setSelectedTrainee] = useState<string>("");
   const [assignLoading, setAssignLoading] = useState(false);
   const [selectedFacilitators, setSelectedFacilitators] = useState<string[]>([]);
   const [selectedTrainees, setSelectedTrainees] = useState<string[]>([]);
 
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
-  const [newProgram, setNewProgram] = useState({
-    name: "",
-    description: "",
-    startDate: "",
-    endDate: "",
-  });
+  const [newProgram, setNewProgram] = useState<{ name: string; description: string; startDate: string; endDate: string }>({ name: "", description: "", startDate: "", endDate: "" });
+  // ...existing code...
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,16 +90,19 @@ const ProgramsPage: React.FC = () => {
   const [showReactivateModal, setShowReactivateModal] = useState(false);
   const [programToReactivate, setProgramToReactivate] = useState<Program | null>(null);
   const [newReactivateEndDate, setNewReactivateEndDate] = useState<string>('');
-  const [isProcessingProgramAction, setIsProcessingProgramAction] = useState<string | null>(null); // For any program-specific loading state (reactivate, complete)
+  const [isProcessingProgramAction, setIsProcessingProgramAction] = useState<string | null>(null);
   // --- End states for program actions ---
-
 
   const fetchPrograms = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await getAllPrograms();
-      setPrograms(data);
+      // Filter to only show programs assigned to this program manager
+      const assignedPrograms = data.filter(program => 
+        program.programManager && program.programManager._id === user?._id
+      );
+      setPrograms(assignedPrograms);
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to load programs.");
       toast.error(err.response?.data?.message || "Failed to load programs.");
@@ -118,10 +110,10 @@ const ProgramsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?._id]);
 
   useEffect(() => {
-    if (!isAuthenticated || (role !== 'program_manager' && role !== 'super_admin')) {
+    if (!isAuthenticated || role !== 'program_manager') {
       setLoading(false);
       return;
     }
@@ -202,32 +194,6 @@ const ProgramsPage: React.FC = () => {
     }
   });
 
-  const handleCreateProgram = async () => {
-    if (!newProgram.name || !newProgram.description || !newProgram.startDate || !newProgram.endDate) {
-      toast.error("Please fill in all required fields.");
-      return;
-    }
-    if (new Date(newProgram.startDate) > new Date(newProgram.endDate)) {
-        toast.error("Start date cannot be after end date.");
-        return;
-    }
-
-    setLoading(true);
-    try {
-      const createdProgram = await createProgram(newProgram);
-      setPrograms((prev) => [...prev, createdProgram]);
-      setNewProgram({ name: "", description: "", startDate: "", endDate: "" });
-      setShowCreateModal(false);
-      toast.success("Program created successfully!");
-      await refreshCounts();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to create program.");
-      console.error("Error creating program:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleEditProgram = async () => {
     if (!selectedProgram || !newProgram.name || !newProgram.description || !newProgram.startDate || !newProgram.endDate) {
       toast.error("Please fill in all required fields.");
@@ -280,20 +246,6 @@ const ProgramsPage: React.FC = () => {
     }
   };
 
-  const handleRequestApproval = async (program: Program) => {
-    setLoading(true);
-    try {
-      await requestApproval(program._id);
-      toast.success("Program submitted for approval!");
-      fetchPrograms();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to submit for approval.");
-      console.error("Error requesting approval:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleArchive = async (program: Program) => {
     if (!confirm(`Are you sure you want to archive "${program.name}"?`)) {
       return;
@@ -325,7 +277,7 @@ const ProgramsPage: React.FC = () => {
       
       const filename = `programs-report-${new Date().toISOString().split('T')[0]}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
       downloadBlob(blob, filename);
-      toast.success(`Exported all programs as ${format.toUpperCase()}.`);
+      toast.success(`Exported programs as ${format.toUpperCase()}.`);
       setShowExportModal(false);
     } catch (err: any) {
       toast.error(err.response?.data?.message || `Failed to export as ${format.toUpperCase()}.`);
@@ -369,6 +321,7 @@ const ProgramsPage: React.FC = () => {
       setSelectedFacilitators([]);
     }
   };
+
   const handleAssignTrainees = async () => {
     if (!assigningProgram || selectedTrainees.length === 0) return;
     setAssignLoading(true);
@@ -387,7 +340,7 @@ const ProgramsPage: React.FC = () => {
   const openPreviewModal = async (program: Program) => {
     try {
       const response = await api.get(`/programs/${program._id}`);
-      setPreviewingProgram(response.data.data); // Use the fully populated program
+      setPreviewingProgram(response.data.data);
       setShowPreviewModal(true);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to load program details.');
@@ -397,7 +350,6 @@ const ProgramsPage: React.FC = () => {
   // --- Reactivate Program Logic ---
   const handleOpenReactivateModal = (program: Program) => {
       setProgramToReactivate(program);
-      // Pre-fill with a date one month from now
       const defaultEndDate = new Date();
       defaultEndDate.setMonth(defaultEndDate.getMonth() + 1);
       setNewReactivateEndDate(defaultEndDate.toISOString().split('T')[0]);
@@ -414,22 +366,21 @@ const ProgramsPage: React.FC = () => {
           return;
       }
 
-      setIsProcessingProgramAction(programToReactivate._id); // Set loading for this specific program
+      setIsProcessingProgramAction(programToReactivate._id);
       try {
           await reactivateProgram(programToReactivate._id, newReactivateEndDate);
           toast.success(`Program "${programToReactivate.name}" reactivated successfully!`);
           setShowReactivateModal(false);
           setProgramToReactivate(null);
           setNewReactivateEndDate('');
-          fetchPrograms(); // Re-fetch the list to update UI
+          fetchPrograms();
       } catch (err: any) {
           toast.error(err.response?.data?.message || "Failed to reactivate program.");
           console.error("Error reactivating program:", err);
       } finally {
-          setIsProcessingProgramAction(null); // Clear loading state
+          setIsProcessingProgramAction(null);
       }
   };
-  // --- End Reactivate Program Logic ---
 
   // --- Mark Program as Complete Logic ---
   const handleMarkAsComplete = async (program: Program) => {
@@ -437,28 +388,24 @@ const ProgramsPage: React.FC = () => {
         return;
     }
 
-    setIsProcessingProgramAction(program._id); // Set loading for this specific program
+    setIsProcessingProgramAction(program._id);
     try {
         await markProgramAsCompleted(program._id);
         toast.success(`Program "${program.name}" marked as completed!`);
-        fetchPrograms(); // Re-fetch the list to update UI
+        fetchPrograms();
     } catch (err: any) {
         toast.error(err.response?.data?.message || "Failed to mark program as complete.");
         console.error("Error marking program as complete:", err);
     } finally {
-        setIsProcessingProgramAction(null); // Clear loading state
+        setIsProcessingProgramAction(null);
     }
   };
-  // --- End Mark Program as Complete Logic ---
-
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case "active": return "bg-green-100 text-green-800";
       case "draft": return "bg-gray-100 text-gray-800";
-      case "pendingapproval": return "bg-yellow-100 text-yellow-800";
       case "completed": return "bg-blue-100 text-blue-800";
-      case "rejected": return "bg-red-100 text-red-800";
       default: return "bg-gray-100 text-gray-800";
     }
   };
@@ -467,14 +414,12 @@ const ProgramsPage: React.FC = () => {
     switch (status.toLowerCase()) {
       case "active": return <CheckCircle className="h-4 w-4" />;
       case "draft": return <Clock className="h-4 w-4" />;
-      case "pendingapproval": return <AlertTriangle className="h-4 w-4" />;
       case "completed": return <Award className="h-4 w-4" />;
-      case "rejected": return <XCircle className="h-4 w-4" />;
       default: return <Clock className="h-4 w-4" />;
     }
   };
 
-  if (isAuthenticated && (role !== 'program_manager' && role !== 'super_admin') && !loading) {
+  if (isAuthenticated && role !== 'program_manager' && !loading) {
     return (
         <Card>
             <CardHeader><CardTitle>Access Denied</CardTitle></CardHeader>
@@ -510,28 +455,19 @@ const ProgramsPage: React.FC = () => {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Programs</h1>
-          <p className="text-gray-600">Manage your training programs</p>
+          <h1 className="text-2xl font-bold text-gray-900">My Assigned Programs</h1>
+          <p className="text-gray-600">Manage programs assigned to you</p>
         </div>
-        {(role === 'program_manager' || role === 'super_admin') && (
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setShowExportModal(true)}
-              disabled={exporting || programs.length === 0}
-              className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-200 transition-colors disabled:opacity-50"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              {exporting ? "Exporting..." : "Export"}
-            </button>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="bg-[#1f497d] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#1a3f6b] transition-colors"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Create Program
-            </button>
-          </div>
-        )}
+        <div className="flex space-x-2">
+          <button
+            onClick={() => setShowExportModal(true)}
+            disabled={exporting || programs.length === 0}
+            className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-200 transition-colors disabled:opacity-50"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {exporting ? "Exporting..." : "Export"}
+          </button>
+        </div>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
@@ -557,10 +493,8 @@ const ProgramsPage: React.FC = () => {
               >
                 <option value="all">All Status</option>
                 <option value="draft">Draft</option>
-                <option value="pendingapproval">Pending Approval</option>
                 <option value="active">Active</option>
                 <option value="completed">Completed</option>
-                <option value="rejected">Rejected</option>
               </select>
           </div>
           
@@ -670,11 +604,11 @@ const ProgramsPage: React.FC = () => {
         {sortedPrograms.length === 0 ? (
           <div className="col-span-full text-center py-12">
             <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No programs found</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No programs assigned</h3>
             <p className="text-gray-600">
               {searchTerm || filterStatus !== "all" || filterDate !== "all" || filterManager !== "all"
                 ? "No programs match your current filters."
-                : "Create your first program to get started."}
+                : "You have no programs assigned to you yet. Contact your administrator to get programs assigned."}
             </p>
           </div>
         ) : (
@@ -704,8 +638,8 @@ const ProgramsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2"> {/* This container handles wrapping */}
-                <button
+              <div className="flex flex-wrap gap-2">
+                {/* <button
                   onClick={() => {
                     setSelectedProgram(program);
                     setNewProgram({
@@ -720,7 +654,7 @@ const ProgramsPage: React.FC = () => {
                 >
                   <Edit className="h-4 w-4 flex-shrink-0" />
                   <span>Edit</span>
-                </button>
+                  </button> */}
                 <button
                   onClick={() => {
                     setSelectedProgram(program);
@@ -738,30 +672,21 @@ const ProgramsPage: React.FC = () => {
                   <Archive className="h-4 w-4 flex-shrink-0" />
                   <span>Archive</span>
                 </button>
-                {(program.status === 'Draft' || program.status === 'Rejected') && (
-                  <button
-                    onClick={() => handleRequestApproval(program)}
-                    className="flex items-center justify-center gap-1 min-w-[90px] px-3 py-2 rounded-lg text-sm bg-[#1f497d] text-white hover:bg-[#1a3f6b] transition-colors"
-                  >
-                    <Send className="h-4 w-4 flex-shrink-0" />
-                    <span>Submit</span>
-                  </button>
-                )}
-                {program.status === 'Active' && ( // Mark as Complete button for Active programs
+                {program.status === 'Active' && (
                     <button
                         onClick={() => handleMarkAsComplete(program)}
                         className="flex items-center justify-center gap-1 min-w-[120px] px-3 py-2 rounded-lg text-sm bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
-                        disabled={isProcessingProgramAction === program._id} // Disable if this program is being processed
+                        disabled={isProcessingProgramAction === program._id}
                     >
                         {isProcessingProgramAction === program._id ? <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" /> : <ClipboardCheck className="h-4 w-4 flex-shrink-0" />}
                         <span>{isProcessingProgramAction === program._id ? "Completing..." : "Complete"}</span>
                     </button>
                 )}
-                {program.status === 'Completed' && ( // Reactivate button for Completed programs
+                {program.status === 'Completed' && (
                     <button
                         onClick={() => handleOpenReactivateModal(program)}
                         className="flex items-center justify-center gap-1 min-w-[120px] px-3 py-2 rounded-lg text-sm bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
-                        disabled={isProcessingProgramAction === program._id} // Disable if this program is being processed
+                        disabled={isProcessingProgramAction === program._id}
                     >
                         {isProcessingProgramAction === program._id ? <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" /> : <RefreshCw className="h-4 w-4 flex-shrink-0" />}
                         <span>{isProcessingProgramAction === program._id ? "Reactivating..." : "Reactivate"}</span>
@@ -787,117 +712,8 @@ const ProgramsPage: React.FC = () => {
         )}
       </div>
 
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowCreateModal(false)}>
-          <div className="bg-white rounded-lg p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-bold mb-4">Create New Program</h2>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              handleCreateProgram();
-            }}>
-              <div className="space-y-4">
-                <input
-                  type="text"
-                  placeholder="Program Name"
-                  value={newProgram.name}
-                  onChange={(e) => setNewProgram({ ...newProgram, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1f497d] focus:border-transparent"
-                  required
-                />
-                <textarea
-                  placeholder="Description"
-                  value={newProgram.description}
-                  onChange={(e) => setNewProgram({ ...newProgram, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1f497d] focus:border-transparent"
-                  rows={3}
-                  required
-                />
-                <input
-                  type="date"
-                  value={newProgram.startDate}
-                  onChange={(e) => setNewProgram({ ...newProgram, startDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1f497d] focus:border-transparent"
-                  required
-                />
-                <input
-                  type="date"
-                  value={newProgram.endDate}
-                  onChange={(e) => setNewProgram({ ...newProgram, endDate: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#1f497d] focus:border-transparent"
-                  required
-                />
-              </div>
-              <div className="flex gap-2 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-[#1f497d] text-white rounded-lg hover:bg-[#1a3f6b] transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1f497d] focus:ring-opacity-50"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {showEditModal && selectedProgram && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Edit Program</h2>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Program Name"
-                value={newProgram.name}
-                onChange={(e) => setNewProgram({ ...newProgram, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              />
-              <textarea
-                placeholder="Description"
-                value={newProgram.description}
-                onChange={(e) => setNewProgram({ ...newProgram, description: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                rows={3}
-              />
-              <input
-                type="date"
-                value={newProgram.startDate}
-                onChange={(e) => setNewProgram({ ...newProgram, startDate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              />
-              <input
-                type="date"
-                value={newProgram.endDate}
-                onChange={(e) => setNewProgram({ ...newProgram, endDate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              />
-            </div>
-            <div className="flex gap-2 mt-6">
-              <button
-                type="button"
-                onClick={() => { setShowEditModal(false); setSelectedProgram(null); }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                onClick={handleEditProgram}
-                className="flex-1 px-4 py-2 bg-[#1f497d] text-white rounded-lg hover:bg-[#1a3f6b] transition-colors"
-              >
-                Update
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+  {/* Removed create program modal and related state for Program Manager */}
 
       {showDeleteModal && selectedProgram && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
