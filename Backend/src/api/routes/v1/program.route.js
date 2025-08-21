@@ -34,12 +34,14 @@ router.route('/:id/reject').patch(checkRole(['SuperAdmin']), programController.r
     
 
 router.route('/:id/enroll-trainee').post(checkRole(['Program Manager']), programController.enrollTrainee);
+router.route('/:id/unenroll-facilitator').post(checkRole(['Program Manager']), programController.unenrollFacilitator);
 
 
 router.route('/:id/enroll-facilitator').post(checkRole(['Program Manager']), programController.enrollFacilitator);
 
 
 router.route('/:id/manage-managers').patch(checkRole(['SuperAdmin']), programController.updateProgramManagers);
+router.route('/:id/unenroll-trainee').post(checkRole(['Program Manager']), programController.unenrollTrainee); 
 
 
 

@@ -1,14 +1,44 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Text, Card, Button, useTheme } from 'react-native-paper';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  View, 
+  StyleSheet, 
+  ScrollView, 
+  RefreshControl, 
+  Alert,
+  Dimensions 
+} from 'react-native';
+import { 
+  Text, 
+  Card, 
+  Button, 
+  useTheme, 
+  ActivityIndicator,
+  Chip,
+  Surface,
+  Dialog,
+  Portal,
+  ProgressBar,
+} from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+
+// Import services
+import { programService } from '../../services/program.service';
+import { Program } from '../../types';
+import ModernHeader from '../../components/ModernHeader';
 
 export default function ProgramsScreen() {
   const theme = useTheme();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {/* Header */}
+      <ModernHeader
+        title="My Programs"
+        subtitle="Manage your programs and track progress"
+        icon="school"
+        gradient={true}
+      />
       <View style={styles.content}>
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={2}>
           <Card.Content style={styles.cardContent}>

@@ -7,6 +7,8 @@ import { createLog } from "../../services/log.service.js";
 import jwt from "jsonwebtoken";
 import bcrypt from 'bcryptjs';
 import { createNotification } from "../../services/notification.service.js";
+import xlsx from 'xlsx'; // NEW: Import xlsx
+import fs from 'fs/promises'; // NEW: Import fs.promises for file cleanup
 
 const registerUser = asyncHandler(async (req, res) => {
   const { name, email, role } = req.body;
@@ -55,7 +57,6 @@ const registerUser = asyncHandler(async (req, res) => {
 
     const superAdmins = await User.find({ role: 'SuperAdmin' });
     for (const admin of superAdmins) {
-        // Don't notify the admin if they are creating the user themselves
         if (admin._id.toString() !== req.user._id.toString()) {
             await createNotification({
                 recipient: admin._id,
@@ -88,6 +89,160 @@ const registerUser = asyncHandler(async (req, res) => {
       )
     );
 });
+
+
+// NEW: Bulk Register Users from Excel/CSV
+const bulkRegisterUsers = asyncHandler(async (req, res) => {
+    // Ensure file is present
+    if (!req.file) {
+        throw new ApiError(400, "Excel/CSV file is required for bulk registration.");
+    }
+
+    const { targetRole = 'Trainee' } = req.body; // Default to Trainee if not specified in form/body
+
+    // Ensure only Program Managers can register Trainees
+    if (req.user.role === "Program Manager" && targetRole !== "Trainee") {
+        throw new ApiError(403, "Forbidden: Program Managers can only bulk register Trainees.");
+    }
+    // Only SuperAdmins can register other roles via bulk upload (if you want to support bulk Fac/PM upload)
+    if (req.user.role !== "SuperAdmin" && req.user.role !== "Program Manager") {
+         throw new ApiError(403, "Forbidden: Only Program Managers or Super Admins can bulk register users.");
+    }
+
+    const filePath = req.file.path;
+    let workbook;
+    try {
+        workbook = xlsx.readFile(filePath);
+    } catch (readError) {
+        console.error("Error reading file:", readError);
+        throw new ApiError(400, "Could not read file. Ensure it's a valid Excel/CSV format.");
+    } finally {
+        // Clean up the uploaded file
+        await fs.unlink(filePath).catch(err => console.error("Failed to delete temp file:", err));
+    }
+
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    // Convert sheet to JSON, starting from 2nd row (skipping headers)
+    const jsonData = xlsx.utils.sheet_to_json(sheet, { header: 1, raw: false }); // raw: false to keep string values
+
+    if (jsonData.length < 2) { // Only header row or empty file
+        throw new ApiError(400, "File is empty or contains only headers. Please provide data.");
+    }
+
+    const headers = jsonData[0]; // Assuming first row is headers
+    const usersToRegister = jsonData.slice(1); // Actual data starts from second row
+
+    const results = {
+        totalProcessed: 0,
+        successful: 0,
+        failed: 0,
+        errors: []
+    };
+
+    const registrationPromises = usersToRegister.map(async (row, index) => {
+        results.totalProcessed++;
+        // Assuming columns are Name, Email. You might need to adjust indices.
+        // Example: If headers are ['Full Name', 'Email Address', 'Gender', 'Phone']
+        const nameIndex = headers.indexOf('Name') !== -1 ? headers.indexOf('Name') : headers.indexOf('Full Name');
+        const emailIndex = headers.indexOf('Email') !== -1 ? headers.indexOf('Email') : headers.indexOf('Email Address');
+        const genderIndex = headers.indexOf('Gender'); // Optional
+        const phoneIndex = headers.indexOf('Phone'); // Optional
+
+        const name = row[nameIndex]?.trim();
+        const email = row[emailIndex]?.trim()?.toLowerCase();
+
+        // Validate basic fields from the spreadsheet
+        if (!name || !email) {
+            results.failed++;
+            results.errors.push({ row: index + 2, message: "Missing Name or Email.", data: row });
+            return null;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            results.failed++;
+            results.errors.push({ row: index + 2, message: `Invalid email format: ${email}.`, data: row });
+            return null;
+        }
+
+        const generatedPassword = Math.random().toString(36).slice(-8);
+
+        try {
+            const existedUser = await User.findOne({ email });
+            if (existedUser) {
+                results.failed++;
+                results.errors.push({ row: index + 2, message: `User with email ${email} already exists.`, data: row });
+                return null;
+            }
+
+            const newUser = await User.create({
+                name,
+                email,
+                password: generatedPassword,
+                role: targetRole, // Assign the role from input or default
+                // You can map other fields like gender, phone if present in your User model
+                ...(genderIndex !== -1 && { gender: row[genderIndex]?.trim() }),
+                ...(phoneIndex !== -1 && { phone: row[phoneIndex]?.trim() })
+            });
+
+            // Send registration email
+            sendRegistrationEmail(email, name, generatedPassword).catch((err) =>
+                console.error(`Email failed for ${email} during bulk registration:`, err)
+            );
+
+            // Create notification for SuperAdmins (similar to single registration)
+            const superAdmins = await User.find({ role: 'SuperAdmin' });
+            for (const admin of superAdmins) {
+                // Don't notify the admin if they are creating the user themselves
+                if (admin._id.toString() !== req.user._id.toString()) {
+                    await createNotification({
+                        recipient: admin._id,
+                        sender: req.user._id,
+                        title: "New User Registered (Bulk)",
+                        message: `${req.user.name} bulk registered a new ${targetRole} account for ${name}.`,
+                        link: `/dashboard/SuperAdmin/user-management`,
+                        type: 'info'
+                    });
+                }
+            }
+            
+            // Log the action for each successful user
+            await createLog({
+                user: req.user._id,
+                action: "USER_CREATED_BULK",
+                details: `Bulk registered user: ${name} (${email}) with role ${targetRole}.`,
+                entity: { id: newUser._id, model: "User" },
+            });
+
+            results.successful++;
+            return newUser;
+        } catch (innerError) {
+            results.failed++;
+            console.error(`Error processing row ${index + 2} (${email}):`, innerError);
+            results.errors.push({
+                row: index + 2,
+                message: `Registration failed: ${innerError.message || 'Unknown error.'}`,
+                data: row
+            });
+            return null;
+        }
+    });
+
+    await Promise.allSettled(registrationPromises); // Wait for all promises to settle
+
+    let message = `Bulk registration complete: ${results.successful} successful, ${results.failed} failed.`;
+    if (results.errors.length > 0) {
+        message += ` Check errors for details.`;
+    }
+
+    return res.status(results.failed > 0 ? 202 : 201).json(
+        new ApiResponse(
+            results.failed > 0 ? 202 : 201, // 202 Accepted for partial success
+            results,
+            message
+        )
+    );
+});
+
 
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -348,5 +503,6 @@ export {
   forgotPassword, 
   updatePassword, 
   changePassword,
-  logoutUser 
+  logoutUser,
+  bulkRegisterUsers // NEW: Export bulkRegisterUsers
 };

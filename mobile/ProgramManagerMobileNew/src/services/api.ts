@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = 'http://192.168.1.65:8000/api/v1';
 
 class ApiService {
   private api: AxiosInstance;
@@ -9,7 +9,7 @@ class ApiService {
   constructor() {
     this.api = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 10000,
+      timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -23,7 +23,7 @@ class ApiService {
     this.api.interceptors.request.use(
       async (config) => {
         try {
-          const token = await AsyncStorage.getItem('authToken');
+                     const token = await AsyncStorage.getItem('accessToken');
           if (token) {
             config.headers.Authorization = `Bearer ${token}`;
           }
@@ -43,10 +43,10 @@ class ApiService {
         return response;
       },
       async (error) => {
-        if (error.response?.status === 401) {
-          // Token expired or invalid
-          await AsyncStorage.removeItem('authToken');
-          await AsyncStorage.removeItem('user');
+                 if (error.response?.status === 401) {
+           // Token expired or invalid
+           await AsyncStorage.removeItem('accessToken');
+           await AsyncStorage.removeItem('user');
           // You might want to redirect to login here
         }
         return Promise.reject(error);
@@ -57,75 +57,75 @@ class ApiService {
   // Generic request methods
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.api.get<T>(url, config);
-    return response.data;
+    return response;
   }
 
   async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.api.post<T>(url, data, config);
-    return response.data;
+    return response;
   }
 
   async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.api.put<T>(url, data, config);
-    return response.data;
+    return response;
   }
 
   async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     const response = await this.api.delete<T>(url, config);
-    return response.data;
+    return response;
   }
 
   // Auth methods
   async login(email: string, password: string) {
     const response = await this.post('/auth/login', { email, password });
-    return response;
+    return response.data;
   }
 
-  async logout() {
-    await AsyncStorage.removeItem('authToken');
-    await AsyncStorage.removeItem('user');
-  }
+     async logout() {
+     await AsyncStorage.removeItem('accessToken');
+     await AsyncStorage.removeItem('user');
+   }
 
   async getCurrentUser() {
     const response = await this.get('/auth/me');
-    return response;
+    return response.data;
   }
 
   // Program methods
   async getPrograms() {
     const response = await this.get('/programs');
-    return response;
+    return response.data;
   }
 
   async getProgramById(id: string) {
     const response = await this.get(`/programs/${id}`);
-    return response;
+    return response.data;
   }
 
   async getMyPrograms() {
-    const response = await this.get('/programs/my-programs');
-    return response;
+    const response = await this.get('/programs');
+    return response.data;
   }
 
   // Assignment methods
   async getAssignments() {
     const response = await this.get('/assignments');
-    return response;
+    return response.data;
   }
 
   async getAssignmentById(id: string) {
     const response = await this.get(`/assignments/${id}`);
-    return response;
+    return response.data;
   }
 
   async getMyAssignments() {
-    const response = await this.get('/assignments/my-assignments');
-    return response;
+    const response = await this.get('/assignments/my-available');
+    return response.data;
   }
 
   async submitAssignment(assignmentId: string, content: string) {
     const response = await this.post(`/assignments/${assignmentId}/submit`, { content });
-    return response;
+    return response.data;
   }
 
   // Attendance methods
@@ -136,56 +136,56 @@ class ApiService {
     qrCode?: string;
   }) {
     const response = await this.post('/attendance/mark', data);
-    return response;
+    return response.data;
   }
 
   async getAttendanceHistory() {
-    const response = await this.get('/attendance/history');
-    return response;
+    const response = await this.get('/attendance/my-history');
+    return response.data;
   }
 
   // Dashboard methods
   async getDashboardStats() {
     const response = await this.get('/dashboard/stats');
-    return response;
+    return response.data;
   }
 
   async getRecentActivity() {
     const response = await this.get('/dashboard/recent-activity');
-    return response;
+    return response.data;
   }
 
   // Course methods
   async getCourses() {
     const response = await this.get('/courses');
-    return response;
+    return response.data;
   }
 
   async getCourseById(id: string) {
     const response = await this.get(`/courses/${id}`);
-    return response;
+    return response.data;
   }
 
   // Roadmap methods
   async getRoadmaps() {
     const response = await this.get('/roadmaps');
-    return response;
+    return response.data;
   }
 
   async getRoadmapById(id: string) {
     const response = await this.get(`/roadmaps/${id}`);
-    return response;
+    return response.data;
   }
 
   // Notification methods
   async getNotifications() {
     const response = await this.get('/notifications');
-    return response;
+    return response.data;
   }
 
   async markNotificationAsRead(id: string) {
     const response = await this.put(`/notifications/${id}/read`);
-    return response;
+    return response.data;
   }
 
   // Profile methods
@@ -196,7 +196,7 @@ class ApiService {
     department: string;
   }>) {
     const response = await this.put('/profile', data);
-    return response;
+    return response.data;
   }
 
   async changePassword(data: {
@@ -204,7 +204,7 @@ class ApiService {
     newPassword: string;
   }) {
     const response = await this.put('/profile/change-password', data);
-    return response;
+    return response.data;
   }
 }
 

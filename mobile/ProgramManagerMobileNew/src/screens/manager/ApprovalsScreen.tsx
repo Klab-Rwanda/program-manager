@@ -1,15 +1,32 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Text, Card, Button, useTheme } from 'react-native-paper';
+import React, { useState } from 'react';
+import { View, StyleSheet, ScrollView } from 'react-native';
+import { 
+  Text, 
+  Card, 
+  Button, 
+  useTheme, 
+  Chip,
+  Surface,
+  List,
+  Divider,
+} from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+
+import ModernHeader from '../../components/ModernHeader';
 
 export default function ApprovalsScreen() {
   const theme = useTheme();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={styles.content}>
+      <ModernHeader
+        title="Approvals Center"
+        subtitle="Review and manage pending approvals"
+        icon="check-decagram"
+        gradient={true}
+      />
+      <ScrollView contentContainerStyle={styles.content}>
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={2}>
           <Card.Content style={styles.cardContent}>
             <MaterialCommunityIcons 
@@ -50,7 +67,7 @@ export default function ApprovalsScreen() {
             </View>
           </Card.Content>
         </Card>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

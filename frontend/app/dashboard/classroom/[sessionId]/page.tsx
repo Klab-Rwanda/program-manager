@@ -1,16 +1,23 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/contexts/RoleContext";
 import { useSocket } from "@/lib/hooks/useSocket";
 import { toast } from "sonner";
 import jsQR from "jsqr";
-import { QrCode, Loader2, CheckCircle2, Video, Info, LogOut, Badge } from "lucide-react";
+import { QrCode, Loader2, CheckCircle2, Video, Info, LogOut, Badge, MapPin } from "lucide-react"; // Import MapPin for geolocation
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { markQRAttendance, getSessionDetails, ClassSession } from "@/lib/services/attendance.service";
+import { 
+    markQRAttendance, 
+    markGeolocationAttendance, 
+    getSessionDetails, 
+    getAttendanceStatusForUserSession, 
+    ClassSession,
+    UserSessionAttendanceStatus 
+} from "@/lib/services/attendance.service";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,17 +48,45 @@ export default function ClassroomHubPage() {
     // Trainee-specific state
     const [isTraineeModalOpen, setTraineeModalOpen] = useState(false);
     const [traineeQrCode, setTraineeQrCode] = useState<string | null>(null);
+    const [traineeAttendanceStatus, setTraineeAttendanceStatus] = useState<UserSessionAttendanceStatus | null>(null);
 
-    // Fetch initial session details when the page loads
+    // Derived state for convenience in JSX
+    const hasMarkedAttendance = useMemo(() => {
+        return traineeAttendanceStatus && ['Present', 'Late', 'Excused'].includes(traineeAttendanceStatus.status);
+    }, [traineeAttendanceStatus]);
+
+    // Function to check if the current trainee has already marked attendance for this session
+    // This function will NOW RETURN the boolean status
+    const checkTraineeAttendanceStatus = useCallback(async () => {
+        if (!user || !sessionId) return false;
+        try {
+            const statusRecord = await getAttendanceStatusForUserSession(sessionId);
+            setTraineeAttendanceStatus(statusRecord); 
+            
+            const marked = statusRecord && ['Present', 'Late', 'Excused'].includes(statusRecord.status);
+            if (marked) {
+                // Do NOT show toast here, it's already handled by the button's disabled state
+                // This function is for internal state update, not direct user feedback on initial load
+            }
+            return marked;
+        } catch (err) {
+            console.error("Failed to fetch trainee attendance status:", err);
+            setTraineeAttendanceStatus(null);
+            return false;
+        }
+    }, [user, sessionId]);
+
     useEffect(() => {
         const fetchDetails = async () => {
             if (sessionId) {
                 try {
                     const sessionData = await getSessionDetails(sessionId);
                     setSession(sessionData.session);
-                    // Initialize the meeting link from API data if it exists
                     if (sessionData.session.meetingLink) {
                         setMeetingLink(sessionData.session.meetingLink);
+                    }
+                    if (user && role === 'trainee') {
+                        await checkTraineeAttendanceStatus(); 
                     }
                 } catch (err) {
                     toast.error("Failed to load session details.");
@@ -61,25 +96,27 @@ export default function ClassroomHubPage() {
             }
         };
         fetchDetails();
-    }, [sessionId]);
+    }, [sessionId, user, role, checkTraineeAttendanceStatus]);
 
-    // Set up all WebSocket event listeners
     useEffect(() => {
         if (!socket || !user) return;
 
-        // On connecting, announce presence to the room
         socket.emit('join_session_room', { sessionId, userId: user._id });
 
-        // Listen for when the facilitator starts an attendance check
-        const handleAttendanceStarted = ({ qrCodeImage }: { qrCodeImage: string }) => {
+        const handleAttendanceStarted = async ({ qrCodeImage }: { qrCodeImage: string }) => {
             if (role === 'trainee') {
-                setTraineeQrCode(qrCodeImage);
-                setTraineeModalOpen(true);
-                toast.info("The facilitator has started an attendance check!");
+                const alreadyMarked = await checkTraineeAttendanceStatus(); 
+                if (!alreadyMarked) {
+                    setTraineeQrCode(qrCodeImage);
+                    setTraineeModalOpen(true);
+                    toast.info("The facilitator has started an attendance check!");
+                } else {
+                    // This toast is important if the user was already marked but still saw the prompt
+                    toast.warning(`The facilitator started an attendance check, but you've already marked attendance (${traineeAttendanceStatus?.status || 'N/A'}).`);
+                }
             }
         };
 
-        // Listen for when the facilitator ends an attendance check
         const handleAttendanceEnded = () => {
             if (role === 'trainee') {
                 setTraineeModalOpen(false);
@@ -87,7 +124,6 @@ export default function ClassroomHubPage() {
             }
         };
         
-        // Listen for real-time updates to the meeting link
         const handleMeetingLinkUpdate = (link: string) => {
             setMeetingLink(link);
             if (role === 'trainee') {
@@ -95,7 +131,6 @@ export default function ClassroomHubPage() {
             }
         };
 
-        // Listen for updates to the participant list
         const handleParticipantUpdate = (participantList: any[]) => {
             setParticipants(participantList);
         };
@@ -105,16 +140,14 @@ export default function ClassroomHubPage() {
         socket.on('meeting_link_updated', handleMeetingLinkUpdate);
         socket.on('participant_list_updated', handleParticipantUpdate);
 
-        // Cleanup function to remove listeners when the component unmounts
         return () => {
             socket.off('attendance_started', handleAttendanceStarted);
             socket.off('attendance_ended', handleAttendanceEnded);
             socket.off('meeting_link_updated', handleMeetingLinkUpdate);
             socket.off('participant_list_updated', handleParticipantUpdate);
         };
-    }, [socket, role, sessionId, user]);
-    
-    // Handler for the facilitator to start attendance
+    }, [socket, role, sessionId, user, checkTraineeAttendanceStatus, traineeAttendanceStatus]);
+
     const handleStartAttendanceCheck = () => {
         if (!socket) return toast.error("Not connected to the real-time server.");
         setIsProcessing(true);
@@ -129,13 +162,11 @@ export default function ClassroomHubPage() {
         });
     };
     
-    // Handler for the facilitator to end attendance
     const handleEndAttendanceCheck = () => {
         if (socket) socket.emit('facilitator_end_attendance', { sessionId });
         setFacilitatorQrModalOpen(false);
     };
 
-    // Handler for the facilitator to share their meeting link
     const handleShareLink = () => {
         if (!socket || !meetingLink.trim()) {
             return toast.error("Please paste a valid meeting link first.");
@@ -144,21 +175,26 @@ export default function ClassroomHubPage() {
         toast.success("Meeting link has been shared with all trainees!");
     };
 
-    // Handler for the trainee to scan the QR code that appears on their screen
-    const handleScanAndMark = () => {
+    const handleScanAndMark = async () => {
+        // NEW: PRE-CHECK HERE
+        if (hasMarkedAttendance) {
+            toast.info(`You have already marked attendance for this session. Status: ${traineeAttendanceStatus?.status || 'N/A'}.`);
+            setTraineeModalOpen(false); // Close the modal if already marked
+            return; // EXIT EARLY
+        }
+
         if (!traineeQrCode) return;
         setIsProcessing(true);
-        const image = new Image();
-        image.src = traineeQrCode;
-        image.crossOrigin = "Anonymous";
-        image.onload = () => {
+        try {
+            const image = new Image();
+            image.src = traineeQrCode;
+            image.crossOrigin = "Anonymous";
+            await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; });
+
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            if(!ctx) {
-                toast.error("Browser error: Could not process image.");
-                setIsProcessing(false);
-                return;
-            }
+            if(!ctx) throw new Error("Browser error: Could not process image.");
+            
             canvas.width = image.width;
             canvas.height = image.height;
             ctx.drawImage(image, 0, 0);
@@ -166,22 +202,53 @@ export default function ClassroomHubPage() {
             const code = jsQR(imageData.data, imageData.width, imageData.height);
 
             if (code?.data) {
-                markQRAttendance(code.data)
-                    .then(() => { toast.success("Attendance marked successfully!"); setTraineeModalOpen(false); })
-                    .catch((err) => toast.error(err.response?.data?.message || "QR code verification failed."))
-                    .finally(() => setIsProcessing(false));
+                await markQRAttendance(code.data);
+                toast.success("Attendance marked successfully!");
+                setTraineeModalOpen(false);
+                await checkTraineeAttendanceStatus(); // Update status after successful marking
             } else {
-                toast.error("Could not read QR code from the received image.");
-                setIsProcessing(false);
+                throw new Error("Could not read QR code from the received image.");
             }
-        };
-        image.onerror = () => {
-            toast.error("Failed to load QR code image for scanning.");
+        } catch (err: any) {
+            // Error from backend (e.g., "You have already marked attendance...")
+            const errorMessage = err.response?.data?.message || err.message || "QR code verification failed.";
+            toast.error(errorMessage);
+            console.error("QR Scan Error:", err);
+        } finally {
             setIsProcessing(false);
         }
     };
     
-    // Loading and error states
+    const handleMarkGeolocationAttendance = async () => {
+        // NEW: PRE-CHECK HERE
+        if (hasMarkedAttendance) {
+            toast.info(`You have already marked attendance for this session. Status: ${traineeAttendanceStatus?.status || 'N/A'}.`);
+            return; // EXIT EARLY
+        }
+
+        if (!user || !sessionId) return;
+        setIsProcessing(true);
+        try {
+            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    return reject(new Error('Geolocation is not supported by your browser.'));
+                }
+                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
+            });
+
+            await markGeolocationAttendance(sessionId, position.coords.latitude, position.coords.longitude);
+            toast.success("Attendance marked successfully!");
+            await checkTraineeAttendanceStatus(); // Update status after successful marking
+        } catch (err: any) {
+            // Error from backend
+            const errorMessage = err.response?.data?.message || err.message || "Geolocation attendance failed.";
+            toast.error(errorMessage);
+            console.error("Geolocation Mark Error:", err);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     if (loading || authLoading) {
         return (
             <div className="flex h-[calc(100vh-4rem)] w-full items-center justify-center">
@@ -204,7 +271,6 @@ export default function ClassroomHubPage() {
         );
     }
     
-    // Main JSX render
     return (
         <div className="space-y-6">
             <Card>
@@ -265,8 +331,24 @@ export default function ClassroomHubPage() {
                                     <Info className="h-4 w-4" />
                                     <AlertDescription>
                                         Keep this page open. The attendance QR code will appear here automatically when the facilitator starts the check.
+                                        {hasMarkedAttendance && traineeAttendanceStatus && (
+                                            <span className="block mt-2 font-semibold text-primary">
+                                                You are already marked as {traineeAttendanceStatus.status} for this session.
+                                            </span>
+                                        )}
                                     </AlertDescription>
                                 </Alert>
+                                {session.type === 'physical' && (
+                                    <Button 
+                                        size="lg" 
+                                        className="w-full h-16 text-lg" 
+                                        onClick={handleMarkGeolocationAttendance}
+                                        disabled={isProcessing || hasMarkedAttendance}
+                                    >
+                                        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <MapPin className="mr-3 h-6 w-6"/>}
+                                        {hasMarkedAttendance ? `Attendance Marked: ${traineeAttendanceStatus?.status}` : 'Mark Geolocation Attendance'}
+                                    </Button>
+                                )}
                              </CardContent>
                         </Card>
                      )}
@@ -301,9 +383,13 @@ export default function ClassroomHubPage() {
                 <DialogContent>
                     <DialogHeader><DialogTitle>Attendance Check!</DialogTitle><DialogDescription>Scan the code below to mark your presence.</DialogDescription></DialogHeader>
                     <div className="flex justify-center p-4 min-h-[300px] items-center">{traineeQrCode ? <img src={traineeQrCode} alt="QR Code" /> : <Loader2 className="h-16 w-16 animate-spin"/>}</div>
-                    <Button className="w-full" onClick={handleScanAndMark} disabled={isProcessing}>
+                    <Button 
+                        className="w-full" 
+                        onClick={handleScanAndMark} 
+                        disabled={isProcessing || hasMarkedAttendance}
+                    >
                         {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                        Scan and Mark My Attendance
+                        {hasMarkedAttendance ? `Attendance Marked: ${traineeAttendanceStatus?.status}` : 'Scan and Mark My Attendance'}
                     </Button>
                 </DialogContent>
             </Dialog>
