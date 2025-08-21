@@ -124,7 +124,7 @@ export function ProgramManagerDashboard() {
     {
       title: "Total Trainees",
       value: stats?.totalTrainees?.toString() || "0",
-      change: "+18 from last month", 
+      // change: "+18 from last month", 
       icon: Users,
       color: "text-custom-blue",
       bgColor: "bg-custom-blue/10",
@@ -132,7 +132,7 @@ export function ProgramManagerDashboard() {
     {
       title: "Total Facilitators",
       value: stats?.totalFacilitators?.toString() || "0",
-      change: "+5 from last month", 
+      // change: "+5 from last month", 
       icon: TrendingUp, 
       color: "text-custom-blue",
       bgColor: "bg-custom-blue/10",
