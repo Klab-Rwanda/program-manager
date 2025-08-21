@@ -5,10 +5,12 @@ import {
   forgotPassword, 
   updatePassword, 
   changePassword, 
-  logoutUser 
+  logoutUser, 
+  bulkRegisterUsers
 } from '../../controllers/auth.controller.js';
 import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole } from '../../middlewares/role.middleware.js';
+import { upload } from '../../middlewares/upload.middleware.js';
 
 const router = Router();
 
@@ -52,80 +54,10 @@ const router = Router();
  */
 router.route('/register').post(verifyJWT, checkRole(['SuperAdmin', 'Program Manager']), registerUser);
 
-/**
- * @openapi
- * /auth/login:
- *   post:
- *     tags: [Authentication]
- *     summary: Log in a user
- *     description: Authenticates a user with their email and password, returning a JWT access token and user details. On first login, the user's status is changed from 'Pending' to 'Active'.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [email, password]
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: 'superadmin@klab.com'
- *               password:
- *                 type: string
- *                 format: password
- *                 example: 'password123'
- *     responses:
- *       200:
- *         description: Successful login, returns user object and access token.
- *       401:
- *         description: Invalid credentials.
- *       404:
- *         description: User not found or is deactivated.
- */
+router.route('/bulk-register').post(verifyJWT, checkRole(['SuperAdmin', 'Program Manager']), upload.single('file'), bulkRegisterUsers);
 router.route('/login').post(loginUser);
 
-/**
- * @openapi
- * /auth/forgot-password:
- *   post:
- *     tags: [Authentication]
- *     summary: Request password reset
- *     description: Sends a password reset link to the user's email address. The link expires in 1 hour.
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [email]
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: 'user@klab.com'
- *                 description: The email address of the user requesting password reset
- *     responses:
- *       200:
- *         description: Password reset link sent successfully.
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: "Password reset link has been sent to your email"
- *       400:
- *         description: Bad request, email is required.
- *       404:
- *         description: User with this email does not exist or has been deactivated.
- *       500:
- *         description: Failed to send password reset email.
- */
+
 router.post("/forgot-password", forgotPassword);
 
 /**

@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
 
       // Use your computer's IP address instead of localhost
-      const API_URL = 'http://192.168.1.65:8000'; // Updated to correct IP
+      const API_URL = 'http://172.20.10.2:8000'; // Updated to correct IP
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
