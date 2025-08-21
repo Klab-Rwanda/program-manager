@@ -30,6 +30,8 @@ export interface ClassSession {
     lng: number;
     radius: number;
   };
+  qrCodeOpenedAt?: string; // NEW: Add qrCodeOpenedAt to interface
+  qrCodeLastGeneratedAt?: string; // NEW: Add qrCodeLastGeneratedAt to interface
 }
 
 
@@ -44,10 +46,31 @@ export interface UpdateSessionData {
   longitude?: number;
   radius?: number;
 }
+
+// Helper interface for the attendance status response from getAttendanceStatusForUserSession
+export interface UserSessionAttendanceStatus {
+    _id?: string; // Attendance record _id if exists (optional because might be null if not marked)
+    userId: string; // User ID
+    sessionId: string; // Session ID
+    status: 'Present' | 'Absent' | 'Late' | 'Excused';
+    method?: string; // Optional because might be null if not marked
+    timestamp?: string; // Optional because might be null if not marked
+    reason?: string;
+    programId?: string; // Ensure programId is present
+    date?: string; // Ensure date is present
+}
+
 export const getSessionAttendance = async (sessionId: string): Promise<{ session: ClassSession; attendance: AttendanceRecord[] }> => {
     const response = await api.get(`/attendance/sessions/${sessionId}/attendance`);
     return response.data.data;
 };
+
+// NEW: Get a single user's attendance status for a specific session
+export const getAttendanceStatusForUserSession = async (sessionId: string): Promise<UserSessionAttendanceStatus | null> => {
+    const response = await api.get(`/attendance/sessions/${sessionId}/my-status`);
+    return response.data.data; // Assuming data.data holds the attendance record or null
+};
+
 
 // --- Trainee Services ---
 
@@ -71,8 +94,12 @@ export const getMyAttendanceHistory = async (
     return response.data.data;
 };
 
-export const getTraineeSessions = async (): Promise<ClassSession[]> => {
-    const response = await api.get('/attendance/trainee/sessions');
+export const getTraineeSessions = async (startDate?: string, endDate?: string): Promise<ClassSession[]> => {
+    const params: { [key: string]: any } = {}; // Use any to allow optional parameters
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+
+    const response = await api.get('/attendance/trainee/sessions', { params });
     return response.data.data;
 };
 
@@ -93,8 +120,12 @@ export const createSession = async (sessionData: any): Promise<ClassSession> => 
     return response.data.data;
 };
 
-export const getFacilitatorSessions = async (): Promise<ClassSession[]> => {
-    const response = await api.get('/attendance/facilitator/sessions');
+export const getFacilitatorSessions = async (startDate?: string, endDate?: string): Promise<ClassSession[]> => {
+    const params: { [key: string]: any } = {}; // Use any to allow optional parameters
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+
+    const response = await api.get('/attendance/facilitator/sessions', { params });
     return response.data.data;
 };
 
@@ -109,7 +140,8 @@ export const startPhysicalSession = async (sessionId: string, location: {latitud
     return response.data.data;
 };
 
-export const openQrForSession = async (sessionId: string): Promise<{ qrCodeImage: string }> => {
+// Updated: now returns the session with updated qrCodeOpenedAt/qrCodeLastGeneratedAt
+export const openQrForSession = async (sessionId: string): Promise<{ qrCodeImage: string; expiresAt: string; session: ClassSession }> => {
     const response = await api.post(`/attendance/sessions/${sessionId}/open-qr`);
     return response.data.data;
 };
@@ -126,7 +158,7 @@ export const endSession = async (sessionId: string): Promise<ClassSession> => {
 
 export const getProgramAttendanceReport = async (programId: string, startDate: string, endDate: string): Promise<ProgramAttendanceReportData> => {
     const response = await api.get(`/attendance/report/program/${programId}`, {
-        params: { startDate, endDate }
+        params: { startDate, endDate } // Pass params to the GET request
     });
     return response.data.data;
 };
@@ -146,7 +178,6 @@ export const markManualStudentAttendance = async (
     return response.data.data;
 };
 
-// NEW INTERFACE for the summary report structure
 export interface ProgramAttendanceSummaryReport {
     totalSessions: number;
     report: Array<{
@@ -237,5 +268,3 @@ export const updateSession = async (sessionId: string, data: UpdateSessionData):
     const response = await api.patch(`/attendance/sessions/${sessionId}`, data);
     return response.data.data;
 };
-
-

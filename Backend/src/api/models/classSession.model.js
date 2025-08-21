@@ -12,7 +12,6 @@ const classSessionSchema = new mongoose.Schema({
     title: { type: String, required: true },
     description: { type: String },
     
-    
     // Location for physical classes
    location: { 
         lat: { type: Number },
@@ -30,8 +29,12 @@ const classSessionSchema = new mongoose.Schema({
     // Access links
     accessLink: { type: String }, // For attendance marking by link click
     videoCallLink: { type: String }, 
-     meetingLink: { type: String },
+    meetingLink: { type: String },
     qrCodeData: { type: String }, // QR code data for online sessions
+    
+    // New fields for tracking QR code generation and lateness
+    qrCodeOpenedAt: { type: Date, default: null }, // Timestamp when QR attendance was first opened for the session
+    qrCodeLastGeneratedAt: { type: Date, default: null }, // Timestamp of the most recent QR code generation
     
     // Status
     status: { 
@@ -46,8 +49,8 @@ const classSessionSchema = new mongoose.Schema({
     totalAbsent: { type: Number, default: 0 },
     
     // Settings
-    allowLateAttendance: { type: Boolean, default: true },
-    lateThreshold: { type: Number, default: 15 }, // minutes
+    allowLateAttendance: { type: Boolean, default: true }, // Already exists, but useful
+    lateThreshold: { type: Number, default: 10 }, // minutes (for QR/geolocation)
     
     // Metadata
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

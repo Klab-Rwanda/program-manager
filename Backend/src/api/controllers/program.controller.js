@@ -49,10 +49,7 @@ const createProgram = asyncHandler(async (req, res) => {
         status: programStatus,
     });
 
-    // --- THIS IS THE FIX ---
-    // Step 2: Fetch the newly created program again, but this time populate the manager details.
     const populatedProgram = await Program.findById(programDoc._id).populate('programManager', 'name email');
-    // --- END OF FIX ---
 
     const message = creator.role === 'SuperAdmin' 
         ? "Program created and is now pending your approval." 
@@ -67,7 +64,7 @@ const createProgram = asyncHandler(async (req, res) => {
                 sender: creator._id,
                 title: "New Program Drafted",
                 message: `Program Manager ${creator.name} created program "${populatedProgram.name}" as a draft.`,
-                link: `/dashboard/Manager/programs`, // Link to PM's program list
+                link: `/dashboard/Manager/programs`,
                 type: 'info'
             });
         }
@@ -110,7 +107,7 @@ const approveProgram = asyncHandler(async (req, res) => {
             sender: req.user._id,
             title: "Program Approved!",
             message: `Your program "${program.name}" has been approved by a Super Admin and is now Active.`,
-            link: `/dashboard/Manager/programs`, // Link to their programs list
+            link: `/dashboard/Manager/programs`,
             type: 'success'
         });
     }
@@ -149,17 +146,26 @@ const rejectProgram = asyncHandler(async (req, res) => {
 });
 
 const enrollTrainee = asyncHandler(async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params; // Program ID
     const { traineeId } = req.body;
     await verifyManagerAccess(id, req.user._id);
+
     const trainee = await User.findById(traineeId);
     if (!trainee || trainee.role !== 'Trainee') throw new ApiError(404, "Trainee not found or user is not a trainee.");
-    const program = await Program.findByIdAndUpdate(id, { $addToSet: { trainees: traineeId } }, { new: true });
-      await createNotification({
+    
+    // Check if trainee is already enrolled
+    const program = await Program.findById(id);
+    if (program.trainees.includes(traineeId)) {
+        throw new ApiError(409, "Trainee is already enrolled in this program.");
+    }
+
+    const updatedProgram = await Program.findByIdAndUpdate(id, { $addToSet: { trainees: traineeId } }, { new: true });
+    
+    await createNotification({
         recipient: traineeId,
         sender: req.user._id, // The Program Manager who enrolled them
         title: "You've been enrolled!",
-        message: `You have been enrolled in the "${program.name}" program.`,
+        message: `You have been enrolled in the "${updatedProgram.name}" program.`,
         link: `/dashboard/Trainee/my-learning`, 
         type: 'info'
     });
@@ -169,8 +175,48 @@ const enrollTrainee = asyncHandler(async (req, res) => {
         details: `${req.user.name} enrolled trainee '${trainee.name}' into program '${program.name}'.`,
         entity: { id: program._id, model: 'Program' }
     });
-    return res.status(200).json(new ApiResponse(200, program, "Trainee enrolled successfully."));
+    return res.status(200).json(new ApiResponse(200, updatedProgram, "Trainee enrolled successfully."));
 });
+
+
+// NEW: Unenroll Trainee from Program
+const unenrollTrainee = asyncHandler(async (req, res) => {
+    const { id } = req.params; // Program ID
+    const { traineeId } = req.body; // Trainee ID to unenroll
+    await verifyManagerAccess(id, req.user._id);
+
+    const trainee = await User.findById(traineeId);
+    if (!trainee || trainee.role !== 'Trainee') throw new ApiError(404, "Trainee not found or user is not a trainee.");
+
+    const program = await Program.findById(id);
+    if (!program) throw new ApiError(404, "Program not found.");
+
+    // Check if trainee is actually enrolled in this program
+    if (!program.trainees.includes(traineeId)) {
+        throw new ApiError(400, "Trainee is not currently enrolled in this program.");
+    }
+
+    const updatedProgram = await Program.findByIdAndUpdate(id, { $pull: { trainees: traineeId } }, { new: true });
+
+    await createNotification({
+        recipient: traineeId,
+        sender: req.user._id,
+        title: "Program Unenrollment",
+        message: `You have been unenrolled from the "${updatedProgram.name}" program by ${req.user.name}.`,
+        link: `/dashboard/Trainee/my-learning`,
+        type: 'warning'
+    });
+
+    await createLog({
+        user: req.user._id,
+        action: 'TRAINEE_UNENROLLED',
+        details: `${req.user.name} unenrolled trainee ${trainee.name} from program '${updatedProgram.name}'.`,
+        entity: { id: traineeId, model: 'User' }
+    });
+
+    return res.status(200).json(new ApiResponse(200, updatedProgram, "Trainee unenrolled successfully."));
+});
+
 
 const enrollFacilitator = asyncHandler(async (req, res) => {
     const { id } = req.params; // Program ID
@@ -245,22 +291,19 @@ const getAllPrograms = asyncHandler(async (req, res) => {
         query.programManager = _id;
         console.log('Query for Program Manager:', query);
     } else if (role === 'Facilitator') {
-        // Facilitators might only see programs they are assigned to, or just active ones
-        query.facilitators = _id; // This is what the frontend expects
+        query.facilitators = _id;
         console.log('Query for Facilitator:', query);
     } else if (role === 'Trainee') {
-        // Trainees only see programs they are enrolled in
         query.trainees = _id;
         console.log('Query for Trainee:', query);
     } else if (role === 'SuperAdmin') {
-        // SuperAdmin can see all programs
         console.log('Query for SuperAdmin: all programs');
     }
     
     const programs = await Program.find(query)
-        .populate('programManager', 'name email') // Already populated for managers
-        .populate('facilitators', 'name email') // <-- ADD THIS LINE to populate facilitators
-        .populate('trainees', 'name email'); // Already populated for trainees
+        .populate('programManager', 'name email')
+        .populate('facilitators', 'name email')
+        .populate('trainees', 'name email');
 
     console.log('Found programs count:', programs.length);
     
@@ -271,13 +314,12 @@ const getAllPrograms = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { role, _id } = req.user;
 
-    // Use Promise.all to fetch the program and its associated courses simultaneously
     const [program, courses] = await Promise.all([
         Program.findById(id).populate([
             { path: 'programManager', select: 'name email' },
             { path: 'facilitators', select: 'name email role status isActive' },
             { path: 'trainees', select: 'name email role status isActive' }
-        ]).lean(), // .lean() makes the query faster as it returns a plain JS object
+        ]).lean(),
         Course.find({ program: id }).populate('facilitator', 'name').lean()
     ]);
 
@@ -285,26 +327,24 @@ const getAllPrograms = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Program not found");
     }
 
-    // Check if user has access to this program based on their role
     let hasAccess = false;
     if (role === 'SuperAdmin') {
-        hasAccess = true; // SuperAdmin can access all programs
+        hasAccess = true;
     } else if (role === 'Program Manager' && program.programManager?._id?.toString() === _id.toString()) {
-        hasAccess = true; // Program Manager can access their own programs
+        hasAccess = true;
     } else if (role === 'Facilitator' && program.facilitators?.some(f => f._id?.toString() === _id.toString())) {
-        hasAccess = true; // Facilitator can access programs they're enrolled in
+        hasAccess = true;
     } else if (role === 'Trainee' && program.trainees?.some(t => t._id?.toString() === _id.toString())) {
-        hasAccess = true; // Trainee can access programs they're enrolled in
+        hasAccess = true;
     }
 
     if (!hasAccess) {
         throw new ApiError(403, "You don't have permission to access this program");
     }
 
-    // Combine the results
     const programDetails = {
         ...program,
-        courses: courses // Attach the courses to the program object
+        courses: courses
     };
 
     return res.status(200).json(new ApiResponse(200, programDetails, "Program details fetched successfully."));
@@ -330,7 +370,6 @@ const deleteProgram = asyncHandler(async (req, res) => {
     console.log("=============================");
     
     try {
-        // Mark program as deleted (permanent removal)
         const program = await Program.findByIdAndUpdate(
             id, 
             { isDeleted: true, isActive: false }, 
@@ -344,7 +383,6 @@ const deleteProgram = asyncHandler(async (req, res) => {
         
         console.log("Program found and deleted:", program.name);
         
-        // Create log entry
         await createLog({
             user: req.user._id,
             action: 'PROGRAM_DELETED',
@@ -362,20 +400,18 @@ const deleteProgram = asyncHandler(async (req, res) => {
 });
 
 const getArchivedPrograms = asyncHandler(async (req, res) => {
-    let query = { isArchived: true }; // Get only archived programs
+    let query = { isArchived: true };
     const { role, _id } = req.user;
     
-    // Filter by user role - Program Managers can only see their own archived programs
     if (role === 'Program Manager') {
         query.programManager = _id;
     }
-    // SuperAdmin can see all archived programs
     
     const programs = await Program.find(query)
         .populate('programManager', 'name email')
         .populate('facilitators', 'name email')
         .populate('trainees', 'name email')
-        .sort({ updatedAt: -1 }); // Most recently archived first
+        .sort({ updatedAt: -1 });
     
     return res.status(200).json(new ApiResponse(200, programs, "Archived programs fetched successfully."));
 });
@@ -383,7 +419,6 @@ const getArchivedPrograms = asyncHandler(async (req, res) => {
 const archiveProgram = asyncHandler(async (req, res) => {
     const { id } = req.params;
     
-    // Check if user has permission to archive this program
     if (req.user.role === 'Program Manager') {
         await verifyManagerAccess(id, req.user._id);
     }
@@ -398,7 +433,6 @@ const archiveProgram = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Program not found");
     }
     
-    // Create log entry
     await createLog({
         user: req.user._id,
         action: 'PROGRAM_ARCHIVED',
@@ -412,7 +446,7 @@ const archiveProgram = asyncHandler(async (req, res) => {
             sender: req.user._id, // The SuperAdmin
             title: "Program Archived",
             message: `Your program "${program.name}" has been archived by a Super Admin.`,
-            link: `/dashboard/Manager/archive`, // Link to PM's archive page
+            link: `/dashboard/Manager/archive`,
             type: 'warning'
         });
     }
@@ -473,7 +507,7 @@ const unarchiveProgram = asyncHandler(async (req, res) => {
             sender: req.user._id,
             title: "Program Unarchived",
             message: `Your program "${program.name}" has been unarchived by a Super Admin and is now active.`,
-            link: `/dashboard/Manager/programs`, // Link to PM's programs list
+            link: `/dashboard/Manager/programs`,
             type: 'info'
         });
     }
@@ -513,20 +547,20 @@ const updateProgramManagers = asyncHandler(async (req, res) => {
     if (!program) throw new ApiError(404, "Program not found.");
 
      await createLog({
-        user: currentUserId,
-        action: logAction,
-        details: `${req.user.name} ${action}d Program Manager ${manager ? `'${manager.name}'` : 'N/A'} ${action === 'add' ? 'to' : 'from'} program '${updatedProgram.name}'.`,
-        entity: { id: updatedProgram._id, model: 'Program' }
+        user: req.user._id,
+        action: 'PROGRAM_MANAGER_UPDATED',
+        details: `${req.user.name} ${action}d Program Manager ${manager ? `'${manager.name}'` : 'N/A'} ${action === 'add' ? 'to' : 'from'} program '${program.name}'.`,
+        entity: { id: program._id, model: 'Program' }
     });
 
     // Send notification to the affected manager
     if (managerId) { // Only send if a manager was involved (not unsetting empty)
         await createNotification({
             recipient: managerId,
-            sender: currentUserId,
-            title: notificationTitle,
-            message: notificationMessage,
-            link: `/dashboard/Manager/programs`,
+            sender: req.user._id,
+            title: `Program Manager ${action === 'add' ? 'Assigned' : 'Removed'}`,
+            message: `You have been ${action === 'add' ? 'assigned to' : 'removed from'} program '${program.name}'.`,
+            link: `/dashboard/Manager/programs`, 
             type: 'info'
         });
     }
@@ -547,7 +581,7 @@ const generateProgramReport = asyncHandler(async (req, res) => {
 });
 
 export const assignManager = asyncHandler(async (req, res) => {
-    const { id } = req.params
+    const { id } = req.params; // program id
     const { managerId } = req.body;
 
     const program = await Program.findById(id).populate('programManager', 'name email'); 
@@ -709,7 +743,7 @@ const getProgramStudentCount = asyncHandler(async (req, res) => {
 
     program.status = 'Completed';
     program.isActive = false; // A completed program is typically no longer active
-    await program.save({ validateBeforeSave: false }); // Bypass validation if status change conflicts with other rules
+    await program.save({ validateBeforeSave: false }); // Bypass validation if status conflicts
 
     await createLog({
         user: user._id,
@@ -721,7 +755,7 @@ const getProgramStudentCount = asyncHandler(async (req, res) => {
     // Notify program manager if a SuperAdmin marked it completed
     if (user.role === 'SuperAdmin' && program.programManager && program.programManager.toString() !== user._id.toString()) {
         await createNotification({
-            recipient: program.programManager,
+            recipient: program.programManager._id,
             sender: user._id,
             title: "Program Marked Complete",
             message: `The program "${program.name}" has been marked as completed.`,
@@ -751,34 +785,24 @@ const reactivateProgram = asyncHandler(async (req, res) => {
         throw new ApiError(400, "New end date must be in the future.");
     }
 
-    // Find the program. Note: The pre('find') middleware might filter it if it's archived/deleted.
-    // If you explicitly want to find archived programs, you'd need to modify the query or the middleware.
-    // For this specific case (reactivating from 'Completed'), it should typically be non-archived.
     const program = await Program.findById(id); 
     if (!program) {
         throw new ApiError(404, "Program not found.");
     }
 
-    // Verify access: Program Manager owns it OR is SuperAdmin
     const isManager = program.programManager && program.programManager.toString() === req.user._id.toString();
     if (!isManager && req.user.role !== 'SuperAdmin') {
         throw new ApiError(403, "Forbidden: You do not have permission to reactivate this program.");
     }
 
-    // Only allow reactivation if status is 'Completed'
     if (program.status !== 'Completed') {
         throw new ApiError(400, `Program cannot be reactivated from status '${program.status}'. Only 'Completed' programs can be reactivated here.`);
     }
 
-    // Update program fields
     program.status = 'Active';
-    program.isActive = true; // Ensure it's active
-    program.endDate = parsedNewEndDate; // Set the new end date
-    // Optionally, if the program was also 'isArchived: true' when completed, you might set isArchived: false here too.
-    // However, the `archiveProgram` controller handles setting isArchived: true, and `unarchiveProgram` handles reversing that.
-    // So, 'Completed' programs usually aren't archived unless explicitly done so by a separate action.
-
-    await program.save({ validateBeforeSave: false }); // Bypass schema validation for status/isActive changes
+    program.isActive = true;
+    program.endDate = parsedNewEndDate;
+    await program.save({ validateBeforeSave: false });
 
     await createLog({
         user: req.user._id,
@@ -798,6 +822,7 @@ export {
     approveProgram,
     rejectProgram,
     enrollTrainee,
+    unenrollTrainee,
     enrollFacilitator,
     getAllPrograms,
     getProgramById,
