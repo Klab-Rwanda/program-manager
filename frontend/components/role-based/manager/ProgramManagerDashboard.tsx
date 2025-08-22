@@ -246,7 +246,7 @@ export function ProgramManagerDashboard() {
           <Link href="dashboard/Manager/programs">
             <Button size="lg" className="bg-white text-custom-blue hover:bg-gray-100 shadow-md font-semibold">
               <Plus className="mr-2 h-5 w-5" />
-              Create New Program
+              View your Programs
             </Button>
           </Link>
           <Button
