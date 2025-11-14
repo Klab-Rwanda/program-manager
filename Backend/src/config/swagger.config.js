@@ -6,15 +6,16 @@ const swaggerOptions = {
     info: {
       title: 'Klab Program Manager API',
       version: '1.0.0',
-      description: 'API documentation for the Klab Program Manager backend, providing endpoints for managing programs, users, attendance, and more.',
+      description:
+        'API documentation for the Klab Program Manager backend, providing endpoints for managing programs, users, attendance, and more.',
       contact: {
         name: 'Klab Dev Team',
-        email: 'dev@klab.com',
-      },
+        email: 'dev@klab.com'
+      }
     },
     servers: [
       {
-       url: "https://program-manager-klab.onrender.com/api/v1",
+        url: 'https://program-ms.andasy.dev/api/v1',
         description: 'Development Server'
       }
     ],
@@ -24,7 +25,7 @@ const swaggerOptions = {
         bearerAuth: {
           type: 'http',
           scheme: 'bearer',
-          bearerFormat: 'JWT',
+          bearerFormat: 'JWT'
         }
       }
     },
@@ -35,7 +36,7 @@ const swaggerOptions = {
     ]
   },
   // This tells swagger-jsdoc where to look for your annotated routes
-  apis: ['./src/api/routes/v1/*.js'],
+  apis: ['./src/api/routes/v1/*.js']
 };
 
 export default swaggerOptions;

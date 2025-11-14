@@ -1,6 +1,6 @@
 // lib/contexts/AuthContext.tsx
-"use client";
-import { createContext, useContext, useState } from "react";
+'use client';
+import { createContext, useContext, useState } from 'react';
 
 interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
@@ -18,43 +18,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const login = async (email: string, password: string) => {
     try {
-      let API_URL = "";
+      let API_URL = '';
 
       const hostname = window.location.hostname;
 
-      if (hostname === "localhost") {
-        API_URL = "http://localhost:8000";
-      } else if (hostname.includes("vercel")) {
-        API_URL = "https://program-manager-klab.onrender.com";
+      if (hostname === 'localhost') {
+        API_URL = 'http://localhost:8000';
+      } else if (hostname.includes('vercel')) {
+        API_URL = 'https://program-ms.andasy.dev';
       } else {
         // Default to new production API
-        API_URL = "https://backendklab.andasy.dev";
+        API_URL = 'https://program-ms.andasy.dev/';
       }
 
       const res = await fetch(`${API_URL}/api/v1/auth/login`, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json'
         },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
+        credentials: 'include',
+        body: JSON.stringify({ email, password })
       });
 
       if (!res.ok) {
-        throw new Error("Login failed");
+        throw new Error('Login failed');
       }
 
       const data = await res.json();
-      localStorage.setItem("accessToken", data.accessToken);
+      localStorage.setItem('accessToken', data.accessToken);
       setUser(data.user);
     } catch (err) {
-      console.error("Login error:", err);
+      console.error('Login error:', err);
       throw err;
     }
   };
 
   const logout = () => {
-    localStorage.removeItem("accessToken");
+    localStorage.removeItem('accessToken');
     setUser(null);
   };
 
@@ -67,6 +67,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within an AuthProvider");
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
