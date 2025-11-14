@@ -59,7 +59,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
 
     if (hostname === "localhost") {
         API_URL = "http://localhost:8000";
-      } else  (hostname.includes("vercel")) {
+      } else if (hostname.includes("vercel")) {
         API_URL = "https://program-ms.andasy.dev";
       }
 

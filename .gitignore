@@ -67,3 +67,5 @@ Thumbs.db
 .env
 ./frontend/.env
 ./backend/.env
+
+./backend/src/scripts/*.js
