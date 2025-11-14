@@ -1,23 +1,23 @@
-# andasy.hcl app configuration file generated for program-manager on Saturday, 09-Aug-25 21:22:23 EET
+# andasy.hcl app configuration file generated for program-ms on Tuesday, 11-Nov-25 16:23:28 EST
 #
 # See https://github.com/quarksgroup/andasy-cli for information about how to use this file.
 
-app_name = "program-manager"
+app_name = "program-ms"
 
 app {
 
   env = {}
 
-  port = 3000
+  port = 5000
 
   compute {
     cpu      = 1
-    memory   = 1024
+    memory   = 256
     cpu_kind = "shared"
   }
 
   process {
-    name = "program-manager"
+    name = "program-ms"
   }
 
 }
