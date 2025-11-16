@@ -17,7 +17,8 @@ export type UserRole =
   | "program_manager"
   | "facilitator"
   | "trainee"
-  | "it_support";
+  | "it_support"
+  | "evaluator";
 
 export interface AuthContextType {
   user: User | null;
@@ -48,6 +49,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
       "Facilitator": "facilitator",
       "Trainee": "trainee",
       "ItSupport": "it_support",
+      "Evaluator": "evaluator",
     };
     return roleMap[role] || (role as UserRole);
   };

@@ -4,7 +4,7 @@ import { verifyJWT } from '../../middlewares/auth.middleware.js';
 import { checkRole } from '../../middlewares/role.middleware.js';
 
 const router = Router();
-router.use(verifyJWT, checkRole(['SuperAdmin', 'Program Manager']));
+router.use(verifyJWT, checkRole(['SuperAdmin', 'Program Manager', 'Evaluator']));
 
 /**
  * @openapi

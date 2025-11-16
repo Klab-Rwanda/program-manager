@@ -98,6 +98,7 @@ export const getFacilitatorDashboardStats = asyncHandler(async (req, res) => {
 
 export const getAdminOverview = asyncHandler(async (req, res) => {
     // Determine if the user is a manager to filter some stats
+    // Evaluators see all programs (like SuperAdmin), so we don't filter for them
     const isManager = req.user.role === 'Program Manager';
     const managerQuery = isManager ? { programManager: req.user._id } : {};
 
@@ -159,8 +160,12 @@ export const getRecentActivity = asyncHandler(async (req, res) => {
     let programQuery = {}; // For filtering by manager/facilitator if applicable
 
     // Determine programs relevant to the user's role
-    if (userRole === 'Program Manager') {
-        programQuery = { programManager: userId };
+    if (userRole === 'Program Manager' || userRole === 'Evaluator') {
+        // Evaluators and Program Managers can see all programs (no filtering by manager)
+        if (userRole === 'Program Manager') {
+            programQuery = { programManager: userId };
+        }
+        // Evaluators see all programs, so programQuery stays empty {}
     } else if (userRole === 'Facilitator') {
         programQuery = { facilitators: userId };
     }

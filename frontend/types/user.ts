@@ -1,6 +1,6 @@
-export type UserRole = 'super_admin' | 'program_manager' | 'facilitator' | 'trainee' | 'it_support'
+export type UserRole = 'super_admin' | 'program_manager' | 'facilitator' | 'trainee' | 'it_support' | 'evaluator'
 
-export type Permission = 
+export type Permission =
   | 'manage_users'
   | 'manage_programs'
   | 'view_reports'
@@ -11,6 +11,7 @@ export type Permission =
   | 'view_own_programs'
   | 'manage_system'
   | 'provide_support'
+  | 'export_reports'
 
 export interface User {
   id: string
@@ -21,6 +22,12 @@ export interface User {
   isActive: boolean
   createdAt: Date
   updatedAt: Date
+  // New trainee-specific fields
+  firstName?: string
+  lastName?: string
+  phone?: string
+  gender?: 'Male' | 'Female'
+  nationality?: string
 }
 
 export interface UserProfile {

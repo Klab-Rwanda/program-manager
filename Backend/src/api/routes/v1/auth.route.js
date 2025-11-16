@@ -20,7 +20,7 @@ const router = Router();
  *   post:
  *     tags: [Authentication]
  *     summary: Register a new user
- *     description: Allows a logged-in SuperAdmin or Program Manager to create a new user. The password is auto-generated and sent via email. Program Managers can only create Trainees and Facilitators.
+ *     description: Allows a logged-in SuperAdmin, Program Manager, or Evaluator to create a new user. The password is auto-generated and sent via email. Program Managers and Evaluators can only create Trainees and Facilitators.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -40,7 +40,7 @@ const router = Router();
  *                 example: 'trainee.new@klab.com'
  *               role:
  *                 type: string
- *                 enum: [Trainee, Facilitator, "Program Manager", SuperAdmin]
+ *                 enum: [Trainee, Facilitator, "Program Manager", SuperAdmin, Evaluator]
  *                 example: 'Trainee'
  *     responses:
  *       201:
@@ -52,9 +52,9 @@ const router = Router();
  *       409:
  *         description: Conflict, a user with this email already exists.
  */
-router.route('/register').post(verifyJWT, checkRole(['SuperAdmin', 'Program Manager']), registerUser);
+router.route('/register').post(verifyJWT, checkRole(['SuperAdmin', 'Program Manager', 'Evaluator']), registerUser);
 
-router.route('/bulk-register').post(verifyJWT, checkRole(['SuperAdmin', 'Program Manager']), upload.single('file'), bulkRegisterUsers);
+router.route('/bulk-register').post(verifyJWT, checkRole(['SuperAdmin', 'Program Manager', 'Evaluator']), upload.single('file'), bulkRegisterUsers);
 router.route('/login').post(loginUser);
 
 

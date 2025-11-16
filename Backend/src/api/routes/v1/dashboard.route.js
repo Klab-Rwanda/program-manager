@@ -29,13 +29,13 @@ router.use(verifyJWT);
  *                 pendingApprovals: { type: integer }
  */
 // SuperAdmin and Program Manager dashboard stats
-router.route('/stats').get(checkRole(['SuperAdmin', 'Program Manager']), getDashboardStats);
+router.route('/stats').get(checkRole(['SuperAdmin', 'Program Manager', 'Evaluator']), getDashboardStats);
 
 // Facilitator dashboard stats
 router.route('/facilitator-stats').get(checkRole(['Facilitator']), getFacilitatorDashboardStats);
-router.route('/admin-overview').get(checkRole(['SuperAdmin', 'Program Manager']), getAdminOverview);
+router.route('/admin-overview').get(checkRole(['SuperAdmin', 'Program Manager', 'Evaluator']), getAdminOverview);
 
 // Recent activity for dashboard
-router.route('/recent-activity').get(checkRole(['SuperAdmin', 'Program Manager', 'Facilitator']), getRecentActivity);
+router.route('/recent-activity').get(checkRole(['SuperAdmin', 'Program Manager', 'Facilitator', 'Evaluator']), getRecentActivity);
 
 export default router;

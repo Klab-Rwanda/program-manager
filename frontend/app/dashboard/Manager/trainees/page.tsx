@@ -19,14 +19,25 @@ import { useAuth } from "@/lib/contexts/RoleContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
-const initialTraineeData = { name: "", email: "" };
+const initialTraineeData = {
+  name: "",
+  email: "",
+  firstName: "",
+  lastName: "",
+  phone: "",
+  gender: "" as "Male" | "Female" | "",
+  nationality: "Rwandan"
+};
 
 // Interface for trainee data parsed from Excel
 interface ParsedTraineeData {
   name: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
   gender?: string;
   phone?: string;
+  nationality?: string;
   _id?: string;
   selected?: boolean;
   errors?: string[];
@@ -749,36 +760,103 @@ const TraineesPage: React.FC = () => {
       
       {/* Create Trainee Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setCreateModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add New Trainee</DialogTitle>
+            <DialogDescription>
+              Fill in the trainee information. Fields marked with * are required.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateTrainee} className="space-y-4 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First Name *</Label>
+                <Input
+                  id="firstName"
+                  value={newTraineeData.firstName}
+                  onChange={(e) => setNewTraineeData(d => ({...d, firstName: e.target.value}))}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last Name *</Label>
+                <Input
+                  id="lastName"
+                  value={newTraineeData.lastName}
+                  onChange={(e) => setNewTraineeData(d => ({...d, lastName: e.target.value}))}
+                  required
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input 
-                id="name" 
-                value={newTraineeData.name} 
-                onChange={(e) => setNewTraineeData(d => ({...d, name: e.target.value}))} 
-                required 
+              <Label htmlFor="name">Full Name *</Label>
+              <Input
+                id="name"
+                value={newTraineeData.name}
+                onChange={(e) => setNewTraineeData(d => ({...d, name: e.target.value}))}
+                required
+                placeholder="e.g., John Doe"
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                value={newTraineeData.email} 
-                onChange={(e) => setNewTraineeData(d => ({...d, email: e.target.value}))} 
-                required 
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={newTraineeData.email}
+                onChange={(e) => setNewTraineeData(d => ({...d, email: e.target.value}))}
+                required
               />
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone *</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={newTraineeData.phone}
+                  onChange={(e) => setNewTraineeData(d => ({...d, phone: e.target.value}))}
+                  required
+                  placeholder="+250XXXXXXXXX"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gender">Gender *</Label>
+                <Select
+                  value={newTraineeData.gender}
+                  onValueChange={(value: "Male" | "Female") => setNewTraineeData(d => ({...d, gender: value}))}
+                  required
+                >
+                  <SelectTrigger id="gender">
+                    <SelectValue placeholder="Select gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Male">Male</SelectItem>
+                    <SelectItem value="Female">Female</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="nationality">Nationality</Label>
+              <Input
+                id="nationality"
+                value={newTraineeData.nationality}
+                onChange={(e) => setNewTraineeData(d => ({...d, nationality: e.target.value}))}
+                placeholder="Rwandan"
+              />
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setCreateModalOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} 
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                 Add Trainee
               </Button>
             </DialogFooter>
@@ -826,7 +904,7 @@ const TraineesPage: React.FC = () => {
             <DialogTitle>Import Trainees</DialogTitle>
             <DialogDescription>
               Upload an Excel (.xlsx) or CSV file to register multiple trainees at once.
-              File must contain 'Name' and 'Email' columns. 'Gender' and 'Phone' are optional.
+              Required columns: Name, Email. Optional columns: First Name, Last Name, Phone, Gender, Nationality.
             </DialogDescription>
           </DialogHeader>
           
@@ -881,8 +959,11 @@ const TraineesPage: React.FC = () => {
                           </TableHead>
                           <TableHead>Name</TableHead>
                           <TableHead>Email</TableHead>
-                          <TableHead>Gender</TableHead>
+                          <TableHead>First Name</TableHead>
+                          <TableHead>Last Name</TableHead>
                           <TableHead>Phone</TableHead>
+                          <TableHead>Gender</TableHead>
+                          <TableHead>Nationality</TableHead>
                           <TableHead>Status</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -905,13 +986,16 @@ const TraineesPage: React.FC = () => {
                               {trainee.name || 'N/A'}
                             </TableCell>
                             <TableCell className={
-                              trainee.errors?.includes('Email is missing.') || 
+                              trainee.errors?.includes('Email is missing.') ||
                               trainee.errors?.includes('Invalid email format.') ? 'text-red-600' : ''
                             }>
                               {trainee.email || 'N/A'}
                             </TableCell>
-                            <TableCell>{trainee.gender || 'N/A'}</TableCell>
+                            <TableCell>{trainee.firstName || 'N/A'}</TableCell>
+                            <TableCell>{trainee.lastName || 'N/A'}</TableCell>
                             <TableCell>{trainee.phone || 'N/A'}</TableCell>
+                            <TableCell>{trainee.gender || 'N/A'}</TableCell>
+                            <TableCell>{trainee.nationality || 'N/A'}</TableCell>
                             <TableCell>
                               {trainee.errors && trainee.errors.length > 0 ? (
                                 <Badge 

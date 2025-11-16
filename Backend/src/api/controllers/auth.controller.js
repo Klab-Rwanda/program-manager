@@ -15,7 +15,7 @@ import xlsx from 'xlsx'; // NEW: Import xlsx
 import fs from 'fs/promises'; // NEW: Import fs.promises for file cleanup
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, role } = req.body;
+  const { name, email, role, firstName, lastName, phone, gender, nationality } = req.body;
 
   const generatedPassword = Math.random().toString(36).slice(-8);
 
@@ -33,6 +33,16 @@ const registerUser = asyncHandler(async (req, res) => {
     }
   }
 
+  // Validate role permissions for Evaluators
+  if (req.user.role === 'Evaluator') {
+    if (role !== 'Trainee') {
+      throw new ApiError(
+        403,
+        'Forbidden: Evaluators can only register Trainees.'
+      );
+    }
+  }
+
   const existedUser = await User.findOne({ email });
   if (existedUser) {
     throw new ApiError(409, 'User with this email already exists');
@@ -42,7 +52,12 @@ const registerUser = asyncHandler(async (req, res) => {
     name,
     email,
     password: generatedPassword,
-    role
+    role,
+    ...(firstName && { firstName }),
+    ...(lastName && { lastName }),
+    ...(phone && { phone }),
+    ...(gender && { gender }),
+    ...(nationality && { nationality })
   });
   const createdUser = await User.findById(user._id).select('-password');
 
@@ -157,8 +172,7 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
 
   const registrationPromises = usersToRegister.map(async (row, index) => {
     results.totalProcessed++;
-    // Assuming columns are Name, Email. You might need to adjust indices.
-    // Example: If headers are ['Full Name', 'Email Address', 'Gender', 'Phone']
+    // Map column headers to field indices
     const nameIndex =
       headers.indexOf('Name') !== -1
         ? headers.indexOf('Name')
@@ -167,11 +181,25 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
       headers.indexOf('Email') !== -1
         ? headers.indexOf('Email')
         : headers.indexOf('Email Address');
-    const genderIndex = headers.indexOf('Gender'); // Optional
-    const phoneIndex = headers.indexOf('Phone'); // Optional
+    const firstNameIndex =
+      headers.indexOf('First Name') !== -1
+        ? headers.indexOf('First Name')
+        : headers.indexOf('FirstName');
+    const lastNameIndex =
+      headers.indexOf('Last Name') !== -1
+        ? headers.indexOf('Last Name')
+        : headers.indexOf('LastName');
+    const genderIndex = headers.indexOf('Gender');
+    const phoneIndex = headers.indexOf('Phone');
+    const nationalityIndex = headers.indexOf('Nationality');
 
     const name = row[nameIndex]?.trim();
     const email = row[emailIndex]?.trim()?.toLowerCase();
+    const firstName = firstNameIndex !== -1 ? row[firstNameIndex]?.trim() : undefined;
+    const lastName = lastNameIndex !== -1 ? row[lastNameIndex]?.trim() : undefined;
+    const gender = genderIndex !== -1 ? row[genderIndex]?.trim() : undefined;
+    const phone = phoneIndex !== -1 ? row[phoneIndex]?.trim() : undefined;
+    const nationality = nationalityIndex !== -1 ? row[nationalityIndex]?.trim() : undefined;
 
     // Validate basic fields from the spreadsheet
     if (!name || !email) {
@@ -212,9 +240,11 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
         email,
         password: generatedPassword,
         role: targetRole, // Assign the role from input or default
-        // You can map other fields like gender, phone if present in your User model
-        ...(genderIndex !== -1 && { gender: row[genderIndex]?.trim() }),
-        ...(phoneIndex !== -1 && { phone: row[phoneIndex]?.trim() })
+        ...(firstName && { firstName }),
+        ...(lastName && { lastName }),
+        ...(gender && { gender }),
+        ...(phone && { phone }),
+        ...(nationality && { nationality })
       });
 
       // Send registration email

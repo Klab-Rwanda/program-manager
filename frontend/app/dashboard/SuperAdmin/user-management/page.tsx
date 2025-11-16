@@ -72,7 +72,8 @@ type UserRole =
   | 'Program Manager'
   | 'Facilitator'
   | 'Trainee'
-  | 'IT-Support';
+  | 'IT-Support'
+  | 'Evaluator';
 interface UserFormData {
   name: string;
   email: string;
@@ -188,7 +189,8 @@ export default function UserManagementPage() {
       'Program Manager': 'bg-blue-100 text-blue-800',
       Facilitator: 'bg-purple-100 text-purple-800',
       Trainee: 'bg-gray-100 text-gray-800',
-      'IT-Support': 'bg-orange-100 text-orange-800'
+      'IT-Support': 'bg-orange-100 text-orange-800',
+      Evaluator: 'bg-teal-100 text-teal-800'
     };
     return <Badge className={roleColors[role] || ''}>{role}</Badge>;
   };
@@ -378,6 +380,7 @@ export default function UserManagementPage() {
                   <SelectItem value='Trainee'>Trainee</SelectItem>
                   <SelectItem value='Facilitator'>Facilitator</SelectItem>
                   <SelectItem value='IT-Support'>IT Support</SelectItem>
+                  <SelectItem value='Evaluator'>Evaluator</SelectItem>
                   {currentUser?.role === 'SuperAdmin' && (
                     <>
                       <SelectItem value='Program Manager'>

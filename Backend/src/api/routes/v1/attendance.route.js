@@ -39,34 +39,34 @@ const router = express.Router();
 router.use(verifyJWT);
 
 // ===================================================================
-//   FACILITATOR ROUTES
+//   FACILITATOR & EVALUATOR ROUTES
 // ===================================================================
 
 // Create a new class session
-router.post('/sessions', 
-    verifyRole(['Facilitator']), 
+router.post('/sessions',
+    verifyRole(['Facilitator', 'Evaluator']),
     createSession
 );
 
 router.patch('/sessions/:sessionId',
-    verifyRole(['Facilitator']),
+    verifyRole(['Facilitator', 'Evaluator']),
     updateSession
 );
 // Start an online session and generate QR code
-router.post('/sessions/:sessionId/start-online', 
-    verifyRole(['Facilitator']), 
+router.post('/sessions/:sessionId/start-online',
+    verifyRole(['Facilitator', 'Evaluator']),
     startOnlineSession
 );
 
-// Mark attendance for physical class (facilitator)
-router.post('/sessions/:sessionId/physical-attendance', 
-    verifyRole(['Facilitator']), 
+// Mark attendance for physical class (facilitator/evaluator)
+router.post('/sessions/:sessionId/physical-attendance',
+    verifyRole(['Facilitator', 'Evaluator']),
     markPhysicalAttendance
 );
 
 // Get facilitator's sessions
-router.get('/facilitator/sessions', 
-    verifyRole(['Facilitator']), 
+router.get('/facilitator/sessions',
+    verifyRole(['Facilitator', 'Evaluator']),
     getFacilitatorSessions
 );
 
@@ -101,14 +101,14 @@ router.delete('/sessions/:sessionId',
 // ===================================================================
 
 // Get session details
-router.get('/sessions/:sessionId', 
-    verifyRole(['Facilitator', 'Trainee', 'ProgramManager', 'SuperAdmin']), 
+router.get('/sessions/:sessionId',
+    verifyRole(['Facilitator', 'Evaluator', 'Trainee', 'ProgramManager', 'SuperAdmin']),
     getSessionDetails
 );
 
 // Get attendance report for a session
-router.get('/sessions/:sessionId/attendance', 
-    verifyRole(['Facilitator', 'Trainee', 'ProgramManager', 'SuperAdmin']), 
+router.get('/sessions/:sessionId/attendance',
+    verifyRole(['Facilitator', 'Evaluator', 'Trainee', 'ProgramManager', 'SuperAdmin']),
     getSessionAttendance
 );
 
@@ -122,45 +122,45 @@ router.post('/mark', markAttendance);
 // Legacy QR code generation
 router.get('/qr/:sessionId', getSessionQRCode);
 router.post('/sessions/:sessionId/manual-attendance',
-    verifyRole(['Facilitator', 'Program Manager']), // Only facilitators or PMs can manually mark
+    verifyRole(['Facilitator', 'Evaluator', 'Program Manager']), // Facilitators, Evaluators, or PMs can manually mark
     markManualStudentAttendance
 );
 
-router.post('/sessions/:sessionId/start-physical', 
-    verifyRole(['Facilitator']), 
+router.post('/sessions/:sessionId/start-physical',
+    verifyRole(['Facilitator', 'Evaluator']),
     startPhysicalSession // Add this new route
 );
 
-router.post('/sessions/:sessionId/open-qr', 
-    verifyRole(['Facilitator']), 
+router.post('/sessions/:sessionId/open-qr',
+    verifyRole(['Facilitator', 'Evaluator']),
     openQrForSession // Add this new route
 );
 
 router.get('/report/program/:programId/summary',
-    verifyRole(['Program Manager', 'SuperAdmin']),
+    verifyRole(['Program Manager', 'Evaluator', 'SuperAdmin']),
     getProgramAttendanceSummary // Add this new route
 );
-router.get('/report/program/:programId', 
-    verifyRole(['Program Manager', 'SuperAdmin']), 
-    getProgramAttendanceReport 
+router.get('/report/program/:programId',
+    verifyRole(['Program Manager', 'Evaluator', 'SuperAdmin']),
+    getProgramAttendanceReport
 );
 
 router.get('/my-history', 
     verifyRole(['Trainee']), 
     getMyAttendanceHistory
 );
-router.post('/sessions/:sessionId/end', 
-    verifyRole(['Facilitator']), 
+router.post('/sessions/:sessionId/end',
+    verifyRole(['Facilitator', 'Evaluator']),
     endSession
 );
 
-router.get('/sessions/:sessionId/report', 
-    verifyRole(['Facilitator', 'ProgramManager', 'SuperAdmin']), 
-    getSessionAttendance 
+router.get('/sessions/:sessionId/report',
+    verifyRole(['Facilitator', 'Evaluator', 'ProgramManager', 'SuperAdmin']),
+    getSessionAttendance
 );
 
-router.get('/sessions/program/:programId/counts', 
-    verifyRole(['Facilitator', 'ProgramManager', 'SuperAdmin']), 
+router.get('/sessions/program/:programId/counts',
+    verifyRole(['Facilitator', 'Evaluator', 'ProgramManager', 'SuperAdmin']),
     getProgramSessionCounts
 );
 

@@ -26,8 +26,8 @@ import { Button } from "../ui/button";
 import Image from 'next/image'; 
 
 const menuItems = [
-    { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee', 'it_support'] },
-   
+    { title: "Dashboard", url: "/dashboard", icon: Home, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee', 'it_support', 'evaluator'] },
+
     // Super Admin
     { title: "User Management", url: "/dashboard/SuperAdmin/user-management", icon: Users, roles: ['super_admin'] },
     { title: "Program Management", url: "/dashboard/SuperAdmin/program-approval", icon: TicketCheck, roles: ['super_admin'] },
@@ -35,7 +35,7 @@ const menuItems = [
     { title: "Reports & Export", url: "/dashboard/SuperAdmin/reports-export", icon: BarChart3, roles: ['super_admin'] },
     { title: "System Monitoring", url: "/dashboard/SuperAdmin/system-monitoring", icon: Activity, roles: [ 'it_support'] },
     { title: "System Settings", url: "/dashboard/SuperAdmin/settings", icon: Settings, roles: ['super_admin'] },
-   
+
     // Program Manager
     { title: "Programs", url: "/dashboard/Manager/programs", icon: BookOpen, roles: ['program_manager'], countKey: 'programs' },
     { title: "Facilitators", url: "/dashboard/Manager/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },
@@ -44,6 +44,12 @@ const menuItems = [
     { title: "Attendance", url: "/dashboard/Manager/attendance", icon: Calendar, roles: ['program_manager'] },
     { title: "Certificates", url: "/dashboard/Manager/certificates", icon: Award, roles: ['program_manager'], countKey: 'certificates' },
     { title: "Archive", url: "/dashboard/Manager/archive", icon: Archive, roles: ['program_manager'], countKey: 'archived' },
+
+    // Evaluator
+    { title: "Trainees", url: "/dashboard/Evaluator/trainees", icon: Users, roles: ['evaluator'], countKey: 'trainees' },
+    { title: "Attendance", url: "/dashboard/Evaluator/attendance", icon: Calendar, roles: ['evaluator'] },
+    { title: "Reports", url: "/dashboard/Evaluator/reports", icon: BarChart3, roles: ['evaluator'] },
+
     // Facilitator
     { title: "My Programs", url: "/dashboard/Facilitator/fac-programs", icon: BookOpen, roles: ['facilitator'] },
     { title: "Attendance Tracking", url: "/dashboard/Facilitator/Fac-attendance", icon: Calendar, roles: ['facilitator'] },
@@ -65,7 +71,7 @@ const menuItems = [
     { title: "Maintenance", url: "/dashboard/It-support/maintenance", icon: Wrench, roles: ['it_support'] },
 
     //Submit Ticket
-     { title: "submit-tickets", url: "/dashboard/submit-tickets", icon: MessageSquare, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee']},
+     { title: "submit-tickets", url: "/dashboard/submit-tickets", icon: MessageSquare, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee', 'evaluator']},
 
     // Shared
    

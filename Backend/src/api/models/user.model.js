@@ -4,26 +4,35 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto'; // For forgot password token
 
 const userSchema = new mongoose.Schema({
-    name: { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true }, // Keep for backward compatibility
+
+    // New trainee-specific fields
+    firstName: { type: String, trim: true },
+    lastName: { type: String, trim: true },
+    gender: { type: String, enum: ['Male', 'Female'] },
+    nationality: { type: String, trim: true, default: 'Rwandan' },
+
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     role: {
         type: String,
-        enum: ['Trainee', 'Facilitator', 'Program Manager', 'SuperAdmin','IT-Support'],
+        enum: ['Trainee', 'Facilitator', 'Program Manager', 'SuperAdmin', 'IT-Support', 'Evaluator'],
         required: true,
     },
     status: {
         type: String,
         enum: ['Pending', 'Active'],
-        default: 'Pending' 
+        default: 'Pending'
     },
     isActive: { type: Boolean, default: true },
     isDeleted: { type: Boolean, default: false },
     firstLogin: { type: Date }, // Will be set once on the very first login
     lastLogin: { type: Date },
-    
-    // Facilitator-specific fields
+
+    // Phone field - now available for all users (especially trainees)
     phone: { type: String, trim: true },
+
+    // Facilitator-specific fields
     specialization: { type: String, trim: true },
     experience: { type: String, trim: true },
     rating: { type: Number, min: 0, max: 5, default: 0 },
@@ -35,7 +44,7 @@ const userSchema = new mongoose.Schema({
     type: { type: String, enum: ['regular', 'promoted'], default: 'regular' },
     previousProgram: { type: String, trim: true },
     promotionDate: { type: Date },
-    
+
     // Fields for password reset
     forgotPasswordToken: String,
     forgotPasswordExpiry: Date,

@@ -9,6 +9,7 @@ import { ProgramManagerDashboard } from "@/components/role-based/manager/Program
 import { FacilitatorDashboard } from "@/components/role-based/facilitator/FacilitatorDashboard"
 import { TraineeDashboard } from "@/components/role-based/trainee/TraineeDashboard"
 import { ITSupportDashboard } from "@/components/role-based/support/ITSupportDashboard"
+import { EvaluatorDashboard } from "@/components/role-based/evaluator/EvaluatorDashboard"
 import { Loader2 } from "lucide-react"
 
 export default function Dashboard() {
@@ -37,6 +38,8 @@ export default function Dashboard() {
         return <TraineeDashboard />
       case 'it_support':
         return <ITSupportDashboard />
+      case 'evaluator':
+        return <EvaluatorDashboard />
       default:
         // This will show if the user is authenticated but has no role, or an unknown role
         return <div>Welcome! Your dashboard is being set up.</div>

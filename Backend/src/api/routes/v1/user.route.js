@@ -82,7 +82,7 @@ manageRouter.use(verifyJWT);
  *   get:
  *     tags: [User Management (Admin)]
  *     summary: Get all users of a specific role
- *     description: (SuperAdmin only) Retrieves a list of ALL users (including pending/inactive) filtered by a specific role. Useful for populating admin dropdowns.
+ *     description: (SuperAdmin, Program Manager, Evaluator) Retrieves a list of ALL users (including pending/inactive) filtered by a specific role. Useful for populating admin dropdowns.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -90,7 +90,7 @@ manageRouter.use(verifyJWT);
  *     responses:
  *       200: { description: 'A list of users matching the role.' }
  */
-manageRouter.route('/list-by-role').get(checkRole(['SuperAdmin', 'Program Manager']), userController.getUserListByRole);
+manageRouter.route('/list-by-role').get(checkRole(['SuperAdmin', 'Program Manager', 'Evaluator']), userController.getUserListByRole);
 
 /**
  * @openapi
@@ -98,7 +98,7 @@ manageRouter.route('/list-by-role').get(checkRole(['SuperAdmin', 'Program Manage
  *   get:
  *     tags: [User Management (Admin)]
  *     summary: Get onboarded users
- *     description: (SuperAdmin & Program Manager) Retrieves a paginated list of users who have logged in at least once.
+ *     description: (SuperAdmin, Program Manager, Evaluator) Retrieves a paginated list of users who have logged in at least once.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -107,7 +107,7 @@ manageRouter.route('/list-by-role').get(checkRole(['SuperAdmin', 'Program Manage
  *     responses:
  *       200: { description: 'A paginated list of onboarded users.' }
  */
-manageRouter.route('/onboarded').get(checkRole(['SuperAdmin', 'Program Manager']), userController.getOnboardedUsers);
+manageRouter.route('/onboarded').get(checkRole(['SuperAdmin', 'Program Manager', 'Evaluator']), userController.getOnboardedUsers);
 
 /**
  * @openapi
@@ -132,13 +132,13 @@ manageRouter.route('/archived').get(checkRole(['SuperAdmin']), userController.ge
  *   get:
  *     tags: [User Management (Admin)]
  *     summary: Get all active users
- *     description: (SuperAdmin only) Retrieves a list of all active users in the system (`isActive: true`).
+ *     description: (SuperAdmin, Program Manager, Evaluator) Retrieves a list of all active users in the system (`isActive: true`).
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200: { description: 'A list of active users.' }
  */
-manageRouter.route('/').get(checkRole(['SuperAdmin', 'Program Manager']), userController.getAllUsers);
+manageRouter.route('/').get(checkRole(['SuperAdmin', 'Program Manager', 'Evaluator']), userController.getAllUsers);
 
 
 // --- GENERIC, PARAMETERIZED '/manage' ROUTES COME LAST ---
