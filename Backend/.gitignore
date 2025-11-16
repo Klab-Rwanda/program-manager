@@ -14,3 +14,5 @@ logs
 /public/temp
 
 .env
+./.env
+/.env

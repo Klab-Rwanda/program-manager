@@ -28,28 +28,28 @@ const io = new Server(server, {
     ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
-     allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization']
   }
 });
-
 
 // Pass the 'io' instance to our socket configuration
 initializeSocket(io);
 export { io };
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 6000;
 
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'https://program-manager-klab.vercel.app',
-    'https://frontendklab.andasy.dev'
-  ],
-  credentials: true
-}));
-
+app.use(
+  cors({
+    origin: [
+      'http://localhost:3000',
+      'https://program-manager-klab.vercel.app',
+      'https://frontendklab.andasy.dev'
+    ],
+    credentials: true
+  })
+);
 
 app.use(express.static('public'));
 app.use(express.json({ limit: '10mb' }));
@@ -64,7 +64,9 @@ app.get('/', (req, res) => res.json({ message: 'API is running!' }));
 // Error handling
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(err.statusCode || 500).json({ error: err.message || 'Something went wrong!' });
+  res
+    .status(err.statusCode || 500)
+    .json({ error: err.message || 'Something went wrong!' });
 });
 
 // 404 handler
@@ -73,7 +75,7 @@ app.use('*', (req, res) => res.status(404).json({ error: 'Route not found' }));
 const startServer = async () => {
   try {
     await connectDB();
-     startCronJobs();
+    startCronJobs();
     server.listen(PORT, () => {
       console.log(`🚀 Server & WebSocket running on port ${PORT}`);
     });
