@@ -23,21 +23,12 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Name, email, and role are required fields.');
   }
 
-  if (req.user) {
-    if (req.user.role === 'Program Manager') {
-      if (role !== 'Facilitator' && role !== 'Trainee') {
-        throw new ApiError(
-          403,
-          'Forbidden: Program Managers can only register Facilitators or Trainees.'
-        );
-      }
-    }
-  } else {
-    const userCount = await User.countDocuments();
-    if (userCount > 0 && role !== 'Trainee') {
+  // Validate role permissions based on authenticated user
+  if (req.user.role === 'Program Manager') {
+    if (role !== 'Facilitator' && role !== 'Trainee') {
       throw new ApiError(
         403,
-        'Forbidden: Only an existing admin or manager can create new users.'
+        'Forbidden: Program Managers can only register Facilitators or Trainees.'
       );
     }
   }
@@ -59,6 +50,7 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(500, 'Something went wrong while registering the user');
   }
 
+  // Notify other SuperAdmins about the new user
   const superAdmins = await User.find({ role: 'SuperAdmin' });
   for (const admin of superAdmins) {
     if (admin._id.toString() !== req.user._id.toString()) {
@@ -72,6 +64,8 @@ const registerUser = asyncHandler(async (req, res) => {
       });
     }
   }
+
+  // Log the user creation action
   await createLog({
     user: req.user._id,
     action: 'USER_CREATED',
@@ -231,7 +225,7 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
         )
       );
 
-      // Create notification for SuperAdmins (similar to single registration)
+      // Notify other SuperAdmins about the new user
       const superAdmins = await User.find({ role: 'SuperAdmin' });
       for (const admin of superAdmins) {
         // Don't notify the admin if they are creating the user themselves

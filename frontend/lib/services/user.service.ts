@@ -10,11 +10,14 @@ export const getUsers = async (isActive: boolean = true): Promise<User[]> => {
   return response.data.data;
 };
 
-// CORRECTED: Renamed 'createUser' to 'createTrainee'
-export const createTrainee = async (userData: { name: string; email: string; role: string }): Promise<User> => {
+// Create a new user (SuperAdmin can create any role, Program Manager can create Facilitator/Trainee)
+export const createUser = async (userData: { name: string; email: string; role: string }): Promise<User> => {
   const response = await api.post('/auth/register', userData);
   return response.data.data;
 };
+
+// Alias for backwards compatibility
+export const createTrainee = createUser;
 
 // NEW: Bulk Create Users from a File
 export interface BulkUserRegisterResponse {
