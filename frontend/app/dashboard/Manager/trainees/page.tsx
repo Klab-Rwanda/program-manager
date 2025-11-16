@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Plus, Search, BookOpen, Eye, Edit, Trash2, GraduationCap, Loader2, UserPlus, FileUp, MinusCircle, CheckCircle, XCircle, Grid, List, Users, Filter } from "lucide-react";
+import { Plus, Search, BookOpen, Eye, Trash2, GraduationCap, Loader2, UserPlus, FileUp, MinusCircle, CheckCircle, XCircle, Grid, List, Users, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,15 +12,12 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 
-import { getAllTrainees, createTrainee, assignTraineeToProgram, bulkRegisterUsers, unenrollTraineeFromProgram } from "@/lib/services/user.service";
+import { getAllTrainees, createTrainee, assignTraineeToProgram, bulkRegisterUsers, unenrollTraineeFromProgram, deleteUser } from "@/lib/services/user.service";
 import { getAllPrograms } from "@/lib/services/program.service";
 import { Program, Trainee } from "@/types";
 import { useAuth } from "@/lib/contexts/RoleContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Avatar, AvatarFallback, AvatarInitials } from "@/components/ui/avatar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const initialTraineeData = { name: "", email: "" };
 
@@ -38,7 +35,7 @@ interface ParsedTraineeData {
 type ViewMode = 'cards' | 'list' | 'table' | 'programs';
 
 const TraineesPage: React.FC = () => {
-  const { user, role } = useAuth();
+  const { user } = useAuth();
   const [trainees, setTrainees] = useState<Trainee[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +49,8 @@ const TraineesPage: React.FC = () => {
   const [isBulkUploadModalOpen, setBulkUploadModalOpen] = useState(false);
   const [isUnenrollConfirmOpen, setUnenrollConfirmOpen] = useState(false);
   const [traineeToUnenroll, setTraineeToUnenroll] = useState<Trainee | null>(null);
+  const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [traineeToDelete, setTraineeToDelete] = useState<Trainee | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -95,7 +94,9 @@ const TraineesPage: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await createTrainee(newTraineeData);
+      // Include role field for backend validation
+      const traineeData = { ...newTraineeData, role: "Trainee" as const };
+      await createTrainee(traineeData);
       toast.success("Trainee created successfully! Credentials sent via email.");
       setCreateModalOpen(false);
       setNewTraineeData(initialTraineeData);
@@ -162,6 +163,27 @@ const TraineesPage: React.FC = () => {
     setTraineeToUnenroll(trainee);
     setProgramToAssign(programId);
     setUnenrollConfirmOpen(true);
+  };
+
+  const openDeleteConfirm = (trainee: Trainee) => {
+    setTraineeToDelete(trainee);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteTrainee = async () => {
+    if (!traineeToDelete) return;
+    setIsSubmitting(true);
+    try {
+      await deleteUser(traineeToDelete._id);
+      toast.success(`${traineeToDelete.name} has been deleted successfully.`);
+      setDeleteConfirmOpen(false);
+      setTraineeToDelete(null);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete trainee.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const filteredTrainees = trainees.filter(trainee => {
@@ -352,19 +374,19 @@ const TraineesPage: React.FC = () => {
 
   // Render different views
   const renderCardsView = () => (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
       {filteredTrainees.map((trainee) => (
-        <Card key={trainee._id}>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <GraduationCap className="h-8 w-8 text-blue-600"/>
-                <div>
-                  <CardTitle className="text-lg">{trainee.name}</CardTitle>
-                  <CardDescription>{trainee.email}</CardDescription>
+        <Card key={trainee._id} className="flex flex-col">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center space-x-3 min-w-0 flex-1">
+                <GraduationCap className="h-8 w-8 text-blue-600 flex-shrink-0"/>
+                <div className="min-w-0 flex-1">
+                  <CardTitle className="text-base sm:text-lg truncate">{trainee.name}</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm truncate">{trainee.email}</CardDescription>
                 </div>
               </div>
-              <Badge variant={trainee.isActive ? "default" : "outline"}>
+              <Badge variant={trainee.isActive ? "default" : "outline"} className="flex-shrink-0 text-xs">
                 {trainee.status}
               </Badge>
             </div>
@@ -377,11 +399,11 @@ const TraineesPage: React.FC = () => {
                   .join(', ') || 'No programs'
               }
             </p>
-            <div className="flex space-x-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="flex-1" 
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 min-w-[100px]"
                 onClick={() => openAssignModal(trainee)}
               >
                 <UserPlus className="h-4 w-4 mr-2" /> Assign
@@ -390,7 +412,7 @@ const TraineesPage: React.FC = () => {
                 const traineePrograms = getTraineePrograms(trainee._id);
                 return traineePrograms.length > 0 && (
                   <Select onValueChange={(programId) => openUnenrollConfirm(trainee, programId)} value="">
-                    <SelectTrigger className="w-[140px] h-9 text-xs">
+                    <SelectTrigger className="w-[120px] h-9 text-xs">
                       <SelectValue placeholder="Unenroll" />
                     </SelectTrigger>
                     <SelectContent>
@@ -403,9 +425,20 @@ const TraineesPage: React.FC = () => {
                   </Select>
                 );
               })()}
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" title="View details">
                 <Eye className="h-4 w-4"/>
               </Button>
+              {(user?.role === 'SuperAdmin' || user?.role === 'Program Manager') && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => openDeleteConfirm(trainee)}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  title="Delete trainee"
+                >
+                  <Trash2 className="h-4 w-4"/>
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -439,9 +472,20 @@ const TraineesPage: React.FC = () => {
               <Button variant="outline" size="sm" onClick={() => openAssignModal(trainee)}>
                 <UserPlus className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" title="View details">
                 <Eye className="h-4 w-4" />
               </Button>
+              {(user?.role === 'SuperAdmin' || user?.role === 'Program Manager') && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => openDeleteConfirm(trainee)}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  title="Delete trainee"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
         </Card>
@@ -495,12 +539,23 @@ const TraineesPage: React.FC = () => {
                 </TableCell>
                 <TableCell>
                   <div className="flex space-x-1">
-                    <Button variant="outline" size="sm" onClick={() => openAssignModal(trainee)}>
+                    <Button variant="outline" size="sm" onClick={() => openAssignModal(trainee)} title="Assign to program">
                       <UserPlus className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" title="View details">
                       <Eye className="h-4 w-4" />
                     </Button>
+                    {(user?.role === 'SuperAdmin' || user?.role === 'Program Manager') && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openDeleteConfirm(trainee)}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title="Delete trainee"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -554,12 +609,23 @@ const TraineesPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex space-x-1">
-                      <Button variant="ghost" size="sm" onClick={() => openAssignModal(trainee)}>
+                      <Button variant="ghost" size="sm" onClick={() => openAssignModal(trainee)} title="Assign to program">
                         <UserPlus className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" title="View details">
                         <Eye className="h-3 w-3" />
                       </Button>
+                      {(user?.role === 'SuperAdmin' || user?.role === 'Program Manager') && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openDeleteConfirm(trainee)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          title="Delete trainee"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -574,17 +640,17 @@ const TraineesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Trainee Management</h1>
-          <p className="text-muted-foreground">Add new trainees and assign them to your programs.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Trainee Management</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Add new trainees and assign them to your programs.</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setBulkUploadModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button onClick={() => setBulkUploadModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto">
             <FileUp className="mr-2 h-4 w-4" />
             Import Trainees
           </Button>
-          <Button onClick={() => setCreateModalOpen(true)} className="bg-[#1f497d] hover:bg-[#1a3f6b]">
+          <Button onClick={() => setCreateModalOpen(true)} className="bg-[#1f497d] hover:bg-[#1a3f6b] w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
             Add Single Trainee
           </Button>
@@ -594,19 +660,19 @@ const TraineesPage: React.FC = () => {
       {/* Filters and View Controls */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
+              <div className="flex items-center space-x-2 flex-1 sm:flex-initial">
                 <Search className="h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search trainees by name or email..." 
-                  value={searchTerm} 
-                  onChange={(e) => setSearchTerm(e.target.value)} 
-                  className="w-72"
+                <Input
+                  placeholder="Search trainees..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full sm:w-64 md:w-72"
                 />
               </div>
               <Select value={filterProgram} onValueChange={setFilterProgram}>
-                <SelectTrigger className="w-[200px]">
+                <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="Filter by program" />
                 </SelectTrigger>
                 <SelectContent>
@@ -619,9 +685,9 @@ const TraineesPage: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
-            
+
             {/* View Mode Controls */}
-            <div className="flex items-center space-x-1 border rounded-lg p-1">
+            <div className="flex items-center justify-center sm:justify-start space-x-1 border rounded-lg p-1">
               <Button
                 variant={viewMode === 'cards' ? 'default' : 'ghost'}
                 size="sm"
@@ -944,6 +1010,37 @@ const TraineesPage: React.FC = () => {
                 <MinusCircle className="mr-2 h-4 w-4"/>
               )}
               Unenroll
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5"/>
+              Confirm Deletion
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{traineeToDelete?.name}</strong> ({traineeToDelete?.email})?
+              This action cannot be undone. The trainee will be permanently removed from the system and all associated programs.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteTrainee}
+              disabled={isSubmitting}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isSubmitting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin"/>
+              ) : (
+                <Trash2 className="mr-2 h-4 w-4"/>
+              )}
+              Delete Trainee
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

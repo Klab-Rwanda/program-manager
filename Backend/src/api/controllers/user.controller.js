@@ -428,7 +428,15 @@ export const getArchivedUsers = asyncHandler(async (req, res) => {
         throw new ApiError(404, "User not found.");
     }
 
-    const user = await User.findByIdAndUpdate(
+    // Role-based permission check
+    if (req.user.role === 'Program Manager') {
+        // Program Managers can only delete Trainees and Facilitators
+        if (userToDelete.role !== 'Trainee' && userToDelete.role !== 'Facilitator') {
+            throw new ApiError(403, "Forbidden: Program Managers can only delete Trainees and Facilitators.");
+        }
+    }
+
+    await User.findByIdAndUpdate(
         id,
         { $set: { isActive: false, isDeleted: true } },
         { new: true }
@@ -436,10 +444,10 @@ export const getArchivedUsers = asyncHandler(async (req, res) => {
 
     await createNotification({
         recipient: userToDelete._id,
-        sender: req.user._id, 
+        sender: req.user._id,
         title: "Account Deleted",
-        message: `Your account (${userToDelete.email}) has been deleted by a Super Admin. You will no longer be able to log in.`,
-        link: `/auth/login`, 
+        message: `Your account (${userToDelete.email}) has been deleted by ${req.user.role === 'SuperAdmin' ? 'a Super Admin' : 'a Program Manager'}. You will no longer be able to log in.`,
+        link: `/auth/login`,
         type: 'error'
     });
     return res.status(200).json(new ApiResponse(200, {}, "User has been deleted."));

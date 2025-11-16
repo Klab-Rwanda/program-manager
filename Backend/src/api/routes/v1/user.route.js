@@ -181,7 +181,7 @@ manageRouter.route('/').get(checkRole(['SuperAdmin', 'Program Manager']), userCo
  *   delete:
  *     tags: [User Management (Admin)]
  *     summary: Delete a user
- *     description: (SuperAdmin only) Marks a user as deleted and inactive.
+ *     description: (SuperAdmin & Program Manager) Marks a user as deleted and inactive. Program Managers can only delete Trainees and Facilitators.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -189,11 +189,12 @@ manageRouter.route('/').get(checkRole(['SuperAdmin', 'Program Manager']), userCo
  *     responses:
  *       200: { description: 'User deleted successfully.' }
  *       404: { description: 'User not found.' }
+ *       403: { description: 'Forbidden - Program Managers can only delete Trainees and Facilitators.' }
  */
 manageRouter.route('/:id')
     .get(checkRole(['SuperAdmin']), userController.getUserById)
-    .patch(checkRole(['SuperAdmin']), userController.updateUserDetailsByAdmin) // ✅ THIS WAS MISSING!
-    .delete(checkRole(['SuperAdmin']), userController.deleteUserByAdmin);
+    .patch(checkRole(['SuperAdmin']), userController.updateUserDetailsByAdmin)
+    .delete(checkRole(['SuperAdmin', 'Program Manager']), userController.deleteUserByAdmin);
 
 /**
  * @openapi
