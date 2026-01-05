@@ -19,7 +19,7 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select';
-import { toast } from 'react-toastify';
+import { toast } from 'sonner';
 
 type Ticket = {
   _id: string;
@@ -88,7 +88,7 @@ export default function MyTickets() {
       }
 
       const data = await res.json();
-      setTickets(data.tickets || []); // Replace with your actual key
+      setTickets(data.data || []);
     } catch (err) {
       console.error('Error fetching tickets:', err);
     } finally {

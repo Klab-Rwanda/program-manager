@@ -35,7 +35,7 @@ export default function ResetPasswordPage() {
       const API_URL =
         window.location.hostname === 'localhost'
           ? 'http://localhost:8000'
-          : 'https://program-ms.andasy.dev/';
+          : 'https://program-ms.andasy.dev';
 
       const response = await fetch(
         `${API_URL}/api/v1/auth/reset-password/${token}`,
