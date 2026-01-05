@@ -43,23 +43,47 @@ const registerUser = asyncHandler(async (req, res) => {
     }
   }
 
-  const existedUser = await User.findOne({ email });
-  if (existedUser) {
-    throw new ApiError(409, 'User with this email already exists');
-  }
+  // Check for existing user (including soft-deleted ones)
+  const existedUser = await User.findOne({ email }).setOptions({ includeDeleted: true });
 
-  const user = await User.create({
-    name,
-    email,
-    password: generatedPassword,
-    role,
-    ...(firstName && { firstName }),
-    ...(lastName && { lastName }),
-    ...(phone && { phone }),
-    ...(gender && { gender }),
-    ...(nationality && { nationality })
-  });
-  const createdUser = await User.findById(user._id).select('-password');
+  let user;
+  let createdUser;
+
+  if (existedUser) {
+    if (!existedUser.isDeleted) {
+      throw new ApiError(409, 'User with this email already exists');
+    }
+
+    // Reactivate the soft-deleted user with new details
+    existedUser.name = name;
+    existedUser.password = generatedPassword;
+    existedUser.role = role;
+    existedUser.isDeleted = false;
+    existedUser.isActive = true;
+    existedUser.status = 'Pending';
+    if (firstName) existedUser.firstName = firstName;
+    if (lastName) existedUser.lastName = lastName;
+    if (phone) existedUser.phone = phone;
+    if (gender) existedUser.gender = gender;
+    if (nationality) existedUser.nationality = nationality;
+
+    await existedUser.save();
+    user = existedUser;
+    createdUser = await User.findById(user._id).select('-password');
+  } else {
+    user = await User.create({
+      name,
+      email,
+      password: generatedPassword,
+      role,
+      ...(firstName && { firstName }),
+      ...(lastName && { lastName }),
+      ...(phone && { phone }),
+      ...(gender && { gender }),
+      ...(nationality && { nationality })
+    });
+    createdUser = await User.findById(user._id).select('-password');
+  }
 
   if (!createdUser) {
     throw new ApiError(500, 'Something went wrong while registering the user');

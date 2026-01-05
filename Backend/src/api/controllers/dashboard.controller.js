@@ -127,13 +127,22 @@ export const getAdminOverview = asyncHandler(async (req, res) => {
         User.countDocuments({ role: 'Trainee', isActive: true }),
         User.countDocuments({ role: 'Facilitator', isActive: true }),
         Course.countDocuments({ status: 'PendingApproval' }), // Pending course approvals are system-wide for SuperAdmin, or could be filtered by program manager's courses if desired (but generally pending approvals are centralized)
-        Log.find({}).sort({ createdAt: -1 }).limit(5).populate('user', 'name role'),
+        Log.find({}).sort({ createdAt: -1 }).limit(5).populate('user', 'name role').lean(),
         Program.find({
             ...managerQuery,
             status: 'Active', // Only active programs ending soon
             endDate: { $gte: new Date(), $lte: new Date(new Date().setDate(new Date().getDate() + 30)) }
         }).sort('endDate').limit(3).select('name endDate')
     ]);
+
+    // Transform recentLogs to avoid sending populated objects to frontend
+    const transformedLogs = recentLogs.map(log => ({
+        _id: log._id,
+        action: log.action,
+        userName: log.user?.name || 'Unknown',
+        userRole: log.user?.role || 'Unknown',
+        createdAt: log.createdAt
+    }));
 
     const stats = {
         totalPrograms,
@@ -142,10 +151,10 @@ export const getAdminOverview = asyncHandler(async (req, res) => {
         totalTrainees,
         totalFacilitators,
         pendingCourses,
-        recentLogs,
+        recentLogs: transformedLogs,
         programsEndingSoon,
     };
-    
+
     return res.status(200).json(new ApiResponse(200, stats, "Admin overview fetched successfully."));
 });
 

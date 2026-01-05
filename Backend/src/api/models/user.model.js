@@ -58,6 +58,11 @@ userSchema.pre('save', async function (next) {
 
 userSchema.pre(/^find/, function (next) {
   if (this.op === 'findOne' || this.op === 'find') {
+    const options = this.getOptions();
+    // Skip filtering if includeDeleted option is set
+    if (options.includeDeleted) {
+      return next();
+    }
     const query = this.getQuery();
     if (query.isDeleted !== true) {
       this.where({ isDeleted: { $ne: true } });

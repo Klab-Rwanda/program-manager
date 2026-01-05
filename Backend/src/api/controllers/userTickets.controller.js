@@ -26,7 +26,7 @@ export const createTicket = asyncHandler(async (req, res) => {
 
 // Get tickets: IT support gets all, others get their own
 export const getTickets = asyncHandler(async (req, res) => {
-  const query = (req.user.role === 'it_support' || req.user.role === 'SuperAdmin') ? {} : { createdBy: req.user._id };
+  const query = (req.user.role === 'IT-Support' || req.user.role === 'SuperAdmin') ? {} : { createdBy: req.user._id };
 
   const tickets = await Ticket.find(query)
     .populate('createdBy', 'name email')
