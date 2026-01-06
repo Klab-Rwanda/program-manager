@@ -185,7 +185,14 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
   }
 
   const headers = jsonData[0]; // Assuming first row is headers
-  const usersToRegister = jsonData.slice(1); // Actual data starts from second row
+
+  // Filter out empty rows (rows where all cells are empty/null/undefined)
+  const isEmptyRow = (row) => {
+    if (!row || row.length === 0) return true;
+    return row.every(cell => cell === null || cell === undefined || String(cell).trim() === '');
+  };
+
+  const usersToRegister = jsonData.slice(1).filter(row => !isEmptyRow(row)); // Actual data starts from second row
 
   const results = {
     totalProcessed: 0,
@@ -194,7 +201,12 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
     errors: []
   };
 
-  const registrationPromises = usersToRegister.map(async (row, index) => {
+  // Helper function to add delay between emails to avoid rate limiting
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Process users sequentially to avoid email rate limiting
+  for (let index = 0; index < usersToRegister.length; index++) {
+    const row = usersToRegister[index];
     results.totalProcessed++;
     // Map column headers to field indices
     const nameIndex =
@@ -217,13 +229,18 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
     const phoneIndex = headers.indexOf('Phone');
     const nationalityIndex = headers.indexOf('Nationality');
 
-    const name = row[nameIndex]?.trim();
+    let name = row[nameIndex]?.trim() || '';
     const email = row[emailIndex]?.trim()?.toLowerCase();
     const firstName = firstNameIndex !== -1 ? row[firstNameIndex]?.trim() : undefined;
     const lastName = lastNameIndex !== -1 ? row[lastNameIndex]?.trim() : undefined;
     const gender = genderIndex !== -1 ? row[genderIndex]?.trim() : undefined;
-    const phone = phoneIndex !== -1 ? row[phoneIndex]?.trim() : undefined;
+    const phone = phoneIndex !== -1 ? String(row[phoneIndex] || '').trim() : undefined;
     const nationality = nationalityIndex !== -1 ? row[nationalityIndex]?.trim() : undefined;
+
+    // If Name is empty but First Name and/or Last Name exist, generate Name
+    if (!name && (firstName || lastName)) {
+      name = `${firstName || ''} ${lastName || ''}`.trim();
+    }
 
     // Validate basic fields from the spreadsheet
     if (!name || !email) {
@@ -304,7 +321,9 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
       });
 
       results.successful++;
-      return newUser;
+
+      // Add delay between emails to avoid rate limiting (500ms between each)
+      await delay(500);
     } catch (innerError) {
       results.failed++;
       console.error(
@@ -318,11 +337,8 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
         }`,
         data: row
       });
-      return null;
     }
-  });
-
-  await Promise.allSettled(registrationPromises); // Wait for all promises to settle
+  }
 
   let message = `Bulk registration complete: ${results.successful} successful, ${results.failed} failed.`;
   if (results.errors.length > 0) {

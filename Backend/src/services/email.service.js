@@ -13,6 +13,15 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+// Verify transporter connection on startup
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('Email transporter verification failed:', error);
+  } else {
+    console.log('Email server is ready to send messages');
+  }
+});
+
 const sendRegistrationEmail = async (to, name, password) => {
   const subject = 'Welcome to Klab Program Manager!';
   const htmlBody = `

@@ -116,6 +116,13 @@ const getAllUsers = asyncHandler(async (req, res) => {
                 role: 1,
                 status: 1,
                 isActive: 1,
+                firstName: 1,
+                lastName: 1,
+                gender: 1,
+                nationality: 1,
+                phone: 1,
+                createdAt: 1,
+                updatedAt: 1,
                 enrolledPrograms: {
                     $map: {
                         input: "$enrolledPrograms",
