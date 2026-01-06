@@ -62,6 +62,8 @@ const TraineesPage: React.FC = () => {
   const [traineeToUnenroll, setTraineeToUnenroll] = useState<Trainee | null>(null);
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [traineeToDelete, setTraineeToDelete] = useState<Trainee | null>(null);
+  const [isViewModalOpen, setViewModalOpen] = useState(false);
+  const [traineeToView, setTraineeToView] = useState<Trainee | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -181,6 +183,11 @@ const TraineesPage: React.FC = () => {
     setDeleteConfirmOpen(true);
   };
 
+  const openViewModal = (trainee: Trainee) => {
+    setTraineeToView(trainee);
+    setViewModalOpen(true);
+  };
+
   const handleDeleteTrainee = async () => {
     if (!traineeToDelete) return;
     setIsSubmitting(true);
@@ -280,41 +287,80 @@ const TraineesPage: React.FC = () => {
         }
 
         const headers = rawData[0].map(h => h?.trim());
-        const requiredHeaders = ['Name', 'Email'];
-        const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
 
-        if (missingHeaders.length > 0) {
-          toast.error(`Missing required headers: ${missingHeaders.join(', ')}. Please ensure your file has 'Name' and 'Email' columns.`);
+        // Email is the only required header; Name can be derived from First Name + Last Name
+        if (!headers.includes('Email')) {
+          toast.error("Missing required header: 'Email'. Please ensure your file has an 'Email' column.");
           setParsedTrainees([]);
           return;
         }
 
         const emailColIndex = headers.indexOf('Email');
         const nameColIndex = headers.indexOf('Name');
+        const firstNameColIndex = headers.indexOf('First Name');
+        const lastNameColIndex = headers.indexOf('Last Name');
         const genderColIndex = headers.indexOf('Gender');
         const phoneColIndex = headers.indexOf('Phone');
+        const nationalityColIndex = headers.indexOf('Nationality');
 
-        const parsed: ParsedTraineeData[] = rawData.slice(1).map((row, index) => {
-          const errors: string[] = [];
-          const name = row[nameColIndex]?.trim() || '';
-          const email = row[emailColIndex]?.trim()?.toLowerCase() || '';
+        // Helper to safely convert cell value to trimmed string
+        const toStr = (val: any): string => {
+          if (val === null || val === undefined) return '';
+          return String(val).trim();
+        };
 
-          if (!name) errors.push('Name is missing.');
-          if (!email) errors.push('Email is missing.');
-          if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.push('Invalid email format.');
+        // Helper to safely get column value (handles missing columns)
+        const getCol = (row: any[], colIndex: number): string => {
+          if (colIndex === -1 || colIndex >= row.length) return '';
+          return toStr(row[colIndex]);
+        };
 
-          const tempId = email || `temp-${index}-${Date.now()}`; 
+        // Helper to check if a row is empty (all cells are empty or whitespace)
+        const isEmptyRow = (row: any[]): boolean => {
+          if (!row || row.length === 0) return true;
+          return row.every(cell => cell === null || cell === undefined || toStr(cell) === '');
+        };
 
-          return {
-            _id: tempId,
-            name,
-            email,
-            gender: genderColIndex !== -1 && row[genderColIndex] ? row[genderColIndex]?.trim() : undefined,
-            phone: phoneColIndex !== -1 && row[phoneColIndex] ? row[phoneColIndex]?.trim() : undefined,
-            errors: errors.length > 0 ? errors : undefined,
-            selected: errors.length === 0
-          };
-        });
+        const parsed: ParsedTraineeData[] = rawData.slice(1)
+          .filter(row => !isEmptyRow(row)) // Skip empty rows
+          .map((row, index) => {
+            const errors: string[] = [];
+            const firstName = getCol(row, firstNameColIndex);
+            const lastName = getCol(row, lastNameColIndex);
+            let name = getCol(row, nameColIndex);
+
+            // If Name is empty but First Name and/or Last Name exist, generate Name
+            if (!name && (firstName || lastName)) {
+              name = `${firstName} ${lastName}`.trim();
+            }
+
+            const email = getCol(row, emailColIndex).toLowerCase();
+
+            // Skip rows that have no meaningful data (no email and no name info)
+            if (!email && !name && !firstName && !lastName) {
+              return null; // Will be filtered out
+            }
+
+            if (!name && !firstName && !lastName) errors.push('Name or First/Last Name is missing.');
+            if (!email) errors.push('Email is missing.');
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.push('Invalid email format.');
+
+            const tempId = email || `temp-${index}-${Date.now()}`;
+
+            return {
+              _id: tempId,
+              name,
+              email,
+              firstName: firstName || undefined,
+              lastName: lastName || undefined,
+              gender: getCol(row, genderColIndex) || undefined,
+              phone: getCol(row, phoneColIndex) || undefined,
+              nationality: getCol(row, nationalityColIndex) || undefined,
+              errors: errors.length > 0 ? errors : undefined,
+              selected: errors.length === 0
+            };
+          })
+          .filter((row): row is ParsedTraineeData => row !== null); // Remove null entries
 
         setParsedTrainees(parsed);
         setSelectedParsedTraineeIds(parsed.filter(t => !t.errors).map(t => t._id!));
@@ -436,7 +482,7 @@ const TraineesPage: React.FC = () => {
                   </Select>
                 );
               })()}
-              <Button variant="ghost" size="icon" title="View details">
+              <Button variant="ghost" size="icon" title="View details" onClick={() => openViewModal(trainee)}>
                 <Eye className="h-4 w-4"/>
               </Button>
               {(user?.role === 'SuperAdmin' || user?.role === 'Program Manager') && (
@@ -483,7 +529,7 @@ const TraineesPage: React.FC = () => {
               <Button variant="outline" size="sm" onClick={() => openAssignModal(trainee)}>
                 <UserPlus className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="sm" title="View details">
+              <Button variant="ghost" size="sm" title="View details" onClick={() => openViewModal(trainee)}>
                 <Eye className="h-4 w-4" />
               </Button>
               {(user?.role === 'SuperAdmin' || user?.role === 'Program Manager') && (
@@ -553,7 +599,7 @@ const TraineesPage: React.FC = () => {
                     <Button variant="outline" size="sm" onClick={() => openAssignModal(trainee)} title="Assign to program">
                       <UserPlus className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" title="View details">
+                    <Button variant="ghost" size="sm" title="View details" onClick={() => openViewModal(trainee)}>
                       <Eye className="h-4 w-4" />
                     </Button>
                     {(user?.role === 'SuperAdmin' || user?.role === 'Program Manager') && (
@@ -623,7 +669,7 @@ const TraineesPage: React.FC = () => {
                       <Button variant="ghost" size="sm" onClick={() => openAssignModal(trainee)} title="Assign to program">
                         <UserPlus className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="sm" title="View details">
+                      <Button variant="ghost" size="sm" title="View details" onClick={() => openViewModal(trainee)}>
                         <Eye className="h-3 w-3" />
                       </Button>
                       {(user?.role === 'SuperAdmin' || user?.role === 'Program Manager') && (
@@ -899,12 +945,13 @@ const TraineesPage: React.FC = () => {
 
       {/* Bulk Upload Trainee Modal */}
       <Dialog open={isBulkUploadModalOpen} onOpenChange={setBulkUploadModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Import Trainees</DialogTitle>
             <DialogDescription>
               Upload an Excel (.xlsx) or CSV file to register multiple trainees at once.
-              Required columns: Name, Email. Optional columns: First Name, Last Name, Phone, Gender, Nationality.
+              Required: Email. Optional: Name, First Name, Last Name, Phone, Gender, Nationality.
+              If Name is missing, it will be generated from First Name + Last Name.
             </DialogDescription>
           </DialogHeader>
           
@@ -982,7 +1029,7 @@ const TraineesPage: React.FC = () => {
                                 className="rounded border-gray-300"
                               />
                             </TableCell>
-                            <TableCell className={trainee.errors?.includes('Name is missing.') ? 'text-red-600' : ''}>
+                            <TableCell className={trainee.errors?.includes('Name or First/Last Name is missing.') ? 'text-red-600' : ''}>
                               {trainee.name || 'N/A'}
                             </TableCell>
                             <TableCell className={
@@ -1129,6 +1176,93 @@ const TraineesPage: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* View Trainee Details Modal */}
+      <Dialog open={isViewModalOpen} onOpenChange={setViewModalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-blue-600" />
+              Trainee Details
+            </DialogTitle>
+            <DialogDescription>
+              View detailed information about this trainee.
+            </DialogDescription>
+          </DialogHeader>
+          {traineeToView && (
+            <div className="space-y-4 py-4">
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
+                  <span className="text-xl font-semibold text-blue-600">
+                    {getInitials(traineeToView.name)}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">{traineeToView.name}</h3>
+                  <p className="text-sm text-muted-foreground">{traineeToView.email}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                <div>
+                  <Label className="text-xs text-muted-foreground">First Name</Label>
+                  <p className="font-medium">{traineeToView.firstName || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Last Name</Label>
+                  <p className="font-medium">{traineeToView.lastName || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Phone</Label>
+                  <p className="font-medium">{traineeToView.phone || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Gender</Label>
+                  <p className="font-medium">{traineeToView.gender || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Nationality</Label>
+                  <p className="font-medium">{traineeToView.nationality || 'N/A'}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Status</Label>
+                  <Badge variant={traineeToView.isActive ? "default" : "outline"}>
+                    {traineeToView.status || (traineeToView.isActive ? 'Active' : 'Inactive')}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t">
+                <Label className="text-xs text-muted-foreground">Enrolled Programs</Label>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {getTraineePrograms(traineeToView._id).length > 0 ? (
+                    getTraineePrograms(traineeToView._id).map(program => (
+                      <Badge key={program._id} variant="secondary" className="flex items-center gap-1">
+                        <BookOpen className="h-3 w-3" />
+                        {program.name}
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Not enrolled in any programs</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewModalOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={() => {
+              setViewModalOpen(false);
+              if (traineeToView) openAssignModal(traineeToView);
+            }}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Assign to Program
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -54,6 +54,10 @@ export interface Facilitator extends User {
 // ----------------------------
 export interface Trainee extends User {
   phone?: string;
+  firstName?: string;
+  lastName?: string;
+  gender?: string;
+  nationality?: string;
   location?: string;
   enrolledPrograms?: string[];
   progress?: number;
