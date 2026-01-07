@@ -31,6 +31,9 @@ type Ticket = {
   createdAt: string;
 };
 
+// Helper to get API URL from environment variable
+const getApiUrl = () => (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/+$/, '');
+
 export default function MyTickets() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,18 +65,7 @@ export default function MyTickets() {
       return;
     }
 
-    // Detect API base URL based on current hostname
-    let BASE_URL = 'http://localhost:8000/api/v1'; // Default for local dev
-
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
-
-      if (hostname.includes('andasy')) {
-        BASE_URL = 'https://backendklab.andasy.dev/api/v1';
-      } else if (hostname.includes('vercel')) {
-        BASE_URL = 'https://program-ms.andasy.dev/api/v1';
-      }
-    }
+    const BASE_URL = getApiUrl();
 
     try {
       const res = await fetch(`${BASE_URL}/tickets`, {
@@ -126,18 +118,7 @@ export default function MyTickets() {
     if (!token) return alert('You must be logged in');
 
     try {
-      // Detect API base URL based on current hostname
-      let BASE_URL = 'http://localhost:8000/api/v1'; // Default for local dev
-
-      if (typeof window !== 'undefined') {
-        const hostname = window.location.hostname;
-
-        if (hostname.includes('andasy')) {
-          BASE_URL = 'https://backendklab.andasy.dev/api/v1';
-        } else if (hostname.includes('vercel')) {
-          BASE_URL = 'https://program-ms.andasy.dev/api/v1';
-        }
-      }
+      const BASE_URL = getApiUrl();
 
       const url = editingTicket
         ? `${BASE_URL}/tickets/${editingTicket._id}`
@@ -187,18 +168,7 @@ export default function MyTickets() {
     if (!token) return alert('You must be logged in');
 
     try {
-      // Detect API base URL based on current hostname
-      let BASE_URL = 'http://localhost:8000/api/v1'; // Default for local dev
-
-      if (typeof window !== 'undefined') {
-        const hostname = window.location.hostname;
-
-        if (hostname.includes('andasy')) {
-          BASE_URL = 'https://backendklab.andasy.dev/api/v1';
-        } else if (hostname.includes('vercel')) {
-          BASE_URL = 'https://program-ms.andasy.dev/api/v1';
-        }
-      }
+      const BASE_URL = getApiUrl();
 
       const res = await fetch(`${BASE_URL}/tickets/${id}`, {
         method: 'DELETE',

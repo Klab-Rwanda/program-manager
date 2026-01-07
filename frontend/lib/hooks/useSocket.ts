@@ -2,21 +2,11 @@
 import { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-// Dynamically resolve the WebSocket URL
-let SOCKET_URL = 'http://localhost:8000'; // Default local dev fallback
-
-if (typeof window !== 'undefined') {
-  const hostname = window.location.hostname;
-
-  if (hostname.includes('andasy')) {
-    SOCKET_URL = 'https://program-ms.andasy.dev/';
-  } else if (hostname.includes('vercel')) {
-    SOCKET_URL = 'https://program-ms.andasy.dev';
-  } else if (process.env.NEXT_PUBLIC_API_URL) {
-    // Strip off /api/v1 if present
-    SOCKET_URL = process.env.NEXT_PUBLIC_API_URL.replace('/api/v1', '');
-  }
-}
+// Get socket URL from environment variable (strip /api/v1 for WebSocket connection)
+const getSocketUrl = () => {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+  return apiUrl.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
+};
 
 export const useSocket = (roomId?: string) => {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -28,7 +18,7 @@ export const useSocket = (roomId?: string) => {
       return;
     }
 
-    const newSocket = io(SOCKET_URL, {
+    const newSocket = io(getSocketUrl(), {
       withCredentials: true
     });
 

@@ -32,13 +32,11 @@ export default function ResetPasswordPage() {
     setIsLoading(true);
 
     try {
-      const API_URL =
-        window.location.hostname === 'localhost'
-          ? 'http://localhost:8000'
-          : 'https://program-ms.andasy.dev';
+      // Use environment variable for API URL, with fallback for local development
+      const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/+$/, '');
 
       const response = await fetch(
-        `${API_URL}/api/v1/auth/reset-password/${token}`,
+        `${API_URL}/auth/reset-password/${token}`,
         {
           method: 'PUT',
           headers: {

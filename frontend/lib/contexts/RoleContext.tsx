@@ -55,17 +55,10 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    let API_URL = "";
+    // Use environment variable for API URL, with fallback for local development
+    const API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1").replace(/\/+$/, "");
 
-    const hostname = window.location.hostname;
-
-    if (hostname === "localhost") {
-        API_URL = "http://localhost:8000";
-      } else if (hostname.includes("vercel")) {
-        API_URL = "https://program-ms.andasy.dev";
-      }
-
-    const res = await fetch(`${API_URL}/api/v1/auth/login`, {
+    const res = await fetch(`${API_URL}/auth/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

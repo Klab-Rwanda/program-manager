@@ -18,12 +18,10 @@ export default function ForgotPasswordPage() {
     setMessage('');
 
     try {
-      const API_URL =
-        window.location.hostname === 'localhost'
-          ? 'http://localhost:4000'
-          : 'https://program-ms.andasy.dev/';
+      // Use environment variable for API URL, with fallback for local development
+      const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/+$/, '');
 
-      const res = await fetch(`${API_URL}/api/v1/auth/forgot-password`, {
+      const res = await fetch(`${API_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
