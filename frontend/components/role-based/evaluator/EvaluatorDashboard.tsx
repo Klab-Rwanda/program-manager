@@ -68,7 +68,7 @@ export function EvaluatorDashboard() {
           'Content-Type': 'application/json'
         }
 
-        const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+        const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1").replace(/\/+$/, '');
 
         // Fetch from same endpoints as Program Manager
         const [programsRes, overviewStatsRes, activityRes] = await Promise.all([

@@ -2,7 +2,8 @@
 import axios from 'axios';
 
 // Ensure this URL is correct for your backend API
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+// Remove trailing slash to prevent double-slash issues
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/+$/, '');
 
 const api = axios.create({
   baseURL: API_URL,

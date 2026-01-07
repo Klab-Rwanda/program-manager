@@ -70,7 +70,7 @@ export function ProgramManagerDashboard() {
           'Content-Type': 'application/json'
         }
 
-        const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+        const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1").replace(/\/+$/, '');
 
         // Fetch from `admin-overview` which provides more granular stats for PM/SA
         const [programsRes, overviewStatsRes, activityRes] = await Promise.all([
