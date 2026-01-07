@@ -16,16 +16,20 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app); // Create an HTTP server from the Express app
 
-// Setup Socket.io
-
-// And update Socket.io too:
-const io = new Server(server, {
-  cors: {
-    origin: [
+// Parse CORS origins from environment variable or use defaults
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+  : [
       'http://localhost:3000',
       'https://program-ms.vercel.app',
-      'https://frontendklab.andasy.dev'
-    ],
+      'http://pms.klab.rw',
+      'https://pms.klab.rw'
+    ];
+
+// Setup Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -42,11 +46,7 @@ const PORT = process.env.PORT || 6000;
 app.use(helmet());
 app.use(
   cors({
-    origin: [
-      'http://localhost:3000',
-      'https://program-ms.vercel.app',
-      'https://frontendklab.andasy.dev'
-    ],
+    origin: allowedOrigins,
     credentials: true
   })
 );
