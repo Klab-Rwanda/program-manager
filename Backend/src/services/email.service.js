@@ -34,7 +34,7 @@ const sendRegistrationEmail = async (to, name, password) => {
         </ul>
         <p>It is highly recommended that you change your password after your first login.</p>
         <p>Best regards,<br>The Klab Team</p>
-        <p>you can log in using this link https://program-ms.vercel.app/auth/login</p>
+        <p>you can log in using this link https://pms.klab.rw/auth/login</p>
     `;
 
   const mailOptions = {
@@ -56,7 +56,7 @@ const sendRegistrationEmail = async (to, name, password) => {
 const sendPasswordResetEmail = async (email, name, resetToken) => {
   const baseUrl =
     process.env.NODE_ENV === 'production'
-      ? 'https://program-ms.vercel.app'
+      ? 'https://pms.klab.rw'
       : 'http://localhost:3000';
 
   const resetUrl = `${baseUrl}/auth/reset-password/${resetToken}`;
