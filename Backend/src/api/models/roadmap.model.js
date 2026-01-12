@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const roadmapSchema = new mongoose.Schema({
     program: { type: mongoose.Schema.Types.ObjectId, ref: 'Program', required: true },
-    course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course', required: true },
+    course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' }, // Optional - roadmaps are program-level
     facilitator: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     weekNumber: { type: Number, required: true },
     title: { type: String, required: true },
@@ -15,7 +15,8 @@ const roadmapSchema = new mongoose.Schema({
     },
     feedback: { type: String },
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    approvedAt: { type: Date }
+    approvedAt: { type: Date },
+    isCurrent: { type: Boolean, default: false } // Marks the current week for the program
 }, { timestamps: true });
 
 // Ensure a program can only have one roadmap for a specific week

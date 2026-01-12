@@ -112,17 +112,36 @@ const registerUser = asyncHandler(async (req, res) => {
     entity: { id: user._id, model: 'User' }
   });
 
-  sendRegistrationEmail(email, name, generatedPassword).catch((err) =>
-    console.error('Email sending failed after user creation:', err)
-  );
+  // Send registration email and track delivery status
+  let emailSent = false;
+  let emailError = null;
+  try {
+    await sendRegistrationEmail(email, name, generatedPassword);
+    emailSent = true;
+  } catch (err) {
+    console.error('Email sending failed after user creation:', err);
+    emailError = err.message;
+  }
+
+  const responseMessage = emailSent
+    ? 'User registered successfully. Login credentials have been sent to their email.'
+    : 'User registered successfully, but email delivery failed. Please share credentials manually.';
+
+  // Always include generated password in response so admin can share if needed
+  const responseData = {
+    ...createdUser.toObject(),
+    emailSent,
+    emailError,
+    generatedPassword
+  };
 
   return res
     .status(201)
     .json(
       new ApiResponse(
         201,
-        createdUser,
-        'User registered successfully. Login credentials have been sent to their email.'
+        responseData,
+        responseMessage
       )
     );
 });
@@ -198,7 +217,12 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
     totalProcessed: 0,
     successful: 0,
     failed: 0,
-    errors: []
+    errors: [],
+    emailResults: {
+      sent: 0,
+      failed: 0,
+      failures: []
+    }
   };
 
   // Helper function to add delay between emails to avoid rate limiting
@@ -250,7 +274,7 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
         message: 'Missing Name or Email.',
         data: row
       });
-      return null;
+      continue;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       results.failed++;
@@ -259,7 +283,7 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
         message: `Invalid email format: ${email}.`,
         data: row
       });
-      return null;
+      continue;
     }
 
     const generatedPassword = Math.random().toString(36).slice(-8);
@@ -273,7 +297,7 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
           message: `User with email ${email} already exists.`,
           data: row
         });
-        return null;
+        continue;
       }
 
       const newUser = await User.create({
@@ -288,13 +312,19 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
         ...(nationality && { nationality })
       });
 
-      // Send registration email
-      sendRegistrationEmail(email, name, generatedPassword).catch((err) =>
-        console.error(
-          `Email failed for ${email} during bulk registration:`,
-          err
-        )
-      );
+      // Send registration email and track delivery
+      try {
+        await sendRegistrationEmail(email, name, generatedPassword);
+        results.emailResults.sent++;
+      } catch (emailErr) {
+        console.error(`Email failed for ${email} during bulk registration:`, emailErr);
+        results.emailResults.failed++;
+        results.emailResults.failures.push({
+          email,
+          name,
+          error: emailErr.message
+        });
+      }
 
       // Notify other SuperAdmins about the new user
       const superAdmins = await User.find({ role: 'SuperAdmin' });
@@ -340,9 +370,13 @@ const bulkRegisterUsers = asyncHandler(async (req, res) => {
     }
   }
 
-  let message = `Bulk registration complete: ${results.successful} successful, ${results.failed} failed.`;
+  let message = `Bulk registration complete: ${results.successful} users created, ${results.failed} failed.`;
+  message += ` Emails: ${results.emailResults.sent} sent, ${results.emailResults.failed} failed.`;
   if (results.errors.length > 0) {
     message += ` Check errors for details.`;
+  }
+  if (results.emailResults.failures.length > 0) {
+    message += ` Some users may need credentials shared manually.`;
   }
 
   return res.status(results.failed > 0 ? 202 : 201).json(

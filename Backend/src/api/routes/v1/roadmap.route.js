@@ -46,6 +46,11 @@ router.route('/all').get(
 router.route('/')
     .post(checkRole(['Facilitator']), roadmapController.createOrUpdateRoadmap);
 
+router.route('/:roadmapId/set-current').patch(
+    checkRole(['Facilitator']),
+    roadmapController.setCurrentWeek
+);
+
 router.route('/:id')
     .delete(checkRole(['Facilitator']), roadmapController.deleteRoadmap);
 

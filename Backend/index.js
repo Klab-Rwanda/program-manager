@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import http from 'http'; // Import the native http module
@@ -16,20 +15,10 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app); // Create an HTTP server from the Express app
 
-// Parse CORS origins from environment variable or use defaults
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-  : [
-      'http://localhost:3000',
-      'https://program-ms.vercel.app',
-      'http://pms.klab.rw',
-      'https://pms.klab.rw'
-    ];
-
-// Setup Socket.io
+// Setup Socket.io - allow all origins
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -42,12 +31,34 @@ export { io };
 
 const PORT = process.env.PORT || 6000;
 
-// Middleware
-app.use(helmet());
+// Simple CORS - allow all origins
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  // Allow any origin
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
+
+// Configure helmet to not interfere with CORS
 app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true
+  helmet({
+    crossOriginResourcePolicy: false,
+    crossOriginOpenerPolicy: false,
+    crossOriginEmbedderPolicy: false
   })
 );
 

@@ -40,7 +40,7 @@ export const createOrUpdateRoadmap = asyncHandler(async (req, res) => {
     // If it exists, update it. If not, create a new one.
     const roadmapData = {
         program,
-        course,
+        ...(course && { course }), // Only include course if provided
         weekNumber: parseInt(weekNumber),
         title,
         startDate,
@@ -506,7 +506,7 @@ export const rejectRoadmap = asyncHandler(async (req, res) => {
  */
 export const getAllRoadmaps = asyncHandler(async (req, res) => {
     console.log('getAllRoadmaps called by user:', req.user._id);
-    
+
     const roadmaps = await Roadmap.find()
         .populate('program', 'name')
         .populate('course', 'title')
@@ -517,4 +517,41 @@ export const getAllRoadmaps = asyncHandler(async (req, res) => {
     console.log('Roadmap statuses:', roadmaps.map(r => ({ id: r._id, status: r.status, title: r.title })));
 
     return res.status(200).json(new ApiResponse(200, roadmaps, "All roadmaps fetched successfully."));
+});
+
+/**
+ * @desc    Set a roadmap as current week for its program
+ * @route   PATCH /api/v1/roadmaps/{roadmapId}/set-current
+ * @access  Private (Facilitator)
+ */
+export const setCurrentWeek = asyncHandler(async (req, res) => {
+    const { roadmapId } = req.params;
+    const facilitatorId = req.user._id;
+
+    const roadmap = await Roadmap.findById(roadmapId);
+    if (!roadmap) {
+        throw new ApiError(404, "Roadmap not found");
+    }
+
+    // Verify the facilitator owns this roadmap
+    if (roadmap.facilitator.toString() !== facilitatorId.toString()) {
+        throw new ApiError(403, "You are not authorized to modify this roadmap.");
+    }
+
+    // Only approved roadmaps can be set as current
+    if (roadmap.status !== 'approved') {
+        throw new ApiError(400, "Only approved roadmaps can be set as current week.");
+    }
+
+    // Remove current flag from all other roadmaps in the same program
+    await Roadmap.updateMany(
+        { program: roadmap.program, _id: { $ne: roadmapId } },
+        { $set: { isCurrent: false } }
+    );
+
+    // Set this roadmap as current
+    roadmap.isCurrent = true;
+    await roadmap.save();
+
+    return res.status(200).json(new ApiResponse(200, roadmap, "Week set as current successfully."));
 });

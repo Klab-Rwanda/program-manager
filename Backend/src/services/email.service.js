@@ -251,7 +251,11 @@ const sendCertificateIssuedEmail = async (
   programName
 ) => {
   const subject = `Your Certificate for ${programName} is Issued!`;
-  const dashboardLink = `http://localhost:3000/dashboard/Trainee/my-certificates`; // Adjust to your frontend URL
+  const baseUrl =
+    process.env.NODE_ENV === 'production'
+      ? 'https://pms.klab.rw'
+      : 'http://localhost:3000';
+  const dashboardLink = `${baseUrl}/dashboard/Trainee/my-certificates`;
 
   const htmlBody = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
@@ -397,11 +401,94 @@ const sendSessionReminderEmail = async (
   }
 };
 
+/**
+ * Send announcement email to multiple recipients
+ */
+const sendAnnouncementEmail = async ({ recipients, title, content, authorName, programName, priority }) => {
+  const priorityColors = {
+    low: '#6c757d',
+    normal: '#1f497d',
+    high: '#fd7e14',
+    urgent: '#dc3545'
+  };
+
+  const priorityLabels = {
+    low: 'Low Priority',
+    normal: '',
+    high: 'High Priority',
+    urgent: '🚨 URGENT'
+  };
+
+  const priorityColor = priorityColors[priority] || priorityColors.normal;
+  const priorityLabel = priorityLabels[priority] || '';
+
+  const baseUrl = process.env.NODE_ENV === 'production'
+    ? 'https://pms.klab.rw'
+    : 'http://localhost:3000';
+
+  for (const recipient of recipients) {
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <h1 style="color: #333; margin-bottom: 10px;">Klab Program Manager</h1>
+          <h2 style="color: ${priorityColor}; margin-top: 0;">
+            ${priorityLabel ? `<span style="background-color: ${priorityColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${priorityLabel}</span><br>` : ''}
+            New Announcement
+          </h2>
+        </div>
+
+        <p>Hello ${recipient.name},</p>
+        <p>A new announcement has been posted for the <strong>${programName}</strong> program.</p>
+
+        <div style="background-color: #f8f9fa; border-left: 4px solid ${priorityColor}; padding: 20px; margin: 20px 0;">
+          <h3 style="color: ${priorityColor}; margin-top: 0;">${title}</h3>
+          <div style="color: #333; line-height: 1.6;">
+            ${content.replace(/\n/g, '<br>')}
+          </div>
+          <p style="color: #666; font-size: 12px; margin-top: 15px; margin-bottom: 0;">
+            Posted by: ${authorName}
+          </p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${baseUrl}/dashboard"
+             style="background-color: #1f497d; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+            View in Dashboard
+          </a>
+        </div>
+
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+        <p style="font-size: 12px; color: #666;">
+          This is an automated notification from Klab Program Manager.<br>
+          Best regards,<br>
+          The Klab Team
+        </p>
+      </div>
+    `;
+
+    const mailOptions = {
+      from: `"Klab Program Manager" <${process.env.EMAIL_USER}>`,
+      to: recipient.email,
+      subject: `${priorityLabel ? `[${priorityLabel}] ` : ''}${title} - ${programName}`,
+      html: htmlBody
+    };
+
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log(`Announcement email sent to ${recipient.email}: ${info.messageId}`);
+    } catch (error) {
+      console.error(`Error sending announcement email to ${recipient.email}:`, error);
+      // Continue sending to other recipients even if one fails
+    }
+  }
+};
+
 export {
   sendRegistrationEmail,
   sendPasswordResetEmail,
   sendPasswordChangeConfirmationEmail,
   sendAssignmentNotificationEmail,
   sendCertificateIssuedEmail,
-  sendSessionReminderEmail
+  sendSessionReminderEmail,
+  sendAnnouncementEmail
 };
