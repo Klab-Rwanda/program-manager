@@ -135,10 +135,19 @@ export default function UserManagementPage() {
         await updateUserDetails(editingUser._id, formData);
         toast.success(`User "${formData.name}" updated successfully.`);
       } else {
-        await createUser(formData);
-        toast.success(
-          `User "${formData.name}" created! Credentials will be sent via email.`
-        );
+        const result = await createUser(formData);
+        console.log('Create user response:', result); // Debug log
+        if (result.emailSent) {
+          toast.success(
+            `User "${formData.name}" created! Credentials sent via email. Password: ${result.generatedPassword}`,
+            { duration: 10000 }
+          );
+        } else {
+          toast.warning(
+            `User "${formData.name}" created, but email failed. Password: ${result.generatedPassword}`,
+            { duration: 15000 }
+          );
+        }
       }
       setIsModalOpen(false);
       fetchUsers();

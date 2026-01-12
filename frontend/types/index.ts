@@ -84,8 +84,8 @@ export interface Topic {
 
 export interface Roadmap {
     _id: string;
-    program: string | { _id: string; name: string; };
-    course: string | { _id: string; title: string; };
+    program: string | { _id: string; name: string; status?: string; };
+    course?: string | { _id: string; title: string; }; // Optional - roadmaps are program-level
     facilitator: string | { _id: string; name: string; email: string; };
     weekNumber: number;
     title: string;
@@ -94,6 +94,7 @@ export interface Roadmap {
     topics: Topic[];
     status?: string;
     feedback?: string;
+    isCurrent?: boolean; // Marks the current week for the program
 }
 
 
@@ -370,4 +371,41 @@ export interface StudentSummary {
     sessionTitle?: string;
     method: string;
   }[];
+}
+
+// Announcement types
+export interface Announcement {
+  _id: string;
+  title: string;
+  content: string;
+  author: {
+    _id: string;
+    name: string;
+    email: string;
+    role: string;
+  };
+  program: {
+    _id: string;
+    name: string;
+  };
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  targetAudience: 'all' | 'trainees' | 'facilitators';
+  isActive: boolean;
+  expiresAt?: string;
+  emailSent: boolean;
+  emailSentAt?: string;
+  readBy: string[];
+  isRead?: boolean; // Added by backend for current user
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateAnnouncementData {
+  title: string;
+  content: string;
+  program: string;
+  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  targetAudience?: 'all' | 'trainees' | 'facilitators';
+  sendEmail?: boolean;
+  expiresAt?: string;
 }

@@ -109,8 +109,18 @@ const TraineesPage: React.FC = () => {
     try {
       // Include role field for backend validation
       const traineeData = { ...newTraineeData, role: "Trainee" as const };
-      await createTrainee(traineeData);
-      toast.success("Trainee created successfully! Credentials sent via email.");
+      const result = await createTrainee(traineeData);
+      if (result.emailSent) {
+        toast.success(
+          `Trainee created! Credentials sent via email. Password: ${result.generatedPassword}`,
+          { duration: 10000 }
+        );
+      } else {
+        toast.warning(
+          `Trainee created, but email failed. Password: ${result.generatedPassword}`,
+          { duration: 15000 }
+        );
+      }
       setCreateModalOpen(false);
       setNewTraineeData(initialTraineeData);
       fetchData();
@@ -397,13 +407,24 @@ const TraineesPage: React.FC = () => {
 
     try {
       const results = await bulkRegisterUsers(excelFile, 'Trainee');
-      
+
       setBulkRegisterResults(results);
       if (results.successful > 0) {
         toast.success(`Successfully registered ${results.successful} trainees.`);
       }
       if (results.failed > 0) {
         toast.warning(`Failed to register ${results.failed} trainees. Check results for details.`);
+      }
+      // Show email delivery status
+      if (results.emailResults) {
+        if (results.emailResults.failed > 0) {
+          toast.warning(
+            `Email delivery: ${results.emailResults.sent} sent, ${results.emailResults.failed} failed. Some users may need credentials shared manually.`,
+            { duration: 6000 }
+          );
+        } else if (results.emailResults.sent > 0) {
+          toast.success(`All ${results.emailResults.sent} welcome emails sent successfully.`);
+        }
       }
       fetchData();
     } catch (err: any) {

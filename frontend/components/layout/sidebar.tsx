@@ -4,13 +4,10 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity, Archive, Award, BarChart3, Bell, BookOpen, BookText, Calendar,
-  CalendarCheck,
-  CheckCircle,
-  ChevronLeft, ChevronRight, ClipboardCheck, FileText, FolderOpen,
-  GraduationCap, Home, Loader2, LogOut, Mail, Menu, MessageSquare, Moon, NotebookPen, Settings, Sun, Ticket,
-  TicketCheck,
-  TrendingUp, Upload, User, UserCheck, Users, Wrench
+  Activity, Archive, Award, BarChart3, Bell, BookOpen, Calendar,
+  CalendarCheck, ChevronLeft, ChevronRight, ClipboardCheck, FileText,
+  GraduationCap, Home, Loader2, LogOut, Megaphone, MessageSquare, Moon, Settings, Sun,
+  TicketCheck, User, UserCheck, Users, Wrench
 } from "lucide-react";
 
 import { useAuth } from "@/lib/contexts/RoleContext";
@@ -39,7 +36,7 @@ const menuItems = [
     // Program Manager
     { title: "Programs", url: "/dashboard/Manager/programs", icon: BookOpen, roles: ['program_manager'], countKey: 'programs' },
     { title: "Facilitators", url: "/dashboard/Manager/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },
-    { title: "Course Management", url: "/dashboard/Manager/course-management", icon: CheckCircle, roles: ['program_manager'], countKey: 'pendingApprovals' },
+    { title: "Roadmaps", url: "/dashboard/Manager/course-management", icon: CalendarCheck, roles: ['program_manager'], countKey: 'pendingApprovals' },
     { title: "Trainees", url: "/dashboard/Manager/trainees", icon: Users, roles: ['program_manager'], countKey: 'trainees' },
     { title: "Attendance", url: "/dashboard/Manager/attendance", icon: Calendar, roles: ['program_manager'] },
     { title: "Certificates", url: "/dashboard/Manager/certificates", icon: Award, roles: ['program_manager'], countKey: 'certificates' },
@@ -53,10 +50,8 @@ const menuItems = [
     // Facilitator
     { title: "My Programs", url: "/dashboard/Facilitator/fac-programs", icon: BookOpen, roles: ['facilitator'] },
     { title: "Attendance Tracking", url: "/dashboard/Facilitator/Fac-attendance", icon: Calendar, roles: ['facilitator'] },
-    { title: "Course Management", url: "/dashboard/Facilitator/courses", icon: BookText, roles: ['facilitator'] },
-    { title: "Assignment Management", url: "/dashboard/Facilitator/assignments", icon: NotebookPen, roles: ['facilitator'] },
     { title: "Project Reviews", url: "/dashboard/Facilitator/fac-reviews", icon: ClipboardCheck, roles: ['facilitator'] },
-    { title: "Weekly Roadmap", url: "/dashboard/Facilitator/fac-roadmap", icon: Calendar, roles: ['facilitator'] },
+    { title: "Roadmaps", url: "/dashboard/Facilitator/fac-roadmap", icon: CalendarCheck, roles: ['facilitator'] },
     // Trainee
     { title: "My Learning", url: "/dashboard/Trainee/my-learning", icon: GraduationCap, roles: ['trainee'] },
     { title: "Submit Projects", url: "/dashboard/Trainee/submit-projects", icon: FileText, roles: ['trainee'] },
@@ -74,7 +69,7 @@ const menuItems = [
      { title: "submit-tickets", url: "/dashboard/submit-tickets", icon: MessageSquare, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee', 'evaluator']},
 
     // Shared
-   
+    { title: "Announcements", url: "/dashboard/announcements", icon: Megaphone, roles: ['super_admin', 'program_manager', 'facilitator', 'trainee', 'evaluator'] },
 ];
 
 interface Notification {

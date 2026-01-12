@@ -10,8 +10,15 @@ export const getUsers = async (isActive: boolean = true): Promise<User[]> => {
   return response.data.data;
 };
 
+// Response type for user creation with email status
+export interface CreateUserResponse extends User {
+  emailSent: boolean;
+  emailError: string | null;
+  generatedPassword?: string; // Only included if email failed
+}
+
 // Create a new user (SuperAdmin can create any role, Program Manager can create Facilitator/Trainee)
-export const createUser = async (userData: { name: string; email: string; role: string }): Promise<User> => {
+export const createUser = async (userData: { name: string; email: string; role: string }): Promise<CreateUserResponse> => {
   const response = await api.post('/auth/register', userData);
   return response.data.data;
 };
@@ -25,6 +32,11 @@ export interface BulkUserRegisterResponse {
   successful: number;
   failed: number;
   errors: Array<{ row: number; message: string; data: any; }>;
+  emailResults: {
+    sent: number;
+    failed: number;
+    failures: Array<{ email: string; name: string; error: string; }>;
+  };
 }
 
 export const bulkRegisterUsers = async (file: File, targetRole: string = 'Trainee'): Promise<BulkUserRegisterResponse> => {

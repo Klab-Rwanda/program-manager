@@ -19,7 +19,9 @@ export default function ForgotPasswordPage() {
 
     try {
       // Use environment variable for API URL, with fallback for local development
-      const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/+$/, '');
+      const API_URL = (
+        process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
+      ).replace(/\/+$/, '');
 
       const res = await fetch(`${API_URL}/auth/forgot-password`, {
         method: 'POST',
@@ -49,7 +51,7 @@ export default function ForgotPasswordPage() {
             Reset Your Password.
           </h1>
           <p className='text-base md:text-lg text-gray-600 leading-relaxed max-w-xl mb-2'>
-            Forgot your password? Don’t worry — we’ll send you a reset link.
+            c Forgot your password? Don’t worry — we’ll send you a reset link.
           </p>
           <p className='text-base md:text-lg text-gray-600 leading-relaxed'>
             Let’s get you back into your account.

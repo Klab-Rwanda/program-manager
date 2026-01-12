@@ -66,3 +66,9 @@ export const getApprovedRoadmaps = async (): Promise<Roadmap[]> => {
     const allRoadmaps = response.data.data;
     return allRoadmaps.filter((roadmap: Roadmap) => roadmap.status === 'approved');
 };
+
+// Set a roadmap as current week
+export const setCurrentWeek = async (roadmapId: string): Promise<Roadmap> => {
+    const response = await api.patch(`/roadmaps/${roadmapId}/set-current`);
+    return response.data.data;
+};
