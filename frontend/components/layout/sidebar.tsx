@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity, Archive, Award, BarChart3, Bell, BookOpen, Calendar,
   CalendarCheck, ChevronLeft, ChevronRight, ClipboardCheck, FileText,
-  GraduationCap, Home, Loader2, LogOut, Megaphone, MessageSquare, Moon, Settings, Sun,
+  Home, Loader2, LogOut, Megaphone, MessageSquare, Moon, Settings, Sun,
   TicketCheck, User, UserCheck, Users, Wrench
 } from "lucide-react";
 
@@ -53,7 +53,6 @@ const menuItems = [
     { title: "Project Reviews", url: "/dashboard/Facilitator/fac-reviews", icon: ClipboardCheck, roles: ['facilitator'] },
     { title: "Roadmaps", url: "/dashboard/Facilitator/fac-roadmap", icon: CalendarCheck, roles: ['facilitator'] },
     // Trainee
-    { title: "My Learning", url: "/dashboard/Trainee/my-learning", icon: GraduationCap, roles: ['trainee'] },
     { title: "Submit Projects", url: "/dashboard/Trainee/submit-projects", icon: FileText, roles: ['trainee'] },
     { title: "Attendance", url: "/dashboard/Trainee/Trattendance", icon: Calendar, roles: ['trainee'] },
     // { title: "My Attendance History", url: "/dashboard/Trainee/my-attendance-history", icon: Calendar, roles: ['trainee'] },
