@@ -508,15 +508,19 @@ export const getAllRoadmaps = asyncHandler(async (req, res) => {
     console.log('getAllRoadmaps called by user:', req.user._id);
 
     const roadmaps = await Roadmap.find()
-        .populate('program', 'name')
+        .populate('program', 'name status')
         .populate('course', 'title')
         .populate('facilitator', 'name email')
         .sort({ createdAt: -1 });
 
     console.log('Found roadmaps:', roadmaps.length);
-    console.log('Roadmap statuses:', roadmaps.map(r => ({ id: r._id, status: r.status, title: r.title })));
 
-    return res.status(200).json(new ApiResponse(200, roadmaps, "All roadmaps fetched successfully."));
+    // Populate topics for each roadmap
+    const populatedRoadmaps = await Promise.all(
+        roadmaps.map(r => getFullRoadmapById(r._id))
+    );
+
+    return res.status(200).json(new ApiResponse(200, populatedRoadmaps, "All roadmaps fetched successfully."));
 });
 
 /**
