@@ -409,3 +409,45 @@ export interface CreateAnnouncementData {
   sendEmail?: boolean;
   expiresAt?: string;
 }
+
+// Daily Update types
+export interface DailyUpdate {
+  _id: string;
+  trainee: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  program: {
+    _id: string;
+    name: string;
+  };
+  date: string;
+  workDone: string;
+  challenges?: string;
+  learnings?: string;
+  isReviewed: boolean;
+  reviewedBy?: {
+    _id: string;
+    name: string;
+  };
+  reviewedAt?: string;
+  reviewComment?: string;
+  isEditable?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDailyUpdateData {
+  program: string;
+  workDone: string;
+  challenges?: string;
+  learnings?: string;
+}
+
+export interface DailyUpdatesResponse {
+  updates: DailyUpdate[];
+  total: number;
+  page: number;
+  totalPages: number;
+}

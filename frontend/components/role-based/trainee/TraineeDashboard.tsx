@@ -2,20 +2,21 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
-import { 
-  GraduationCap, 
-  BookOpen, 
-  TrendingUp, 
-  Calendar, 
+import {
+  GraduationCap,
+  BookOpen,
+  TrendingUp,
+  Calendar,
   FileText,
-  FolderOpen,
   Clock,
   CheckCircle,
   Loader2,
   ExternalLink,
-  CheckSquare,
-  User, // Added User icon for facilitator
-  Award // Added Award icon for attendance/progress if needed
+  User,
+  Award,
+  Notebook,
+  CalendarCheck,
+  Megaphone
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -307,17 +308,23 @@ export function TraineeDashboard() {
         <p className="text-gray-300 mb-4">
           Continue your learning journey. You have {stats.enrolledPrograms} active program{stats.enrolledPrograms !== 1 ? 's' : ''}.
         </p>
-        <div className="flex gap-3">
-          <Link href="/dashboard/Trainee/my-learning"> {/* Link to My Learning page */}
+        <div className="flex flex-wrap gap-3">
+          <Link href="/dashboard/Trainee/daily-updates">
             <Button size="lg" className="bg-white text-[#1f497d] hover:bg-gray-100">
-              <BookOpen className="mr-2 h-4 w-4" />
-              Continue Learning
+              <Notebook className="mr-2 h-4 w-4" />
+              Submit Daily Update
             </Button>
           </Link>
-          <Link href="/dashboard/Trainee/submit-project"> {/* Link to Submit Project page */}
+          <Link href="/dashboard/Trainee/roadmap">
             <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-[#1f497d] bg-transparent">
-              <FileText className="mr-2 h-4 w-4" />
-              Submit Assignment
+              <CalendarCheck className="mr-2 h-4 w-4" />
+              View Roadmap
+            </Button>
+          </Link>
+          <Link href="/dashboard/announcements">
+            <Button size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-[#1f497d] bg-transparent">
+              <Megaphone className="mr-2 h-4 w-4" />
+              Announcements
             </Button>
           </Link>
         </div>
@@ -355,9 +362,9 @@ export function TraineeDashboard() {
                 <div key={program._id} className="p-4 rounded-lg border border-border bg-background shadow-sm hover:shadow-md transition-all duration-200">
                   <div className="flex justify-between items-start mb-3">
                     <div className="space-y-1">
-                      <Link 
-                        href={`/dashboard/Trainee/my-learning`} // Link to a program details page or general learning path
-                        className="font-semibold text-lg text-foreground hover:text-[#1f497d] transition-colors flex items-center gap-2" 
+                      <Link
+                        href={`/dashboard/Trainee/roadmap`}
+                        className="font-semibold text-lg text-foreground hover:text-[#1f497d] transition-colors flex items-center gap-2"
                       >
                         {program.name}
                         <ExternalLink className="h-4 w-4 text-muted-foreground" />
@@ -384,16 +391,16 @@ export function TraineeDashboard() {
                   </div>
                   
                   <div className="flex gap-2">
-                    <Link href="/dashboard/Trainee/my-learning" className="flex-1">
+                    <Link href="/dashboard/Trainee/roadmap" className="flex-1">
                       <Button variant="outline" size="sm" className="w-full">
-                        <BookOpen className="h-4 w-4 mr-1" />
-                        Go to Program
+                        <CalendarCheck className="h-4 w-4 mr-1" />
+                        View Roadmap
                       </Button>
                     </Link>
-                    <Link href="/dashboard/Trainee/submit-project" className="flex-1">
+                    <Link href="/dashboard/Trainee/daily-updates" className="flex-1">
                       <Button variant="outline" size="sm" className="w-full">
-                        <FileText className="h-4 w-4 mr-1" />
-                        Submit Project
+                        <Notebook className="h-4 w-4 mr-1" />
+                        Daily Update
                       </Button>
                     </Link>
                   </div>
@@ -457,32 +464,38 @@ export function TraineeDashboard() {
       <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="text-foreground">Quick Actions</CardTitle>
-          <CardDescription>Access your learning resources</CardDescription>
+          <CardDescription>Access your program features</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Link href="/dashboard/Trainee/my-learning" className="flex-1">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+            <Link href="/dashboard/Trainee/daily-updates" className="flex-1">
               <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent w-full">
-                <BookOpen className="h-6 w-6" />
-                Continue Learning
+                <Notebook className="h-6 w-6" />
+                Daily Updates
               </Button>
             </Link>
-            <Link href="/dashboard/Trainee/submit-project" className="flex-1">
+            <Link href="/dashboard/Trainee/roadmap" className="flex-1">
+              <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent w-full">
+                <CalendarCheck className="h-6 w-6" />
+                Program Roadmap
+              </Button>
+            </Link>
+            <Link href="/dashboard/Trainee/Trattendance" className="flex-1">
+              <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent w-full">
+                <Calendar className="h-6 w-6" />
+                Attendance
+              </Button>
+            </Link>
+            <Link href="/dashboard/Trainee/submit-projects" className="flex-1">
               <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent w-full">
                 <FileText className="h-6 w-6" />
-                Submit Assignment
+                Submit Projects
               </Button>
             </Link>
-            <Link href="/dashboard/Trainee/resources" className="flex-1">
+            <Link href="/dashboard/Trainee/my-certificates" className="flex-1">
               <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent w-full">
-                <FolderOpen className="h-6 w-6" />
-                View Resources
-              </Button>
-            </Link>
-            <Link href="/dashboard/Trainee/my-progress" className="flex-1">
-              <Button variant="outline" className="h-20 flex-col gap-2 bg-transparent w-full">
-                <CheckCircle className="h-6 w-6" />
-                Track Progress
+                <Award className="h-6 w-6" />
+                My Certificates
               </Button>
             </Link>
           </div>

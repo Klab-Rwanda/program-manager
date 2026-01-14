@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity, Archive, Award, BarChart3, Bell, BookOpen, Calendar,
   CalendarCheck, ChevronLeft, ChevronRight, ClipboardCheck, FileText,
-  Home, Loader2, LogOut, Megaphone, MessageSquare, Moon, Settings, Sun,
+  Home, Loader2, LogOut, Megaphone, MessageSquare, Moon, Notebook, Settings, Sun,
   TicketCheck, User, UserCheck, Users, Wrench
 } from "lucide-react";
 
@@ -38,6 +38,7 @@ const menuItems = [
     { title: "Facilitators", url: "/dashboard/Manager/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },
     { title: "Roadmaps", url: "/dashboard/Manager/course-management", icon: CalendarCheck, roles: ['program_manager'], countKey: 'pendingApprovals' },
     { title: "Trainees", url: "/dashboard/Manager/trainees", icon: Users, roles: ['program_manager'], countKey: 'trainees' },
+    { title: "Daily Updates", url: "/dashboard/daily-updates", icon: Notebook, roles: ['program_manager'] },
     { title: "Attendance", url: "/dashboard/Manager/attendance", icon: Calendar, roles: ['program_manager'] },
     { title: "Certificates", url: "/dashboard/Manager/certificates", icon: Award, roles: ['program_manager'], countKey: 'certificates' },
     { title: "Archive", url: "/dashboard/Manager/archive", icon: Archive, roles: ['program_manager'], countKey: 'archived' },
@@ -52,14 +53,13 @@ const menuItems = [
     { title: "Attendance Tracking", url: "/dashboard/Facilitator/Fac-attendance", icon: Calendar, roles: ['facilitator'] },
     { title: "Project Reviews", url: "/dashboard/Facilitator/fac-reviews", icon: ClipboardCheck, roles: ['facilitator'] },
     { title: "Roadmaps", url: "/dashboard/Facilitator/fac-roadmap", icon: CalendarCheck, roles: ['facilitator'] },
+    { title: "Daily Updates", url: "/dashboard/daily-updates", icon: Notebook, roles: ['facilitator'] },
     // Trainee
     { title: "Submit Projects", url: "/dashboard/Trainee/submit-projects", icon: FileText, roles: ['trainee'] },
+    { title: "Daily Updates", url: "/dashboard/Trainee/daily-updates", icon: Notebook, roles: ['trainee'] },
     { title: "Attendance", url: "/dashboard/Trainee/Trattendance", icon: Calendar, roles: ['trainee'] },
-    // { title: "My Attendance History", url: "/dashboard/Trainee/my-attendance-history", icon: Calendar, roles: ['trainee'] },
-    // { title: "My Progress", url: "/dashboard/Trainee/my-progress", icon: TrendingUp, roles: ['trainee'] },
-    // { title: "Learning Resources", url: "/dashboard/Trainee/resources", icon: FolderOpen, roles: ['trainee'] },
     { title: "Program Roadmap", url: "/dashboard/Trainee/roadmap", icon: CalendarCheck, roles: ['trainee'] },
-     { title: "My Certificates", url: "/dashboard/Trainee/my-certificates", icon: Award, roles: ['trainee'] },
+    { title: "My Certificates", url: "/dashboard/Trainee/my-certificates", icon: Award, roles: ['trainee'] },
     // IT Support
     { title: "Support Tickets", url: "/dashboard/It-support/support-tickets", icon: MessageSquare, roles: ['it_support'] },
     { title: "Maintenance", url: "/dashboard/It-support/maintenance", icon: Wrench, roles: ['it_support'] },
