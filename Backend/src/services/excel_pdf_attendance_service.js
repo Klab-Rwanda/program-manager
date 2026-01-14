@@ -5,9 +5,10 @@ import PDFDocument from 'pdfkit';
 const getStatusSymbol = (status) => {
     switch (status) {
         case 'Present': return 'P';
-        case 'Late': return 'L';   
-        case 'Absent': return 'A';   
-        case 'Excused': return 'E';  
+        case 'Late': return 'L';
+        case 'Absent': return 'A';
+        case 'Excused': return 'E';
+        case 'NoSession': return '-';  // No session on this day
         default: return '?';
     }
 };
@@ -16,7 +17,7 @@ export const generateProgramAttendanceExcel = async (reportData) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Attendance Report');
 
-    const { programName, reportDates, traineeReports, summaryStats } = reportData;
+    const { programName, reportDates, sessionDates = [], traineeReports, summaryStats } = reportData;
 
     worksheet.mergeCells('A1:Z1');
     worksheet.getCell('A1').value = `Attendance Report for Program: ${programName}`;
@@ -34,25 +35,30 @@ export const generateProgramAttendanceExcel = async (reportData) => {
 
     worksheet.addRow(['Summary Statistics:']).font = { bold: true };
     worksheet.addRow(['Total Trainees:', summaryStats.totalTrainees]);
-    worksheet.addRow(['Total Class Days in Period:', summaryStats.totalDaysInPeriod]);
+    worksheet.addRow(['Total Days in Period:', summaryStats.totalDaysInPeriod]);
+    worksheet.addRow(['Total Session Days:', summaryStats.totalSessionDays || sessionDates.length]);
     worksheet.addRow(['Overall Present Marks:', summaryStats.totalPresentCount]);
     worksheet.addRow(['Overall Absent Marks:', summaryStats.totalAbsentCount]);
     worksheet.addRow(['Overall Late Marks:', summaryStats.totalLateCount]);
     worksheet.addRow(['Overall Excused Marks:', summaryStats.totalExcusedCount]);
     worksheet.addRow([]);
+    worksheet.addRow(['Legend: P=Present, L=Late, A=Absent, E=Excused, -=No Session']);
+    worksheet.addRow([]);
 
-    const headers = [{ header: 'Trainee Name', key: 'name', width: 30 }];
-    reportDates.forEach(date => {
-        headers.push({ header: new Date(date).toLocaleDateString('en-US', { day: '2-digit', month: '2-digit' }), key: date, width: 12 });
+    // Set column widths
+    worksheet.getColumn(1).width = 30; // Trainee Name
+    reportDates.forEach((_, index) => {
+        worksheet.getColumn(index + 2).width = 12;
     });
-    headers.push({ header: 'P', key: 'present', width: 5 });
-    headers.push({ header: 'L', key: 'late', width: 5 });
-    headers.push({ header: 'A', key: 'absent', width: 5 });
-    headers.push({ header: 'E', key: 'excused', width: 5 });
-    
-    worksheet.columns = headers;
 
-    const headerRow = worksheet.getRow(worksheet.rowCount);
+    // Build header row values
+    const headerValues = ['Trainee Name'];
+    reportDates.forEach(date => {
+        headerValues.push(new Date(date).toLocaleDateString('en-US', { day: '2-digit', month: '2-digit' }));
+    });
+
+    // Add the header row
+    const headerRow = worksheet.addRow(headerValues);
     headerRow.font = { bold: true };
     headerRow.fill = {
         type: 'pattern',
@@ -62,30 +68,26 @@ export const generateProgramAttendanceExcel = async (reportData) => {
     headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
     headerRow.height = 25;
 
+    // Add trainee data rows
     traineeReports.forEach(tr => {
-        const rowData = { name: tr.trainee.name };
+        const rowValues = [tr.trainee.name];
         tr.dailyAttendance.forEach(da => {
-            rowData[da.date] = getStatusSymbol(da.status);
+            rowValues.push(getStatusSymbol(da.status));
         });
-        rowData['present'] = tr.summary.present;
-        rowData['late'] = tr.summary.late;
-        rowData['absent'] = tr.summary.absent;
-        rowData['excused'] = tr.summary.excused;
-        worksheet.addRow(rowData);
+        worksheet.addRow(rowValues);
     });
 
     worksheet.eachRow((row, rowNumber) => {
         if (rowNumber > headerRow.number) {
             row.height = 20;
             row.eachCell((cell, colNumber) => {
-                if (colNumber > 1 && colNumber <= reportDates.length + 1) {
+                if (colNumber > 1) {
                     cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                    if (cell.value === 'A') cell.font = { color: { argb: 'FFFF0000' } };
-                    else if (cell.value === 'P') cell.font = { color: { argb: 'FF00B050' } };
-                    else if (cell.value === 'L') cell.font = { color: { argb: 'FFFFC000' } };
-                    else if (cell.value === 'E') cell.font = { color: { argb: 'FF92D050' } };
-                } else if (colNumber > reportDates.length + 1) {
-                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    if (cell.value === 'A') cell.font = { color: { argb: 'FFFF0000' } };  // Red for Absent
+                    else if (cell.value === 'P') cell.font = { color: { argb: 'FF00B050' } };  // Green for Present
+                    else if (cell.value === 'L') cell.font = { color: { argb: 'FFFFC000' } };  // Orange for Late
+                    else if (cell.value === 'E') cell.font = { color: { argb: 'FF92D050' } };  // Light green for Excused
+                    else if (cell.value === '-') cell.font = { color: { argb: 'FF888888' } };  // Gray for No Session
                 }
             });
         }
@@ -98,7 +100,7 @@ export const generateProgramAttendancePDF = (reportData, stream) => {
     const doc = new PDFDocument({ margin: 30, layout: 'landscape' });
     doc.pipe(stream);
 
-    const { programName, reportDates, traineeReports, summaryStats } = reportData;
+    const { programName, reportDates, sessionDates = [], traineeReports, summaryStats } = reportData;
 
     doc.fontSize(18).font('Helvetica-Bold').text(`Attendance Report for Program: ${programName}`, { align: 'center' });
     const startDateFormatted = reportDates.length > 0 ? new Date(reportDates[0]).toLocaleDateString() : 'N/A';
@@ -110,13 +112,16 @@ export const generateProgramAttendancePDF = (reportData, stream) => {
     doc.moveDown(0.5);
     doc.fontSize(10).font('Helvetica').list([
         `Total Trainees: ${summaryStats.totalTrainees}`,
-        `Total Class Days in Period: ${summaryStats.totalDaysInPeriod}`,
+        `Total Days in Period: ${summaryStats.totalDaysInPeriod}`,
+        `Total Session Days: ${summaryStats.totalSessionDays || sessionDates.length}`,
         `Overall Present Marks: ${summaryStats.totalPresentCount}`,
         `Overall Absent Marks: ${summaryStats.totalAbsentCount}`,
         `Overall Late Marks: ${summaryStats.totalLateCount}`,
         `Overall Excused Marks: ${summaryStats.totalExcusedCount}`
     ], { lineGap: 4 });
-    doc.moveDown(1.5);
+    doc.moveDown(0.5);
+    doc.fontSize(8).font('Helvetica').text('Legend: P=Present, L=Late, A=Absent, E=Excused, -=No Session');
+    doc.moveDown(1);
 
     doc.fontSize(8);
 
@@ -208,6 +213,7 @@ export const generateProgramAttendancePDF = (reportData, stream) => {
             else if (da.status === 'Late') { cellBg = '#FFFFA0'; textColor = '#FFA500'; }
             else if (da.status === 'Present') { cellBg = '#DDFFDD'; textColor = '#008000'; }
             else if (da.status === 'Excused') { cellBg = '#DDF0FF'; textColor = '#0000FF'; }
+            else if (da.status === 'NoSession') { cellBg = '#F0F0F0'; textColor = '#888888'; }
 
             drawCell(getStatusSymbol(da.status), x, currentY, dateColumnWidth, rowHeight, 'center', cellBg, textColor);
             x += dateColumnWidth;

@@ -18,7 +18,8 @@ import notificationRouter from './notification.route.js'
 import userTicketRoutes from './userTicket.route.js';
 import itSupportRoutes from './itSupport.route.js';
 import fileRouter from './file.route.js';
-import announcementRouter from './announcement.route.js'; 
+import announcementRouter from './announcement.route.js';
+import dailyUpdateRouter from './dailyUpdate.route.js';
 
 
 
@@ -45,6 +46,7 @@ const defaultRoutes = [
     { path: '/it-support/tickets', route: itSupportRoutes },
     { path: '/files', route: fileRouter },
     { path: '/announcements', route: announcementRouter },
+    { path: '/daily-updates', route: dailyUpdateRouter },
 ];
 
 defaultRoutes.forEach((route) => {

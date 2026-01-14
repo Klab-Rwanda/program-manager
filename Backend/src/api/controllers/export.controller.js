@@ -27,9 +27,25 @@ import {
 
 import { Log } from '../models/log.model.js';
 
+// --- Helper function to generate all dates in a range ---
+const generateAllDatesInRange = (startDate, endDate) => {
+    const dates = [];
+    const currentDate = new Date(startDate);
+    currentDate.setUTCHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setUTCHours(0, 0, 0, 0);
+
+    while (currentDate <= end) {
+        dates.push(currentDate.toISOString().split('T')[0]);
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    return dates;
+};
+
 // --- Helper function to get structured attendance data for export ---
 // This function duplicates the logic from `attendance.controller.js`'s getProgramAttendanceReport
 // to avoid circular dependency issues when importing controllers into services/controllers mutually.
+// Updated to include ALL dates in the selected range, marking whether there was a session each day
 const getStructuredProgramAttendanceData = async (programId, startDate, endDate, userRole, userId) => {
     if (!programId || !startDate || !endDate) {
         throw new ApiError(400, "Program ID, start date, and end date are required.");
@@ -50,15 +66,19 @@ const getStructuredProgramAttendanceData = async (programId, startDate, endDate,
         throw new ApiError(403, "Forbidden: You are not the manager of this program.");
     }
 
+    // Generate ALL dates in the selected range
+    const allDatesInRange = generateAllDatesInRange(startDate, endDate);
 
     const traineeIds = program.trainees.map(t => t._id);
     if (traineeIds.length === 0) {
         return {
             programName: program.name,
-            reportDates: [],
+            reportDates: allDatesInRange,
+            sessionDates: [],
             traineeReports: [],
             summaryStats: {
-                totalDaysInPeriod: 0,
+                totalDaysInPeriod: allDatesInRange.length,
+                totalSessionDays: 0,
                 totalPresentCount: 0,
                 totalAbsentCount: 0,
                 totalLateCount: 0,
@@ -68,17 +88,18 @@ const getStructuredProgramAttendanceData = async (programId, startDate, endDate,
         };
     }
 
+    // Get dates where sessions actually occurred
     const classSessions = await ClassSession.find({
         programId: programId,
         startTime: { $gte: start, $lte: end },
         status: { $in: ['active', 'completed'] }
     }).select('startTime');
 
-    const reportDatesSet = new Set();
+    const sessionDatesSet = new Set();
     classSessions.forEach(session => {
-        reportDatesSet.add(new Date(session.startTime).toISOString().split('T')[0]);
+        sessionDatesSet.add(new Date(session.startTime).toISOString().split('T')[0]);
     });
-    const reportDates = Array.from(reportDatesSet).sort();
+    const sessionDates = Array.from(sessionDatesSet);
 
     const attendanceRecords = await Attendance.find({
         userId: { $in: traineeIds },
@@ -109,14 +130,23 @@ const getStructuredProgramAttendanceData = async (programId, startDate, endDate,
         let lateCount = 0;
         let excusedCount = 0;
 
-        for (const date of reportDates) {
-            const status = attendanceByTraineeIdAndDate.get(trainee._id.toString())?.get(date)?.status || 'Absent';
-            dailyAttendance.push({ date, status });
+        // Iterate through ALL dates in the range
+        for (const date of allDatesInRange) {
+            const hadSession = sessionDatesSet.has(date);
 
-            if (status === 'Present') presentCount++;
-            else if (status === 'Absent') absentCount++;
-            else if (status === 'Late') lateCount++;
-            else if (status === 'Excused') excusedCount++;
+            if (hadSession) {
+                // There was a session on this day - check attendance
+                const status = attendanceByTraineeIdAndDate.get(trainee._id.toString())?.get(date)?.status || 'Absent';
+                dailyAttendance.push({ date, status, hadSession: true });
+
+                if (status === 'Present') presentCount++;
+                else if (status === 'Absent') absentCount++;
+                else if (status === 'Late') lateCount++;
+                else if (status === 'Excused') excusedCount++;
+            } else {
+                // No session on this day - mark as "NoSession"
+                dailyAttendance.push({ date, status: 'NoSession', hadSession: false });
+            }
         }
 
         return {
@@ -131,18 +161,19 @@ const getStructuredProgramAttendanceData = async (programId, startDate, endDate,
                 absent: absentCount,
                 late: lateCount,
                 excused: excusedCount,
-                totalDaysInPeriod: reportDates.length
+                totalSessionDays: sessionDates.length
             }
         };
     });
-    
+
     const overallTotalPresent = traineeReports.reduce((sum, tr) => sum + tr.summary.present, 0);
     const overallTotalAbsent = traineeReports.reduce((sum, tr) => sum + tr.summary.absent, 0);
     const overallTotalLate = traineeReports.reduce((sum, tr) => sum + tr.summary.late, 0);
     const overallTotalExcused = traineeReports.reduce((sum, tr) => sum + tr.summary.excused, 0);
 
     const summaryStats = {
-        totalDaysInPeriod: reportDates.length,
+        totalDaysInPeriod: allDatesInRange.length,
+        totalSessionDays: sessionDates.length,
         totalPresentCount: overallTotalPresent,
         totalAbsentCount: overallTotalAbsent,
         totalLateCount: overallTotalLate,
@@ -152,7 +183,8 @@ const getStructuredProgramAttendanceData = async (programId, startDate, endDate,
 
     return {
         programName: program.name,
-        reportDates,
+        reportDates: allDatesInRange,
+        sessionDates,
         traineeReports,
         summaryStats
     };
