@@ -296,8 +296,8 @@ const getAllPrograms = asyncHandler(async (req, res) => {
     } else if (role === 'Trainee') {
         query.trainees = _id;
         console.log('Query for Trainee:', query);
-    } else if (role === 'SuperAdmin') {
-        console.log('Query for SuperAdmin: all programs');
+    } else if (role === 'SuperAdmin' || role === 'Evaluator') {
+        console.log(`Query for ${role}: all programs`);
     }
     
     const programs = await Program.find(query)

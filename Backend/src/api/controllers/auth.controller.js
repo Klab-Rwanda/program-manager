@@ -9,7 +9,6 @@ import {
 } from '../../services/email.service.js';
 import { createLog } from '../../services/log.service.js';
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
 import { createNotification } from '../../services/notification.service.js';
 import xlsx from 'xlsx'; // NEW: Import xlsx
 import fs from 'fs/promises'; // NEW: Import fs.promises for file cleanup
@@ -538,10 +537,23 @@ const updatePassword = asyncHandler(async (req, res) => {
       throw new ApiError(404, 'User not found or has been deactivated');
     }
 
-    // Hash and update the new password
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
-    user.password = hashedPassword;
-    await user.save({ validateBeforeSave: false });
+    // Update the password - the pre-save hook will hash it automatically
+    console.log('=== PASSWORD RESET DEBUG ===');
+    console.log('User email:', user.email);
+    console.log('New password length:', newPassword.length);
+    console.log('Password field before update:', user.password ? 'exists' : 'missing');
+
+    user.password = newPassword;
+
+    console.log('Password field marked modified:', user.isModified('password'));
+
+    await user.save();
+
+    // Verify the password was saved correctly
+    const updatedUser = await User.findById(user._id);
+    const testResult = await updatedUser.isPasswordCorrect(newPassword);
+    console.log('Password verification after save:', testResult);
+    console.log('=== END DEBUG ===');
 
     // Log the password reset
     await createLog({
@@ -593,10 +605,9 @@ const changePassword = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Current password is incorrect');
   }
 
-  // Hash and update new password
-  const hashedPassword = await bcrypt.hash(newPassword, 12);
-  user.password = hashedPassword;
-  await user.save({ validateBeforeSave: false });
+  // Update the password - the pre-save hook will hash it automatically
+  user.password = newPassword;
+  await user.save();
 
   // Log password change
   await createLog({

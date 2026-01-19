@@ -297,13 +297,32 @@ const markPhysicalAttendance = asyncHandler(async (req, res) => {
  */
  const deleteSession = asyncHandler(async (req, res) => {
     const { sessionId: idFromParams } = req.params;
-    const facilitatorId = req.user._id;
 
-    const query = buildSessionQuery(idFromParams, { facilitatorId: facilitatorId });
-    const session = await ClassSession.findOne(query).populate('programId', 'name');
+    // Build base query to find the session
+    const baseQuery = buildSessionQuery(idFromParams, {});
+    const session = await ClassSession.findOne(baseQuery).populate('programId', 'name programManager');
 
     if (!session) {
-        throw new ApiError(404, "Session not found or you are not authorized to delete it.");
+        throw new ApiError(404, "Session not found.");
+    }
+
+    // Authorization check
+    let authorized = false;
+    if (req.user.role === 'SuperAdmin' || req.user.role === 'Evaluator') {
+        // SuperAdmins and Evaluators can delete any session
+        authorized = true;
+    }
+    else if (req.user.role === 'Program Manager' && session.programId && session.programId.programManager?.toString() === req.user._id.toString()) {
+        // Program Managers can delete sessions in their programs
+        authorized = true;
+    }
+    else if (req.user.role === 'Facilitator' && session.facilitatorId?.toString() === req.user._id.toString()) {
+        // Facilitators can only delete their own sessions
+        authorized = true;
+    }
+
+    if (!authorized) {
+        throw new ApiError(403, "You are not authorized to delete this session.");
     }
 
     if (session.status !== 'completed') {
@@ -597,7 +616,19 @@ const getSessionAttendance = asyncHandler(async (req, res) => {
 
 const getFacilitatorSessions = asyncHandler(async (req, res) => {
     const { startDate, endDate } = req.query;
-    let query = { facilitatorId: req.user._id };
+    let query = {};
+
+    // Facilitators only see their own sessions
+    if (req.user.role === 'Facilitator') {
+        query.facilitatorId = req.user._id;
+    }
+    // Program Managers see sessions for programs they manage
+    else if (req.user.role === 'Program Manager') {
+        const managedPrograms = await Program.find({ programManager: req.user._id }).select('_id');
+        const programIds = managedPrograms.map(p => p._id);
+        query.programId = { $in: programIds };
+    }
+    // Evaluators and SuperAdmins see ALL sessions (no filter)
 
     if (startDate && endDate) {
         const start = new Date(startDate);
@@ -607,7 +638,11 @@ const getFacilitatorSessions = asyncHandler(async (req, res) => {
         query.startTime = { $gte: start, $lte: end };
     }
 
-    const sessions = await ClassSession.find(query).sort({ startTime: -1 }).populate('programId', 'name');
+    const sessions = await ClassSession.find(query)
+        .sort({ startTime: -1 })
+        .populate('programId', 'name')
+        .populate('facilitatorId', 'name email'); // Also show who created the session for Evaluators/PMs
+
     return res.status(200).json(new ApiResponse(200, sessions, "Sessions retrieved successfully."));
 });
 
@@ -647,13 +682,16 @@ const markManualStudentAttendance = asyncHandler(async (req, res) => {
     if (!session) throw new ApiError(404, "Session not found.");
     
     let authorized = false;
-    if (req.user.role === 'SuperAdmin') {
+    if (req.user.role === 'SuperAdmin' || req.user.role === 'Evaluator') {
+        // SuperAdmins and Evaluators can mark attendance for any session
         authorized = true;
-    } 
+    }
     else if (req.user.role === 'Program Manager' && session.programId && session.programId.programManager?.toString() === req.user._id.toString()) {
+        // Program Managers can mark attendance for sessions in their programs
         authorized = true;
     }
     else if (req.user.role === 'Facilitator' && session.facilitatorId?._id.toString() === req.user._id.toString()) {
+        // Facilitators can only mark attendance for their own sessions
         authorized = true;
     }
 

@@ -64,9 +64,9 @@ router.post('/sessions/:sessionId/physical-attendance',
     markPhysicalAttendance
 );
 
-// Get facilitator's sessions
+// Get facilitator's sessions (also accessible by Program Managers)
 router.get('/facilitator/sessions',
-    verifyRole(['Facilitator', 'Evaluator']),
+    verifyRole(['Facilitator', 'Evaluator', 'Program Manager']),
     getFacilitatorSessions
 );
 
@@ -92,8 +92,8 @@ router.get('/trainee/sessions',
     getTraineeSessions
 );
 
-router.delete('/sessions/:sessionId', 
-    verifyRole(['Facilitator']), 
+router.delete('/sessions/:sessionId',
+    verifyRole(['Facilitator', 'Evaluator', 'Program Manager']),
     deleteSession
 );
 // ===================================================================

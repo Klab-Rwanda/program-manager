@@ -1,26 +1,31 @@
 import nodemailer from 'nodemailer';
-import dotenv from 'dotenv';
 
-dotenv.config({ path: './.env' });
+// Lazy initialization of transporter to ensure environment variables are loaded
+let transporter = null;
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+const getTransporter = () => {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: 465,
+      secure: true,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    // Verify transporter connection
+    transporter.verify((error, success) => {
+      if (error) {
+        console.error('Email transporter verification failed:', error);
+      } else {
+        console.log('Email server is ready to send messages');
+      }
+    });
   }
-});
-
-// Verify transporter connection on startup
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Email transporter verification failed:', error);
-  } else {
-    console.log('Email server is ready to send messages');
-  }
-});
+  return transporter;
+};
 
 const sendRegistrationEmail = async (to, name, password) => {
   const subject = 'Welcome to Klab Program Manager!';
@@ -45,7 +50,7 @@ const sendRegistrationEmail = async (to, name, password) => {
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const info = await getTransporter().sendMail(mailOptions);
     console.log(`Registration email sent to ${to}: ${info.messageId}`);
   } catch (error) {
     console.error(`Error sending email to ${to}:`, error);
@@ -105,7 +110,7 @@ const sendPasswordResetEmail = async (email, name, resetToken) => {
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const info = await getTransporter().sendMail(mailOptions);
     console.log(`Password reset email sent to ${email}: ${info.messageId}`);
   } catch (error) {
     console.error(`Error sending password reset email to ${email}:`, error);
@@ -154,7 +159,7 @@ const sendPasswordChangeConfirmationEmail = async (email, name) => {
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const info = await getTransporter().sendMail(mailOptions);
     console.log(
       `Password change confirmation email sent to ${email}: ${info.messageId}`
     );
@@ -231,7 +236,7 @@ const sendAssignmentNotificationEmail = async (
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const info = await getTransporter().sendMail(mailOptions);
     console.log(
       `Assignment notification email sent to ${traineeEmail}: ${info.messageId}`
     );
@@ -299,7 +304,7 @@ const sendCertificateIssuedEmail = async (
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const info = await getTransporter().sendMail(mailOptions);
     console.log(
       `Certificate issued email sent to ${traineeEmail}: ${info.messageId}`
     );
@@ -387,7 +392,7 @@ const sendSessionReminderEmail = async (
   };
 
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const info = await getTransporter().sendMail(mailOptions);
     console.log(
       `Session reminder email sent to ${traineeEmail}: ${info.messageId}`
     );
@@ -474,7 +479,7 @@ const sendAnnouncementEmail = async ({ recipients, title, content, authorName, p
     };
 
     try {
-      const info = await transporter.sendMail(mailOptions);
+      const info = await getTransporter().sendMail(mailOptions);
       console.log(`Announcement email sent to ${recipient.email}: ${info.messageId}`);
     } catch (error) {
       console.error(`Error sending announcement email to ${recipient.email}:`, error);
