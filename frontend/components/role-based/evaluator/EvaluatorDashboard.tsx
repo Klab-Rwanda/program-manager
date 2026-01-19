@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { BookOpen, Users, Calendar, Clock, Award, FileText, Loader2, UserPlus, ClipboardList, BarChart3, AlertCircle, Plus, TrendingUp } from "lucide-react"
+import { BookOpen, Users, Clock, Award, FileText, Loader2, UserPlus, ClipboardList, BarChart3, AlertCircle, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -15,10 +15,10 @@ interface Program {
   description?: string
   startDate?: string
   endDate?: string
-  trainees?: number
+  trainees?: { _id: string; name: string; email: string }[] | number
   progress?: number
-  courses?: number
-  facilitators?: number
+  courses?: { _id: string }[] | number
+  facilitators?: { _id: string; name: string; email: string }[] | number
   totalAssignments?: number
   completedAssignments?: number
   averageScore?: number
@@ -175,6 +175,13 @@ export function EvaluatorDashboard() {
   const truncateText = (text: string, maxLength: number = 100) => {
     if (!text) return 'No description'
     return text.length > maxLength ? `${text.substring(0, maxLength)}...` : text
+  }
+
+  // Helper to get count from array or number
+  const getCount = (value: any[] | number | undefined): number => {
+    if (Array.isArray(value)) return value.length
+    if (typeof value === 'number') return value
+    return 0
   }
 
   const getActivityIcon = (type: string) => {
@@ -416,11 +423,11 @@ export function EvaluatorDashboard() {
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div>
                         <p className="text-xs text-muted-foreground">Trainees</p>
-                        <p className="text-sm font-semibold">{program.trainees || 0}</p>
+                        <p className="text-sm font-semibold">{getCount(program.trainees)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Courses</p>
-                        <p className="text-sm font-semibold">{program.courses || 0}</p>
+                        <p className="text-sm font-semibold">{getCount(program.courses)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Progress</p>

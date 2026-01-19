@@ -39,7 +39,8 @@ const menuItems = [
     { title: "Roadmaps", url: "/dashboard/Manager/course-management", icon: CalendarCheck, roles: ['program_manager'], countKey: 'pendingApprovals' },
     { title: "Trainees", url: "/dashboard/Manager/trainees", icon: Users, roles: ['program_manager'], countKey: 'trainees' },
     { title: "Daily Updates", url: "/dashboard/daily-updates", icon: Notebook, roles: ['program_manager'] },
-    { title: "Attendance", url: "/dashboard/Manager/attendance", icon: Calendar, roles: ['program_manager'] },
+    { title: "Attendance Report", url: "/dashboard/Manager/attendance", icon: Calendar, roles: ['program_manager'] },
+    { title: "Session Management", url: "/dashboard/Manager/sessions", icon: CalendarCheck, roles: ['program_manager'] },
     { title: "Certificates", url: "/dashboard/Manager/certificates", icon: Award, roles: ['program_manager'], countKey: 'certificates' },
     { title: "Archive", url: "/dashboard/Manager/archive", icon: Archive, roles: ['program_manager'], countKey: 'archived' },
 
