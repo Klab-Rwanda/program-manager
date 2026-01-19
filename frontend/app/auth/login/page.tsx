@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Mail, Lock, BookOpen, Loader2 } from "lucide-react";
+import { Mail, Lock, Loader2 } from "lucide-react";
+import Image from "next/image";
 import { useAuth } from "@/lib/contexts/RoleContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,15 @@ export default function LoginPage() {
       {/* Left Branding Panel */}
       <div className="w-full md:w-1/2 bg-white flex flex-col justify-center items-start p-8 md:p-20 z-10">
         <div className="animate-fadeIn">
+          <div className="mb-6">
+            <Image
+              src="/logo.png"
+              alt="kLab Logo"
+              width={120}
+              height={40}
+              priority
+            />
+          </div>
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-4 md:mb-6">
             Unlock Your Potential.
           </h1>
@@ -64,11 +74,6 @@ export default function LoginPage() {
       <div className="w-full md:w-[55%] flex items-center justify-center p-6 sm:p-10 md:pl-[15%] relative bg-[#1f497d] text-white animate-gradientAnimation clip-path-polygon md:clip-path-polygon">
         <form onSubmit={handleSubmit} className="w-full max-w-md flex flex-col gap-6 animate-fadeInDelayed">
           <div className="text-center mb-4">
-            <div className="flex justify-center mb-4">
-              <div className="h-16 w-16 flex items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm shadow-lg">
-                <BookOpen className="h-8 w-8" />
-              </div>
-            </div>
             <h2 className="text-2xl md:text-3xl font-semibold mb-2">Welcome Back!</h2>
             <p className="text-gray-200 text-sm md:text-base">
               Sign in to access your dashboard.

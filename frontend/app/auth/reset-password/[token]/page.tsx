@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Lock } from 'lucide-react';
+import Image from 'next/image';
 import { useRouter, useParams } from 'next/navigation';
 
 export default function ResetPasswordPage() {
@@ -69,6 +70,15 @@ export default function ResetPasswordPage() {
       {/* Left Panel */}
       <div className='w-full md:w-1/2 bg-white flex flex-col justify-center items-start p-8 md:p-20 z-10'>
         <div className='animate-fadeIn'>
+          <div className="mb-6">
+            <Image
+              src="/logo.png"
+              alt="kLab Logo"
+              width={120}
+              height={40}
+              priority
+            />
+          </div>
           <h1 className='text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-4 md:mb-6'>
             Create a New Password.
           </h1>

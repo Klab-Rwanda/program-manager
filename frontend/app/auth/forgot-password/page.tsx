@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Mail, BookOpen } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 
 export default function ForgotPasswordPage() {
@@ -47,14 +48,23 @@ export default function ForgotPasswordPage() {
       {/* Left Panel */}
       <div className='w-full md:w-1/2 bg-white flex flex-col justify-center items-start p-8 md:p-20 z-10'>
         <div className='animate-fadeIn'>
+          <div className="mb-6">
+            <Image
+              src="/logo.png"
+              alt="kLab Logo"
+              width={120}
+              height={40}
+              priority
+            />
+          </div>
           <h1 className='text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-4 md:mb-6'>
             Reset Your Password.
           </h1>
           <p className='text-base md:text-lg text-gray-600 leading-relaxed max-w-xl mb-2'>
-            c Forgot your password? Don’t worry — we’ll send you a reset link.
+            Forgot your password? Don't worry — we'll send you a reset link.
           </p>
           <p className='text-base md:text-lg text-gray-600 leading-relaxed'>
-            Let’s get you back into your account.
+            Let's get you back into your account.
           </p>
         </div>
       </div>
@@ -66,11 +76,6 @@ export default function ForgotPasswordPage() {
           className='w-full max-w-md flex flex-col gap-6 animate-fadeInDelayed'
         >
           <div className='text-center mb-4'>
-            <div className='flex justify-center mb-4'>
-              <div className='h-16 w-16 flex items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm shadow-lg'>
-                <BookOpen className='h-8 w-8' />
-              </div>
-            </div>
             <h2 className='text-2xl md:text-3xl font-semibold mb-2'>
               Forgot Password
             </h2>
