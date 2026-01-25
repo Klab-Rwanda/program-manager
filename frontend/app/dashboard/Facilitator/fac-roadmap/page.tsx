@@ -53,6 +53,9 @@ export default function FacilitatorRoadmapPage() {
     const [formData, setFormData] = useState<typeof initialFormData>(initialFormData);
     const [activeTab, setActiveTab] = useState("active");
     const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [roadmapToDelete, setRoadmapToDelete] = useState<EnhancedRoadmap | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const fetchData = useCallback(async () => {
         setLoading(true);
@@ -171,20 +174,27 @@ export default function FacilitatorRoadmapPage() {
         setIsModalOpen(true);
     };
 
-    const handleDelete = (roadmapId: string) => {
-        toast("Are you sure?", {
-            description: "This will permanently delete the weekly roadmap and all its topics.",
-            action: { label: "Delete", onClick: async () => {
-                try {
-                    await deleteRoadmap(roadmapId);
-                    toast.success("Roadmap deleted.");
-                    fetchData();
-                } catch (err: unknown) {
-                    const error = err as { response?: { data?: { message?: string } } };
-                    toast.error(error.response?.data?.message || "Failed to delete roadmap.");
-                }
-            }},
-        });
+    const handleDeleteClick = (roadmap: EnhancedRoadmap) => {
+        setRoadmapToDelete(roadmap);
+        setDeleteConfirmOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!roadmapToDelete) return;
+
+        setIsDeleting(true);
+        try {
+            await deleteRoadmap(roadmapToDelete._id);
+            toast.success(`Week ${roadmapToDelete.weekNumber} roadmap deleted.`);
+            setDeleteConfirmOpen(false);
+            setRoadmapToDelete(null);
+            fetchData();
+        } catch (err: unknown) {
+            const error = err as { response?: { data?: { message?: string } } };
+            toast.error(error.response?.data?.message || "Failed to delete roadmap.");
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     const handleTopicChange = (index: number, field: string, value: string) => {
@@ -397,7 +407,7 @@ export default function FacilitatorRoadmapPage() {
                             </>
                         )}
                         {!isCompleted && (roadmap.status === 'draft' || roadmap.status === 'pending_approval' || roadmap.status === 'rejected') && (
-                            <Button size="sm" variant="destructive" onClick={() => handleDelete(roadmap._id)}>
+                            <Button size="sm" variant="destructive" onClick={() => handleDeleteClick(roadmap)}>
                                 <Trash2 className="mr-2 h-4 w-4"/>Delete
                             </Button>
                         )}
@@ -660,6 +670,37 @@ export default function FacilitatorRoadmapPage() {
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={deleteConfirmOpen} onOpenChange={(open) => {
+                if (!isDeleting) {
+                    setDeleteConfirmOpen(open);
+                    if (!open) setRoadmapToDelete(null);
+                }
+            }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Delete Roadmap</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <p className="text-sm text-muted-foreground">
+                            Are you sure you want to delete <strong>Week {roadmapToDelete?.weekNumber}: {roadmapToDelete?.title}</strong>?
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-2">
+                            This will permanently delete the weekly roadmap and all its topics. This action cannot be undone.
+                        </p>
+                    </div>
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} disabled={isDeleting}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
+                            {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                            Delete
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>
