@@ -372,6 +372,11 @@ export default function FacilitatorRoadmapPage() {
                                 </Button>
                             </>
                         )}
+                        {!isCompleted && roadmap.status === 'pending_approval' && (
+                            <Button size="sm" variant="outline" onClick={() => handleOpenModal(roadmap)}>
+                                <Edit className="mr-2 h-4 w-4"/>Edit
+                            </Button>
+                        )}
                         {!isCompleted && roadmap.status === 'rejected' && (
                             <Button size="sm" variant="outline" onClick={() => handleOpenModal(roadmap)}>
                                 <Edit className="mr-2 h-4 w-4"/>Edit & Resubmit
@@ -391,7 +396,7 @@ export default function FacilitatorRoadmapPage() {
                                 </Button>
                             </>
                         )}
-                        {!isCompleted && (roadmap.status === 'draft' || roadmap.status === 'rejected') && (
+                        {!isCompleted && (roadmap.status === 'draft' || roadmap.status === 'pending_approval' || roadmap.status === 'rejected') && (
                             <Button size="sm" variant="destructive" onClick={() => handleDelete(roadmap._id)}>
                                 <Trash2 className="mr-2 h-4 w-4"/>Delete
                             </Button>
