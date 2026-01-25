@@ -5,6 +5,21 @@ let transporter = null;
 
 const getTransporter = () => {
   if (!transporter) {
+    // Log environment variables (without exposing password)
+    console.log('Email configuration check:', {
+      host: process.env.EMAIL_HOST || 'NOT SET',
+      port: 465,
+      user: process.env.EMAIL_USER || 'NOT SET',
+      passSet: process.env.EMAIL_PASS ? 'YES' : 'NO',
+      nodeEnv: process.env.NODE_ENV
+    });
+
+    if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error('EMAIL CONFIGURATION ERROR: Missing required environment variables');
+      console.error('Required: EMAIL_HOST, EMAIL_USER, EMAIL_PASS');
+      return null;
+    }
+
     transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: 465,
@@ -12,13 +27,19 @@ const getTransporter = () => {
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-      }
+      },
+      // Add connection timeout settings
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000
     });
 
     // Verify transporter connection
     transporter.verify((error, success) => {
       if (error) {
-        console.error('Email transporter verification failed:', error);
+        console.error('Email transporter verification failed:', error.message);
+        console.error('Error code:', error.code);
+        console.error('Full error:', JSON.stringify(error, null, 2));
       } else {
         console.log('Email server is ready to send messages');
       }
@@ -50,10 +71,15 @@ const sendRegistrationEmail = async (to, name, password) => {
   };
 
   try {
-    const info = await getTransporter().sendMail(mailOptions);
+    const transport = getTransporter();
+    if (!transport) {
+      console.error('Email transporter not available - check environment variables');
+      throw new Error('Email service not configured');
+    }
+    const info = await transport.sendMail(mailOptions);
     console.log(`Registration email sent to ${to}: ${info.messageId}`);
   } catch (error) {
-    console.error(`Error sending email to ${to}:`, error);
+    console.error(`Error sending email to ${to}:`, error.message);
     throw new Error('Failed to send registration email');
   }
 };
@@ -110,10 +136,15 @@ const sendPasswordResetEmail = async (email, name, resetToken) => {
   };
 
   try {
-    const info = await getTransporter().sendMail(mailOptions);
+    const transport = getTransporter();
+    if (!transport) {
+      console.error('Email transporter not available - check environment variables');
+      throw new Error('Email service not configured');
+    }
+    const info = await transport.sendMail(mailOptions);
     console.log(`Password reset email sent to ${email}: ${info.messageId}`);
   } catch (error) {
-    console.error(`Error sending password reset email to ${email}:`, error);
+    console.error(`Error sending password reset email to ${email}:`, error.message);
     throw new Error('Failed to send password reset email');
   }
 };

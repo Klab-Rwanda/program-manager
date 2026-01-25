@@ -316,9 +316,12 @@ const markPhysicalAttendance = asyncHandler(async (req, res) => {
         // Program Managers can delete sessions in their programs
         authorized = true;
     }
-    else if (req.user.role === 'Facilitator' && session.facilitatorId?.toString() === req.user._id.toString()) {
-        // Facilitators can only delete their own sessions
-        authorized = true;
+    else if (req.user.role === 'Facilitator') {
+        // Facilitators can delete sessions in programs they're assigned to
+        const program = await Program.findById(session.programId._id);
+        if (program && program.facilitators.some(f => f.toString() === req.user._id.toString())) {
+            authorized = true;
+        }
     }
 
     if (!authorized) {
@@ -581,10 +584,14 @@ const getSessionAttendance = asyncHandler(async (req, res) => {
 
     const attendanceMap = new Map();
     currentAttendanceRecords.forEach(record => {
+        // Skip records where userId is null (deleted users)
+        if (!record.userId || !record.userId._id) return;
+
         // Only keep the latest status for a user for this session
         // This ensures if someone was marked 'Absent' then 'Present', 'Present' is kept.
-        if (!attendanceMap.has(record.userId._id.toString()) || new Date(record.timestamp) > new Date(attendanceMap.get(record.userId._id.toString()).timestamp)) {
-            attendanceMap.set(record.userId._id.toString(), record);
+        const userIdStr = record.userId._id.toString();
+        if (!attendanceMap.has(userIdStr) || new Date(record.timestamp) > new Date(attendanceMap.get(userIdStr).timestamp)) {
+            attendanceMap.set(userIdStr, record);
         }
     });
 
@@ -618,9 +625,11 @@ const getFacilitatorSessions = asyncHandler(async (req, res) => {
     const { startDate, endDate } = req.query;
     let query = {};
 
-    // Facilitators only see their own sessions
+    // Facilitators see sessions from programs they're assigned to
     if (req.user.role === 'Facilitator') {
-        query.facilitatorId = req.user._id;
+        const assignedPrograms = await Program.find({ facilitators: req.user._id }).select('_id');
+        const programIds = assignedPrograms.map(p => p._id);
+        query.programId = { $in: programIds };
     }
     // Program Managers see sessions for programs they manage
     else if (req.user.role === 'Program Manager') {
@@ -690,9 +699,12 @@ const markManualStudentAttendance = asyncHandler(async (req, res) => {
         // Program Managers can mark attendance for sessions in their programs
         authorized = true;
     }
-    else if (req.user.role === 'Facilitator' && session.facilitatorId?._id.toString() === req.user._id.toString()) {
-        // Facilitators can only mark attendance for their own sessions
-        authorized = true;
+    else if (req.user.role === 'Facilitator') {
+        // Facilitators can mark attendance for sessions in programs they're assigned to
+        const program = await Program.findById(session.programId._id);
+        if (program && program.facilitators.some(f => f.toString() === req.user._id.toString())) {
+            authorized = true;
+        }
     }
 
     if (!authorized) {
