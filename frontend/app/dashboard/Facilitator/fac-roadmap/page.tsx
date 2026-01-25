@@ -263,7 +263,8 @@ export default function FacilitatorRoadmapPage() {
             const submitData = {
                 ...formData,
                 weekNumber: parseInt(formData.weekNumber),
-                action: action === 'submit' ? 'submit_for_approval' : undefined
+                action: action === 'submit' ? 'submit_for_approval' : undefined,
+                roadmapId: editingRoadmap?._id // Include roadmapId when editing for ownership verification
             };
             await saveRoadmap(submitData);
             const message = action === 'submit'
