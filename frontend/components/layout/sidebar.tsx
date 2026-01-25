@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity, Archive, Award, BarChart3, Bell, BookOpen, Calendar,
-  CalendarCheck, ChevronLeft, ChevronRight, ClipboardCheck, FileText,
+  CalendarCheck, ChevronLeft, ChevronRight, FileText,
   Home, Loader2, LogOut, Megaphone, MessageSquare, Moon, Notebook, Settings, Sun,
   TicketCheck, User, UserCheck, Users, Wrench
 } from "lucide-react";
@@ -52,7 +52,6 @@ const menuItems = [
     // Facilitator
     { title: "My Programs", url: "/dashboard/Facilitator/fac-programs", icon: BookOpen, roles: ['facilitator'] },
     { title: "Attendance Tracking", url: "/dashboard/Facilitator/Fac-attendance", icon: Calendar, roles: ['facilitator'] },
-    { title: "Project Reviews", url: "/dashboard/Facilitator/fac-reviews", icon: ClipboardCheck, roles: ['facilitator'] },
     { title: "Roadmaps", url: "/dashboard/Facilitator/fac-roadmap", icon: CalendarCheck, roles: ['facilitator'] },
     { title: "Daily Updates", url: "/dashboard/daily-updates", icon: Notebook, roles: ['facilitator'] },
     // Trainee

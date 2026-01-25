@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { Plus, Loader2, QrCode, Play, Eye, Download, StopCircle, UserCheck, Edit, Save, Trash2, Calendar, Clock as ClockIcon, MapPin } from "lucide-react"; 
+import { Plus, Loader2, QrCode, Play, Eye, Download, StopCircle, UserCheck, Edit, Save, Trash2, Calendar, Clock as ClockIcon, MapPin, Search } from "lucide-react"; 
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,6 +62,7 @@ export default function FacilitatorAttendancePage() {
     (TraineeUser & { currentAttendance?: AttendanceRecord | null; manualStatus?: string; manualReason?: string; isSaving?: boolean })[]
   >([]);
   const [manualMarkLoading, setManualMarkLoading] = useState(false);
+  const [traineeSearchQuery, setTraineeSearchQuery] = useState('');
 
   // State for date filtering
   const today = new Date();
@@ -425,6 +426,16 @@ export default function FacilitatorAttendancePage() {
 
   const activeOrScheduledSessions = useMemo(() => sessions.filter(s => s.status === 'active' || s.status === 'scheduled'), [sessions]);
   const completedSessions = useMemo(() => sessions.filter(s => s.status === 'completed'), [sessions]);
+
+  // Filter trainees based on search query for manual mark modal
+  const filteredTraineesForManualMark = useMemo(() => {
+    if (!traineeSearchQuery.trim()) return traineesForManualMark;
+    const query = traineeSearchQuery.toLowerCase();
+    return traineesForManualMark.filter(t =>
+      t.name?.toLowerCase().includes(query) ||
+      t.email?.toLowerCase().includes(query)
+    );
+  }, [traineesForManualMark, traineeSearchQuery]);
 
   // Helper to get initials - MOVED ABOVE RETURN STATEMENT
   const getInitials = (name: string = "") => name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -907,8 +918,11 @@ export default function FacilitatorAttendancePage() {
       </Dialog>
 
       {/* Manual Attendance Marking Modal */}
-      <Dialog open={isManualMarkModalOpen} onOpenChange={setManualMarkModalOpen}>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto 
+      <Dialog open={isManualMarkModalOpen} onOpenChange={(open) => {
+          setManualMarkModalOpen(open);
+          if (!open) setTraineeSearchQuery('');
+      }}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto
               !left-1/2 !-translate-x-1/2
               md:!left-[calc(50%+100px)] md:!top-1/2 md:!-translate-x-1/2 md:!-translate-y-1/2
               lg:max-w-3xl
@@ -926,6 +940,17 @@ export default function FacilitatorAttendancePage() {
               {manualMarkLoading ? (
                   <div className="py-8 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto"/></div>
               ) : (
+                  <div className="space-y-4">
+                  {/* Search Box */}
+                  <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                          placeholder="Search by name or email..."
+                          value={traineeSearchQuery}
+                          onChange={(e) => setTraineeSearchQuery(e.target.value)}
+                          className="pl-9"
+                      />
+                  </div>
                   <Table>
                       <TableHeader>
                           <TableRow>
@@ -939,8 +964,10 @@ export default function FacilitatorAttendancePage() {
                       <TableBody>
                           {traineesForManualMark.length === 0 ? (
                               <TableRow><TableCell colSpan={5} className="text-center py-6">No trainees found for this program.</TableCell></TableRow>
+                          ) : filteredTraineesForManualMark.length === 0 ? (
+                              <TableRow><TableCell colSpan={5} className="text-center py-6">No trainees match your search.</TableCell></TableRow>
                           ) : (
-                              traineesForManualMark.map(trainee => (
+                              filteredTraineesForManualMark.map(trainee => (
                                   <TableRow key={trainee._id}>
                                       <TableCell>
                                           <div className="flex items-center gap-2">
@@ -1001,6 +1028,7 @@ export default function FacilitatorAttendancePage() {
                           )}
                       </TableBody>
                   </Table>
+                  </div>
               )}
               <DialogFooter>
                   <Button variant="outline" onClick={() => setManualMarkModalOpen(false)}>Close</Button>
