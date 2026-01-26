@@ -42,16 +42,17 @@ router.route('/all').get(
     roadmapController.getAllRoadmaps
 );
 
-// Facilitator-only routes
+// Roadmap create/update - Facilitator and Program Manager
 router.route('/')
-    .post(checkRole(['Facilitator']), roadmapController.createOrUpdateRoadmap);
+    .post(checkRole(['Facilitator', 'Program Manager']), roadmapController.createOrUpdateRoadmap);
 
 router.route('/:roadmapId/set-current').patch(
     checkRole(['Facilitator']),
     roadmapController.setCurrentWeek
 );
 
+// Delete roadmap - Facilitator (own only) and Program Manager (all)
 router.route('/:id')
-    .delete(checkRole(['Facilitator']), roadmapController.deleteRoadmap);
+    .delete(checkRole(['Facilitator', 'Program Manager']), roadmapController.deleteRoadmap);
 
 export default router;

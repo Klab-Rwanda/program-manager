@@ -16,15 +16,46 @@ import { createNotification } from '../../services/notification.service.js';
  * @access  Private (Facilitator)
  */
 export const createOrUpdateRoadmap = asyncHandler(async (req, res) => {
-    const { program, course, weekNumber, title, startDate, objectives, topics, action } = req.body;
-    const facilitatorId = req.user._id;
+    const { program, course, weekNumber, title, startDate, objectives, topics, action, roadmapId } = req.body;
+    const userId = req.user._id;
+    const userRole = req.user.role;
 
-    console.log('createOrUpdateRoadmap called with:', { program, course, weekNumber, title, action });
+    console.log('createOrUpdateRoadmap called with:', { program, course, weekNumber, title, action, userRole });
 
-    // Verify facilitator is assigned to this program
-    const programDoc = await Program.findOne({ _id: program, facilitators: facilitatorId });
-    if (!programDoc) {
-        throw new ApiError(403, "You are not authorized to manage the roadmap for this program.");
+    let programDoc;
+    let facilitatorId = userId; // Default to current user
+
+    if (userRole === 'Program Manager') {
+        // Program Manager can edit any roadmap
+        programDoc = await Program.findById(program);
+        if (!programDoc) {
+            throw new ApiError(404, "Program not found.");
+        }
+        // If editing existing roadmap, preserve the original facilitator
+        if (roadmapId) {
+            const existingRoadmap = await Roadmap.findById(roadmapId);
+            if (existingRoadmap) {
+                facilitatorId = existingRoadmap.facilitator;
+            }
+        } else {
+            // For new roadmaps created by PM, use the first facilitator of the program or the PM themselves
+            facilitatorId = programDoc.facilitators?.length > 0 ? programDoc.facilitators[0] : userId;
+        }
+    } else if (userRole === 'Facilitator') {
+        // Facilitator can only manage roadmaps for programs they're assigned to
+        programDoc = await Program.findOne({ _id: program, facilitators: userId });
+        if (!programDoc) {
+            throw new ApiError(403, "You are not authorized to manage the roadmap for this program.");
+        }
+        // If editing an existing roadmap, verify ownership
+        if (roadmapId) {
+            const existingRoadmap = await Roadmap.findById(roadmapId);
+            if (existingRoadmap && existingRoadmap.facilitator.toString() !== userId.toString()) {
+                throw new ApiError(403, "You can only edit roadmaps you created.");
+            }
+        }
+    } else {
+        throw new ApiError(403, "You are not authorized to manage roadmaps.");
     }
     
     // Determine the status based on the action
@@ -194,9 +225,25 @@ export const getMyRoadmaps = asyncHandler(async (req, res) => {
 
 export const deleteRoadmap = asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const roadmap = await Roadmap.findOne({ _id: id, facilitator: req.user._id });
+    const roadmap = await Roadmap.findById(id);
+
     if (!roadmap) {
-        throw new ApiError(404, "Roadmap not found or you lack permission.");
+        throw new ApiError(404, "Roadmap not found.");
+    }
+
+    // Authorization check
+    const userRole = req.user.role;
+    const userId = req.user._id;
+
+    if (userRole === 'Program Manager') {
+        // Program Manager can delete any roadmap - authorized
+    } else if (userRole === 'Facilitator') {
+        // Facilitator can only delete their own roadmaps
+        if (roadmap.facilitator.toString() !== userId.toString()) {
+            throw new ApiError(403, "You can only delete roadmaps you created.");
+        }
+    } else {
+        throw new ApiError(403, "You are not authorized to delete roadmaps.");
     }
 
     // Delete the roadmap and all its associated topics
