@@ -20,6 +20,7 @@ import itSupportRoutes from './itSupport.route.js';
 import fileRouter from './file.route.js';
 import announcementRouter from './announcement.route.js';
 import dailyUpdateRouter from './dailyUpdate.route.js';
+import projectRouter from './project.route.js';
 
 
 
@@ -47,6 +48,7 @@ const defaultRoutes = [
     { path: '/files', route: fileRouter },
     { path: '/announcements', route: announcementRouter },
     { path: '/daily-updates', route: dailyUpdateRouter },
+    { path: '/projects', route: projectRouter },
 ];
 
 defaultRoutes.forEach((route) => {
