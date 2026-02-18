@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity, Archive, Award, BarChart3, Bell, BookOpen, Calendar,
-  CalendarCheck, ChevronLeft, ChevronRight, FileText,
+  CalendarCheck, ChevronLeft, ChevronRight, FileText, FolderOpen,
   Home, Loader2, LogOut, Megaphone, MessageSquare, Moon, Notebook, Settings, Sun,
   TicketCheck, User, UserCheck, Users, Wrench
 } from "lucide-react";
@@ -38,6 +38,7 @@ const menuItems = [
     { title: "Facilitators", url: "/dashboard/Manager/facilitators", icon: UserCheck, roles: ['program_manager'], countKey: 'facilitators' },
     { title: "Roadmaps", url: "/dashboard/Manager/course-management", icon: CalendarCheck, roles: ['program_manager'], countKey: 'pendingApprovals' },
     { title: "Trainees", url: "/dashboard/Manager/trainees", icon: Users, roles: ['program_manager'], countKey: 'trainees' },
+    { title: "Projects", url: "/dashboard/Manager/projects", icon: FolderOpen, roles: ['program_manager'] },
     { title: "Daily Updates", url: "/dashboard/daily-updates", icon: Notebook, roles: ['program_manager'] },
     { title: "Attendance Report", url: "/dashboard/Manager/attendance", icon: Calendar, roles: ['program_manager'] },
     { title: "Session Management", url: "/dashboard/Manager/sessions", icon: CalendarCheck, roles: ['program_manager'] },
@@ -53,8 +54,10 @@ const menuItems = [
     { title: "My Programs", url: "/dashboard/Facilitator/fac-programs", icon: BookOpen, roles: ['facilitator'] },
     { title: "Attendance Tracking", url: "/dashboard/Facilitator/Fac-attendance", icon: Calendar, roles: ['facilitator'] },
     { title: "Roadmaps", url: "/dashboard/Facilitator/fac-roadmap", icon: CalendarCheck, roles: ['facilitator'] },
+    { title: "Projects", url: "/dashboard/Facilitator/projects", icon: FolderOpen, roles: ['facilitator'] },
     { title: "Daily Updates", url: "/dashboard/daily-updates", icon: Notebook, roles: ['facilitator'] },
     // Trainee
+    { title: "My Projects", url: "/dashboard/Trainee/projects", icon: FolderOpen, roles: ['trainee'] },
     { title: "Submit Projects", url: "/dashboard/Trainee/submit-projects", icon: FileText, roles: ['trainee'] },
     { title: "Daily Updates", url: "/dashboard/Trainee/daily-updates", icon: Notebook, roles: ['trainee'] },
     { title: "Attendance", url: "/dashboard/Trainee/Trattendance", icon: Calendar, roles: ['trainee'] },

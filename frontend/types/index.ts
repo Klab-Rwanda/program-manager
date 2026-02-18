@@ -451,3 +451,104 @@ export interface DailyUpdatesResponse {
   page: number;
   totalPages: number;
 }
+
+// -------------------------------------------------------------------
+// PROJECT TRACKING TYPES
+// -------------------------------------------------------------------
+
+export interface ProjectFile {
+  fileName: string;
+  fileUrl: string;
+  uploadedAt: string;
+}
+
+export interface ProjectTask {
+  _id: string;
+  project: string | { _id: string; title: string; };
+  title: string;
+  description?: string;
+  assignedTo: { _id: string; name: string; email: string; } | null;
+  createdBy: { _id: string; name: string; };
+  completionPercentage: number;
+  dueDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTaskData {
+  title: string;
+  description?: string;
+  assignedTo?: string;
+  dueDate?: string;
+}
+
+export interface Project {
+  _id: string;
+  title: string;
+  description?: string;
+  program: { _id: string; name: string; };
+  createdBy: { _id: string; name: string; email: string; };
+  assignedTrainees: { _id: string; name: string; email: string; }[];
+  teamLead?: { _id: string; name: string; email: string; } | null;
+  companyName?: string;
+  companyAddress?: string;
+  companyContactPerson?: string;
+  companyContactPhone?: string;
+  files?: ProjectFile[];
+  status: 'active' | 'completed' | 'on_hold';
+  startDate?: string;
+  dueDate?: string;
+  createdAt: string;
+  updatedAt: string;
+  // Computed fields from backend
+  averageCompletion?: number;
+  totalTasks?: number;
+  myLatestCompletion?: number;
+  myTaskCount?: number;
+  tasks?: ProjectTask[];
+  traineeProgress?: {
+    _id: string;
+    latestPercentage: number;
+    latestDescription: string;
+    latestDate: string;
+    totalUpdates: number;
+  }[];
+}
+
+export interface CreateProjectData {
+  title: string;
+  description?: string;
+  program: string;
+  assignedTrainees?: string[];
+  companyName?: string;
+  companyAddress?: string;
+  companyContactPerson?: string;
+  companyContactPhone?: string;
+  teamLead?: string;
+  startDate?: string;
+  dueDate?: string;
+}
+
+export interface ProjectUpdate {
+  _id: string;
+  project: { _id: string; title: string; } | string;
+  trainee: { _id: string; name: string; email: string; };
+  date: string;
+  description: string;
+  completionPercentage?: number;
+  blockers?: string;
+  isReviewed: boolean;
+  reviewedBy?: { _id: string; name: string; };
+  reviewedAt?: string;
+  reviewComment?: string;
+  isEditable?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectUpdatesResponse {
+  updates: ProjectUpdate[];
+  total: number;
+  page: number;
+  totalPages: number;
+}
