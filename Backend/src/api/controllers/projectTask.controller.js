@@ -68,7 +68,8 @@ export const createTask = asyncHandler(async (req, res) => {
 
     const populated = await ProjectTask.findById(task._id)
         .populate('assignedTo', 'name email')
-        .populate('createdBy', 'name');
+        .populate('createdBy', 'name')
+        .populate('comments.user', 'name email');
 
     return res.status(201).json(new ApiResponse(201, populated, "Task created successfully."));
 });
@@ -108,6 +109,7 @@ export const getProjectTasks = asyncHandler(async (req, res) => {
     const tasks = await ProjectTask.find(query)
         .populate('assignedTo', 'name email')
         .populate('createdBy', 'name')
+        .populate('comments.user', 'name email')
         .sort({ createdAt: -1 });
 
     return res.status(200).json(new ApiResponse(200, tasks, "Tasks fetched successfully."));
@@ -138,6 +140,7 @@ export const getMyTasks = asyncHandler(async (req, res) => {
     })
     .populate('assignedTo', 'name email')
     .populate('createdBy', 'name')
+    .populate('comments.user', 'name email')
     .sort({ createdAt: -1 });
 
     return res.status(200).json(new ApiResponse(200, tasks, "My tasks fetched successfully."));
@@ -152,7 +155,7 @@ export const updateTaskCompletion = asyncHandler(async (req, res) => {
     const userId = req.user._id;
     const userRole = req.user.role;
     const { taskId } = req.params;
-    const { completionPercentage } = req.body;
+    const { completionPercentage, comment } = req.body;
 
     if (completionPercentage === undefined) {
         throw new ApiError(400, "Completion percentage is required.");
@@ -183,11 +186,21 @@ export const updateTaskCompletion = asyncHandler(async (req, res) => {
     }
 
     task.completionPercentage = Math.min(100, Math.max(0, parseInt(completionPercentage)));
+
+    if (comment && comment.trim()) {
+        task.comments.push({
+            user: userId,
+            text: comment.trim(),
+            completionPercentage: task.completionPercentage
+        });
+    }
+
     await task.save();
 
     const populated = await ProjectTask.findById(task._id)
         .populate('assignedTo', 'name email')
-        .populate('createdBy', 'name');
+        .populate('createdBy', 'name')
+        .populate('comments.user', 'name email');
 
     return res.status(200).json(new ApiResponse(200, populated, "Task progress updated successfully."));
 });
@@ -241,7 +254,8 @@ export const updateTask = asyncHandler(async (req, res) => {
 
     const populated = await ProjectTask.findById(task._id)
         .populate('assignedTo', 'name email')
-        .populate('createdBy', 'name');
+        .populate('createdBy', 'name')
+        .populate('comments.user', 'name email');
 
     return res.status(200).json(new ApiResponse(200, populated, "Task updated successfully."));
 });

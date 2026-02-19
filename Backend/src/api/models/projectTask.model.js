@@ -39,7 +39,29 @@ const projectTaskSchema = new mongoose.Schema({
     isDeleted: {
         type: Boolean,
         default: false
-    }
+    },
+    comments: [{
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            required: true
+        },
+        text: {
+            type: String,
+            required: true,
+            trim: true,
+            maxlength: [500, 'Comment cannot exceed 500 characters']
+        },
+        completionPercentage: {
+            type: Number,
+            min: 0,
+            max: 100
+        },
+        createdAt: {
+            type: Date,
+            default: Date.now
+        }
+    }]
 }, {
     timestamps: true
 });
