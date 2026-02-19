@@ -462,6 +462,14 @@ export interface ProjectFile {
   uploadedAt: string;
 }
 
+export interface TaskComment {
+  _id: string;
+  user: { _id: string; name: string; email?: string };
+  text: string;
+  completionPercentage?: number;
+  createdAt: string;
+}
+
 export interface ProjectTask {
   _id: string;
   project: string | { _id: string; title: string; };
@@ -471,6 +479,7 @@ export interface ProjectTask {
   createdBy: { _id: string; name: string; };
   completionPercentage: number;
   dueDate?: string;
+  comments?: TaskComment[];
   createdAt: string;
   updatedAt: string;
 }

@@ -5,7 +5,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import {
     Loader2, Plus, Edit, Trash2, Search, Users, Building2, Eye,
-    FolderOpen, CheckCircle, Clock, Pause, RefreshCw, Crown, ListTodo
+    FolderOpen, CheckCircle, Clock, Pause, RefreshCw, Crown, ListTodo,
+    MessageSquare, Calendar
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,15 +20,13 @@ import { Progress } from "@/components/ui/progress";
 import {
     getProjects,
     deleteProject,
-    getProjectUpdates,
-    reviewProjectUpdate,
     getProjectTasks,
     createTask,
     deleteTask,
     updateTask
 } from "@/lib/services/project.service";
 import { getAllPrograms } from "@/lib/services/program.service";
-import { Project, Program, ProjectUpdate as PUpdate, ProjectUpdatesResponse, ProjectTask, CreateTaskData } from "@/types";
+import { Project, Program, ProjectTask, CreateTaskData } from "@/types";
 
 export default function ProjectManagementPage() {
     const router = useRouter();
@@ -45,14 +44,11 @@ export default function ProjectManagementPage() {
     const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // View project updates & tasks
+    // View project details & tasks
     const [viewProject, setViewProject] = useState<Project | null>(null);
-    const [viewUpdates, setViewUpdates] = useState<PUpdate[]>([]);
     const [viewTasks, setViewTasks] = useState<ProjectTask[]>([]);
     const [viewLoading, setViewLoading] = useState(false);
-    const [viewTab, setViewTab] = useState<"updates" | "tasks">("tasks");
-    const [reviewingUpdate, setReviewingUpdate] = useState<string | null>(null);
-    const [reviewComment, setReviewComment] = useState("");
+    const [viewingTask, setViewingTask] = useState<ProjectTask | null>(null);
 
     // Task creation & filtering
     const [showTaskForm, setShowTaskForm] = useState(false);
@@ -134,16 +130,11 @@ export default function ProjectManagementPage() {
 
     const handleViewUpdates = async (project: Project) => {
         setViewProject(project);
-        setViewTab("tasks");
         setViewLoading(true);
         setShowTaskForm(false);
         setTaskAssigneeFilter("all");
         try {
-            const [updatesData, tasksData] = await Promise.all([
-                getProjectUpdates(project._id, { limit: 50 }),
-                getProjectTasks(project._id)
-            ]);
-            setViewUpdates(updatesData.updates);
+            const tasksData = await getProjectTasks(project._id);
             setViewTasks(tasksData);
         } catch (err) {
             toast.error("Failed to load project data.");
@@ -219,22 +210,6 @@ export default function ProjectManagementPage() {
             toast.error(err.response?.data?.message || "Failed to update task.");
         } finally {
             setIsUpdatingTask(false);
-        }
-    };
-
-    const handleReviewUpdate = async (updateId: string) => {
-        try {
-            await reviewProjectUpdate(updateId, reviewComment);
-            toast.success("Update reviewed.");
-            setReviewingUpdate(null);
-            setReviewComment("");
-            // Refresh updates
-            if (viewProject) {
-                const data = await getProjectUpdates(viewProject._id, { limit: 50 });
-                setViewUpdates(data.updates);
-            }
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || "Failed to review update.");
         }
     };
 
@@ -442,7 +417,7 @@ export default function ProjectManagementPage() {
             </Dialog>
 
             {/* View Project Details Modal */}
-            <Dialog open={!!viewProject} onOpenChange={(open) => { if (!open) { setViewProject(null); setViewUpdates([]); setViewTasks([]); setShowTaskForm(false); } }}>
+            <Dialog open={!!viewProject} onOpenChange={(open) => { if (!open) { setViewProject(null); setViewTasks([]); setShowTaskForm(false); setViewingTask(null); } }}>
                 <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -459,28 +434,9 @@ export default function ProjectManagementPage() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    {/* Tab Switcher */}
-                    <div className="flex gap-2 border-b pb-2">
-                        <Button
-                            variant={viewTab === "tasks" ? "default" : "ghost"}
-                            size="sm"
-                            onClick={() => setViewTab("tasks")}
-                        >
-                            <ListTodo className="mr-1 h-4 w-4" />Tasks ({viewTasks.length})
-                        </Button>
-                        <Button
-                            variant={viewTab === "updates" ? "default" : "ghost"}
-                            size="sm"
-                            onClick={() => setViewTab("updates")}
-                        >
-                            <Eye className="mr-1 h-4 w-4" />Updates ({viewUpdates.length})
-                        </Button>
-                    </div>
-
                     {viewLoading ? (
                         <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
-                    ) : viewTab === "tasks" ? (
-                        /* ---- Tasks Tab ---- */
+                    ) : (
                         <div className="space-y-3 py-2">
                             <div className="flex items-center gap-3 flex-wrap">
                                 {taskAssignees.length > 1 && (
@@ -559,7 +515,11 @@ export default function ProjectManagementPage() {
 
                             {/* Task List */}
                             {filteredViewTasks.map(task => (
-                                <Card key={task._id}>
+                                <Card
+                                    key={task._id}
+                                    className="cursor-pointer hover:shadow-md transition-shadow"
+                                    onClick={() => setViewingTask(task)}
+                                >
                                     <CardContent className="py-3 space-y-2">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="flex-1">
@@ -572,16 +532,19 @@ export default function ProjectManagementPage() {
                                                         </span>
                                                     )}
                                                 </div>
-                                                {task.description && (
-                                                    <p className="text-xs text-muted-foreground mt-1">{task.description}</p>
-                                                )}
                                             </div>
-                                            <div className="flex gap-1">
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                {task.comments && task.comments.length > 0 && (
+                                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                        <MessageSquare className="h-3 w-3" />{task.comments.length}
+                                                    </span>
+                                                )}
+                                                <span className="text-xs font-bold text-primary">{task.completionPercentage}%</span>
                                                 <Button
                                                     size="sm"
                                                     variant="ghost"
                                                     className="h-7 w-7 p-0"
-                                                    onClick={() => handleEditTask(task)}
+                                                    onClick={(e) => { e.stopPropagation(); handleEditTask(task); }}
                                                 >
                                                     <Edit className="h-3.5 w-3.5" />
                                                 </Button>
@@ -589,80 +552,19 @@ export default function ProjectManagementPage() {
                                                     size="sm"
                                                     variant="ghost"
                                                     className="text-destructive hover:text-destructive h-7 w-7 p-0"
-                                                    onClick={() => handleDeleteTask(task._id)}
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteTask(task._id); }}
                                                     disabled={deletingTaskId === task._id}
                                                 >
                                                     {deletingTaskId === task._id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                                                 </Button>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
-                                            <Progress value={task.completionPercentage} className="flex-1 h-2" />
-                                            <span className="text-xs font-medium w-10 text-right">{task.completionPercentage}%</span>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    ) : (
-                        /* ---- Updates Tab ---- */
-                        <div className="space-y-3 py-2">
-                            {viewUpdates.length === 0 ? (
-                                <p className="text-center py-8 text-muted-foreground">No updates submitted yet.</p>
-                            ) : viewUpdates.map(update => (
-                                <Card key={update._id} className={`${!update.isReviewed ? 'border-yellow-200' : ''}`}>
-                                    <CardContent className="py-3 space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium text-sm">{update.trainee.name}</span>
-                                                <span className="text-xs text-muted-foreground">{new Date(update.date).toLocaleDateString()}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                {update.completionPercentage != null && (
-                                                    <Badge variant="outline">{update.completionPercentage}%</Badge>
-                                                )}
-                                                {update.isReviewed ? (
-                                                    <Badge className="bg-green-100 text-green-800 text-xs"><CheckCircle className="mr-1 h-3 w-3" />Reviewed</Badge>
-                                                ) : (
-                                                    <Badge variant="secondary" className="text-xs"><Clock className="mr-1 h-3 w-3" />Pending</Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {update.completionPercentage != null && (
-                                            <Progress value={update.completionPercentage} className="h-1.5" />
-                                        )}
-                                        <p className="text-sm">{update.description}</p>
-                                        {update.blockers && (
-                                            <p className="text-sm text-orange-600"><strong>Blockers:</strong> {update.blockers}</p>
-                                        )}
-                                        {update.reviewComment && (
-                                            <p className="text-sm text-green-700 bg-green-50 p-2 rounded">
-                                                <strong>Review:</strong> {update.reviewComment} — {update.reviewedBy?.name}
+                                        <Progress value={task.completionPercentage} className="h-2" />
+                                        {task.comments && task.comments.length > 0 && (
+                                            <p className="text-xs text-muted-foreground truncate">
+                                                <span className="font-medium">{task.comments[task.comments.length - 1].user?.name}:</span>{" "}
+                                                {task.comments[task.comments.length - 1].text}
                                             </p>
-                                        )}
-                                        {!update.isReviewed && (
-                                            <div>
-                                                {reviewingUpdate === update._id ? (
-                                                    <div className="flex gap-2 mt-1">
-                                                        <Input
-                                                            placeholder="Review comment (optional)"
-                                                            value={reviewComment}
-                                                            onChange={(e) => setReviewComment(e.target.value)}
-                                                            className="text-sm"
-                                                        />
-                                                        <Button size="sm" onClick={() => handleReviewUpdate(update._id)}>
-                                                            <CheckCircle className="mr-1 h-3 w-3" />Review
-                                                        </Button>
-                                                        <Button size="sm" variant="outline" onClick={() => { setReviewingUpdate(null); setReviewComment(""); }}>
-                                                            Cancel
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <Button size="sm" variant="outline" onClick={() => setReviewingUpdate(update._id)}>
-                                                        Mark as Reviewed
-                                                    </Button>
-                                                )}
-                                            </div>
                                         )}
                                     </CardContent>
                                 </Card>
@@ -671,6 +573,93 @@ export default function ProjectManagementPage() {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Task Detail Dialog (Manager view) */}
+            {viewingTask && (
+                <Dialog open={!!viewingTask} onOpenChange={(open) => { if (!open) setViewingTask(null); }}>
+                    <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle>{viewingTask.title}</DialogTitle>
+                            <DialogDescription className="flex items-center gap-2 pt-1">
+                                <span>Assigned to:</span>
+                                {viewingTask.assignedTo ? (
+                                    <Badge variant="outline" className="text-xs">{viewingTask.assignedTo.name}</Badge>
+                                ) : (
+                                    <Badge variant="secondary" className="text-xs">Unassigned</Badge>
+                                )}
+                                {viewingTask.dueDate && (
+                                    <>
+                                        <span className="text-muted-foreground">|</span>
+                                        <span className="flex items-center gap-1">
+                                            <Calendar className="h-3 w-3" />
+                                            Due: {new Date(viewingTask.dueDate).toLocaleDateString()}
+                                        </span>
+                                    </>
+                                )}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-2">
+                            {viewingTask.description ? (
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground">Description</Label>
+                                    <p className="text-sm whitespace-pre-wrap">{viewingTask.description}</p>
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground italic">No description provided.</p>
+                            )}
+
+                            {/* Progress */}
+                            <div className="space-y-2 pt-2 border-t">
+                                <div className="flex items-center justify-between text-sm">
+                                    <span className="font-medium">Progress</span>
+                                    <span className="font-bold text-primary">{viewingTask.completionPercentage}%</span>
+                                </div>
+                                <Progress value={viewingTask.completionPercentage} className="h-2" />
+                            </div>
+
+                            {/* Comment History */}
+                            {viewingTask.comments && viewingTask.comments.length > 0 && (
+                                <div className="space-y-2 pt-2 border-t">
+                                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                                        <MessageSquare className="h-3 w-3" />
+                                        Comments ({viewingTask.comments.length})
+                                    </Label>
+                                    <div className="max-h-48 overflow-y-auto space-y-2">
+                                        {[...viewingTask.comments].reverse().map((c) => (
+                                            <div key={c._id} className="bg-muted rounded p-2 text-sm">
+                                                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                                                    <span className="font-medium">{c.user?.name || "Unknown"}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        {c.completionPercentage !== undefined && (
+                                                            <Badge variant="outline" className="text-xs py-0">{c.completionPercentage}%</Badge>
+                                                        )}
+                                                        <span>{new Date(c.createdAt).toLocaleDateString()}</span>
+                                                    </div>
+                                                </div>
+                                                <p className="whitespace-pre-wrap">{c.text}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="text-xs text-muted-foreground pt-2 border-t">
+                                Created by {viewingTask.createdBy.name} on {new Date(viewingTask.createdAt).toLocaleDateString()}
+                            </div>
+                        </div>
+                        <DialogFooter className="gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => { handleEditTask(viewingTask); setViewingTask(null); }}
+                            >
+                                <Edit className="mr-1 h-4 w-4" />Edit
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => setViewingTask(null)}>Close</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             {/* Edit Task Dialog */}
             <Dialog open={!!editingTask} onOpenChange={(open) => { if (!open) setEditingTask(null); }}>

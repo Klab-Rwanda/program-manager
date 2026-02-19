@@ -117,8 +117,11 @@ export const getMyTasks = async (projectId: string): Promise<ProjectTask[]> => {
     return response.data.data;
 };
 
-export const updateTaskCompletion = async (taskId: string, completionPercentage: number): Promise<ProjectTask> => {
-    const response = await api.patch(`/projects/tasks/${taskId}/completion`, { completionPercentage });
+export const updateTaskCompletion = async (taskId: string, completionPercentage: number, comment?: string): Promise<ProjectTask> => {
+    const response = await api.patch(`/projects/tasks/${taskId}/completion`, {
+        completionPercentage,
+        ...(comment ? { comment } : {})
+    });
     return response.data.data;
 };
 

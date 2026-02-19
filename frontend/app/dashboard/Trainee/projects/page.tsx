@@ -3,36 +3,28 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import {
-    Loader2, Calendar, Clock, CheckCircle, Edit2, Send, Building2,
-    AlertCircle, Lock, FolderOpen, ArrowLeft, FileText, Plus, Trash2,
-    Crown
+    Loader2, Calendar, Clock, CheckCircle, Edit2, Building2,
+    FolderOpen, ArrowLeft, FileText, Plus, Trash2, Crown, MessageSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Slider } from "@/components/ui/slider";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
     getMyProjects,
-    createProjectUpdate,
-    editProjectUpdate,
-    getMyProjectUpdates,
-    getTodayProjectUpdate,
     getProjectTasks,
     updateTaskCompletion,
     createTask,
     deleteTask as deleteTaskApi,
     updateTask
 } from "@/lib/services/project.service";
-import { Project, ProjectUpdate as PUpdate, ProjectTask, CreateTaskData } from "@/types";
+import { Project, ProjectTask, CreateTaskData } from "@/types";
 import { useAuth } from "@/lib/contexts/RoleContext";
 
 export default function TraineeProjectsPage() {
@@ -63,13 +55,8 @@ export default function TraineeProjectsPage() {
     const [editTaskForm, setEditTaskForm] = useState({ title: "", description: "", assignedTo: "", dueDate: "" });
     const [isUpdatingTask, setIsUpdatingTask] = useState(false);
 
-    // Update form state
-    const [submitting, setSubmitting] = useState(false);
-    const [todayUpdate, setTodayUpdate] = useState<PUpdate | null>(null);
-    const [pastUpdates, setPastUpdates] = useState<PUpdate[]>([]);
-    const [isEditing, setIsEditing] = useState(false);
-    const [description, setDescription] = useState("");
-    const [blockers, setBlockers] = useState("");
+    // Task comment
+    const [taskComment, setTaskComment] = useState("");
 
     const today = new Date().toLocaleDateString('en-US', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -104,35 +91,6 @@ export default function TraineeProjectsPage() {
 
     useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
-    const fetchProjectUpdates = useCallback(async (projectId: string) => {
-        try {
-            const [todayData, pastData] = await Promise.all([
-                getTodayProjectUpdate(projectId),
-                getMyProjectUpdates(projectId, { limit: 30 })
-            ]);
-
-            setTodayUpdate(todayData);
-
-            if (todayData) {
-                setDescription(todayData.description);
-                setBlockers(todayData.blockers || "");
-                setIsEditing(false);
-            } else {
-                setDescription("");
-                setBlockers("");
-                setIsEditing(true);
-            }
-
-            // Filter out today's update from past list
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
-            const past = pastData.filter(u => new Date(u.date) < todayStart);
-            setPastUpdates(past);
-        } catch (err) {
-            console.error("Failed to fetch project updates:", err);
-        }
-    }, []);
-
     const fetchTasks = useCallback(async (projectId: string) => {
         try {
             const tasks = await getProjectTasks(projectId);
@@ -146,53 +104,15 @@ export default function TraineeProjectsPage() {
 
     const handleSelectProject = (project: Project) => {
         setSelectedProject(project);
-        setTodayUpdate(null);
-        setPastUpdates([]);
         setProjectTasks([]);
         setTaskAssigneeFilter("all");
-        fetchProjectUpdates(project._id);
         fetchTasks(project._id);
     };
 
     const handleBackToList = () => {
         setSelectedProject(null);
-        setTodayUpdate(null);
-        setPastUpdates([]);
         setProjectTasks([]);
-        setIsEditing(false);
         fetchProjects();
-    };
-
-    const handleSubmit = async () => {
-        if (!description.trim()) {
-            toast.error("Please describe what you are going to work on today.");
-            return;
-        }
-        if (!selectedProject) return;
-
-        setSubmitting(true);
-        try {
-            if (todayUpdate && todayUpdate.isEditable) {
-                const updated = await editProjectUpdate(todayUpdate._id, {
-                    description,
-                    blockers
-                });
-                setTodayUpdate({ ...updated, isEditable: true });
-                toast.success("Update updated successfully!");
-            } else {
-                const created = await createProjectUpdate(selectedProject._id, {
-                    description,
-                    blockers
-                });
-                setTodayUpdate(created);
-                toast.success("Update submitted successfully!");
-            }
-            setIsEditing(false);
-        } catch (err: any) {
-            toast.error(err.response?.data?.message || "Failed to submit update.");
-        } finally {
-            setSubmitting(false);
-        }
     };
 
     const handleTaskCompletionChange = async (taskId: string, value: number) => {
@@ -213,10 +133,14 @@ export default function TraineeProjectsPage() {
         if (!viewingTask) return;
         setSavingProgress(true);
         try {
-            await updateTaskCompletion(viewingTask._id, viewProgress);
-            // Update local lists
-            setProjectTasks(prev => prev.map(t => t._id === viewingTask._id ? { ...t, completionPercentage: viewProgress } : t));
-            setViewingTask(prev => prev ? { ...prev, completionPercentage: viewProgress } : null);
+            const updated = await updateTaskCompletion(
+                viewingTask._id,
+                viewProgress,
+                taskComment.trim() || undefined
+            );
+            setProjectTasks(prev => prev.map(t => t._id === viewingTask._id ? updated : t));
+            setViewingTask(updated);
+            setTaskComment("");
             toast.success("Progress updated!");
         } catch {
             toast.error("Failed to update progress.");
@@ -294,14 +218,6 @@ export default function TraineeProjectsPage() {
         }
     };
 
-    const handleEdit = () => {
-        if (todayUpdate && !todayUpdate.isEditable) {
-            toast.error("This update can no longer be edited (24 hours have passed).");
-            return;
-        }
-        setIsEditing(true);
-    };
-
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString('en-US', {
             weekday: 'short', month: 'short', day: 'numeric'
@@ -336,7 +252,7 @@ export default function TraineeProjectsPage() {
             <div className="space-y-6">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">My Projects</h1>
-                    <p className="text-muted-foreground">View your assigned projects and submit daily progress updates.</p>
+                    <p className="text-muted-foreground">View your assigned projects and track task progress.</p>
                 </div>
 
                 {projects.length === 0 ? (
@@ -369,7 +285,7 @@ export default function TraineeProjectsPage() {
                                                 )}
                                             </div>
                                             <Button size="sm" variant="outline">
-                                                <Send className="mr-1 h-4 w-4" />Submit Update
+                                                View Tasks
                                             </Button>
                                         </div>
                                         {project.description && (
@@ -487,251 +403,84 @@ export default function TraineeProjectsPage() {
                 </Card>
             )}
 
-            <Tabs defaultValue="tasks" className="space-y-4">
-                <TabsList>
-                    <TabsTrigger value="tasks">Project Tasks ({projectTasks.length})</TabsTrigger>
-                    <TabsTrigger value="updates">Daily Update</TabsTrigger>
-                </TabsList>
-
-                {/* ==================== TASKS TAB ==================== */}
-                <TabsContent value="tasks" className="space-y-4">
-                    {/* Header row: filter + add task */}
-                    <div className="flex items-center gap-3 flex-wrap">
-                        {taskAssignees.length > 1 && (
-                            <Select value={taskAssigneeFilter} onValueChange={setTaskAssigneeFilter}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Filter by assignee" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Members</SelectItem>
-                                    {taskAssignees.map(a => (
-                                        <SelectItem key={a.id} value={a.id}>
-                                            {a.id === user?._id ? `${a.name} (You)` : a.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
-                        <div className="flex-1" />
-                        {isTeamLead && (
-                            <Button size="sm" onClick={() => setShowCreateTask(true)}>
-                                <Plus className="mr-1 h-4 w-4" />Add Task
-                            </Button>
-                        )}
-                    </div>
-
-                    {filteredTasks.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-8">
-                                <p className="text-sm text-muted-foreground text-center">
-                                    {projectTasks.length === 0 ? "No tasks created yet." : "No tasks match the selected filter."}
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        filteredTasks.map(task => {
-                            const isMyTask = task.assignedTo?._id === user?._id;
-                            return (
-                                <Card
-                                    key={task._id}
-                                    className="cursor-pointer hover:shadow-md transition-shadow"
-                                    onClick={() => { setViewingTask(task); setViewProgress(task.completionPercentage); }}
-                                >
-                                    <CardContent className="py-3 space-y-2">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-                                                <h4 className="font-medium truncate">{task.title}</h4>
-                                                {isMyTask ? (
-                                                    <Badge className="bg-blue-100 text-blue-800 text-xs">You</Badge>
-                                                ) : task.assignedTo ? (
-                                                    <Badge variant="outline" className="text-xs">{task.assignedTo.name}</Badge>
-                                                ) : (
-                                                    <Badge variant="secondary" className="text-xs">Unassigned</Badge>
-                                                )}
-                                                {task.dueDate && (
-                                                    <span className="text-xs text-muted-foreground">
-                                                        Due: {new Date(task.dueDate).toLocaleDateString()}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <span className="text-sm font-bold text-primary shrink-0">{task.completionPercentage}%</span>
-                                        </div>
-                                        <Progress value={task.completionPercentage} className="h-2" />
-                                    </CardContent>
-                                </Card>
-                            );
-                        })
+            {/* ==================== TASKS ==================== */}
+            <div className="space-y-4">
+                {/* Header row: filter + add task */}
+                <div className="flex items-center gap-3 flex-wrap">
+                    <h2 className="text-lg font-semibold">Tasks ({projectTasks.length})</h2>
+                    {taskAssignees.length > 1 && (
+                        <Select value={taskAssigneeFilter} onValueChange={setTaskAssigneeFilter}>
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Filter by assignee" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Members</SelectItem>
+                                {taskAssignees.map(a => (
+                                    <SelectItem key={a.id} value={a.id}>
+                                        {a.id === user?._id ? `${a.name} (You)` : a.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     )}
-                </TabsContent>
+                    <div className="flex-1" />
+                    {isTeamLead && (
+                        <Button size="sm" onClick={() => setShowCreateTask(true)}>
+                            <Plus className="mr-1 h-4 w-4" />Add Task
+                        </Button>
+                    )}
+                </div>
 
-                {/* ==================== DAILY UPDATE TAB ==================== */}
-                <TabsContent value="updates" className="space-y-4">
-                    {/* Today's Update Form */}
+                {filteredTasks.length === 0 ? (
                     <Card>
-                        <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle>Today&apos;s Update</CardTitle>
-                                    <CardDescription>Describe your plan for the day</CardDescription>
-                                </div>
-                                {todayUpdate && (
-                                    <div className="flex items-center gap-2">
-                                        {todayUpdate.isReviewed ? (
-                                            <Badge className="bg-green-100 text-green-800"><CheckCircle className="mr-1 h-3 w-3" />Reviewed</Badge>
-                                        ) : (
-                                            <Badge variant="secondary"><Clock className="mr-1 h-3 w-3" />Pending Review</Badge>
-                                        )}
-                                        {todayUpdate.isEditable ? (
-                                            <Badge variant="outline" className="text-yellow-600 border-yellow-600"><Edit2 className="mr-1 h-3 w-3" />Editable</Badge>
-                                        ) : (
-                                            <Badge variant="outline" className="text-gray-500"><Lock className="mr-1 h-3 w-3" />Locked</Badge>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="space-y-2">
-                                <Label htmlFor="description">
-                                    What are you going to work on today? <span className="text-red-500">*</span>
-                                </Label>
-                                <Textarea
-                                    id="description"
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    placeholder="Describe the tasks you plan to work on today..."
-                                    rows={3}
-                                    disabled={!isEditing}
-                                    className={!isEditing ? "bg-muted" : ""}
-                                    maxLength={1000}
-                                />
-                                <p className="text-xs text-muted-foreground text-right">{description.length}/1000</p>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label htmlFor="blockers" className="flex items-center gap-2">
-                                    <AlertCircle className="h-4 w-4 text-orange-500" />
-                                    Any blockers? <span className="text-muted-foreground text-sm">(optional)</span>
-                                </Label>
-                                <Textarea
-                                    id="blockers"
-                                    value={blockers}
-                                    onChange={(e) => setBlockers(e.target.value)}
-                                    placeholder="Describe any obstacles preventing progress..."
-                                    rows={2}
-                                    disabled={!isEditing}
-                                    className={!isEditing ? "bg-muted" : ""}
-                                    maxLength={500}
-                                />
-                                <p className="text-xs text-muted-foreground text-right">{blockers.length}/500</p>
-                            </div>
-
-                            {todayUpdate?.reviewComment && (
-                                <Alert>
-                                    <CheckCircle className="h-4 w-4" />
-                                    <AlertDescription>
-                                        <strong>Reviewer Comment:</strong> {todayUpdate.reviewComment}
-                                        {todayUpdate.reviewedBy && (
-                                            <span className="text-muted-foreground ml-2">- {todayUpdate.reviewedBy.name}</span>
-                                        )}
-                                    </AlertDescription>
-                                </Alert>
-                            )}
-
-                            <div className="flex justify-end gap-3 pt-4 border-t">
-                                {isEditing ? (
-                                    <>
-                                        {todayUpdate && (
-                                            <Button variant="outline" onClick={() => {
-                                                setDescription(todayUpdate.description);
-                                                setBlockers(todayUpdate.blockers || "");
-                                                setIsEditing(false);
-                                            }}>Cancel</Button>
-                                        )}
-                                        <Button onClick={handleSubmit} disabled={submitting || !description.trim()}>
-                                            {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                                            {todayUpdate ? 'Update' : 'Submit'}
-                                        </Button>
-                                    </>
-                                ) : (
-                                    todayUpdate && todayUpdate.isEditable && (
-                                        <Button variant="outline" onClick={handleEdit}>
-                                            <Edit2 className="mr-2 h-4 w-4" />Edit Update
-                                        </Button>
-                                    )
-                                )}
-                            </div>
-
-                            {!todayUpdate && (
-                                <p className="text-xs text-muted-foreground text-center">
-                                    Note: You can edit your update within 24 hours of submission.
-                                </p>
-                            )}
+                        <CardContent className="py-8">
+                            <p className="text-sm text-muted-foreground text-center">
+                                {projectTasks.length === 0 ? "No tasks created yet." : "No tasks match the selected filter."}
+                            </p>
                         </CardContent>
                     </Card>
-
-                    {/* Past Updates */}
-                    {pastUpdates.length > 0 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg">Past Updates</CardTitle>
-                                <CardDescription>Your previous updates for this project</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Accordion type="single" collapsible className="w-full">
-                                    {pastUpdates.map((update) => (
-                                        <AccordionItem key={update._id} value={update._id}>
-                                            <AccordionTrigger className="hover:no-underline">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="font-medium">{formatDate(update.date)}</span>
-                                                    {update.completionPercentage !== undefined && (
-                                                        <Badge variant="outline">{update.completionPercentage}%</Badge>
-                                                    )}
-                                                    {update.isReviewed ? (
-                                                        <Badge variant="secondary" className="text-xs"><CheckCircle className="mr-1 h-3 w-3" />Reviewed</Badge>
-                                                    ) : (
-                                                        <Badge variant="outline" className="text-xs">Pending</Badge>
-                                                    )}
-                                                </div>
-                                            </AccordionTrigger>
-                                            <AccordionContent className="space-y-3 pt-2">
-                                                {update.completionPercentage !== undefined && (
-                                                    <div className="flex items-center gap-3 mb-2">
-                                                        <Progress value={update.completionPercentage} className="flex-1 h-2" />
-                                                        <span className="text-sm font-medium">{update.completionPercentage}%</span>
-                                                    </div>
-                                                )}
-                                                <div>
-                                                    <p className="text-sm font-medium text-blue-600">Plan for the day:</p>
-                                                    <p className="text-sm text-muted-foreground ml-4">{update.description}</p>
-                                                </div>
-                                                {update.blockers && (
-                                                    <div>
-                                                        <p className="text-sm font-medium text-orange-600 flex items-center gap-1">
-                                                            <AlertCircle className="h-3 w-3" /> Blockers:
-                                                        </p>
-                                                        <p className="text-sm text-muted-foreground ml-4">{update.blockers}</p>
-                                                    </div>
-                                                )}
-                                                {update.reviewComment && (
-                                                    <Alert className="mt-2">
-                                                        <AlertDescription className="text-sm">
-                                                            <strong>Reviewer:</strong> {update.reviewComment}
-                                                            {update.reviewedBy && (
-                                                                <span className="text-muted-foreground ml-1">- {update.reviewedBy.name}</span>
-                                                            )}
-                                                        </AlertDescription>
-                                                    </Alert>
-                                                )}
-                                            </AccordionContent>
-                                        </AccordionItem>
-                                    ))}
-                                </Accordion>
-                            </CardContent>
-                        </Card>
-                    )}
-                </TabsContent>
-            </Tabs>
+                ) : (
+                    filteredTasks.map(task => {
+                        const isMyTask = task.assignedTo?._id === user?._id;
+                        return (
+                            <Card
+                                key={task._id}
+                                className="cursor-pointer hover:shadow-md transition-shadow"
+                                onClick={() => { setViewingTask(task); setViewProgress(task.completionPercentage); setTaskComment(""); }}
+                            >
+                                <CardContent className="py-3 space-y-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                                            <h4 className="font-medium truncate">{task.title}</h4>
+                                            {isMyTask ? (
+                                                <Badge className="bg-blue-100 text-blue-800 text-xs">You</Badge>
+                                            ) : task.assignedTo ? (
+                                                <Badge variant="outline" className="text-xs">{task.assignedTo.name}</Badge>
+                                            ) : (
+                                                <Badge variant="secondary" className="text-xs">Unassigned</Badge>
+                                            )}
+                                            {task.dueDate && (
+                                                <span className="text-xs text-muted-foreground">
+                                                    Due: {new Date(task.dueDate).toLocaleDateString()}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            {task.comments && task.comments.length > 0 && (
+                                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                    <MessageSquare className="h-3 w-3" />{task.comments.length}
+                                                </span>
+                                            )}
+                                            <span className="text-sm font-bold text-primary">{task.completionPercentage}%</span>
+                                        </div>
+                                    </div>
+                                    <Progress value={task.completionPercentage} className="h-2" />
+                                </CardContent>
+                            </Card>
+                        );
+                    })
+                )}
+            </div>
 
             {/* Create Task Dialog (Team Lead) */}
             <Dialog open={showCreateTask} onOpenChange={setShowCreateTask}>
@@ -793,9 +542,10 @@ export default function TraineeProjectsPage() {
                 const canEdit = isTeamLead || isMyViewedTask;
                 const canUpdateProgress = isTeamLead || isMyViewedTask;
                 const progressChanged = viewProgress !== viewingTask.completionPercentage;
+                const hasChanges = progressChanged || taskComment.trim().length > 0;
                 return (
-                    <Dialog open={!!viewingTask} onOpenChange={(open) => { if (!open) setViewingTask(null); }}>
-                        <DialogContent className="sm:max-w-md">
+                    <Dialog open={!!viewingTask} onOpenChange={(open) => { if (!open) { setViewingTask(null); setTaskComment(""); } }}>
+                        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
                             <DialogHeader>
                                 <DialogTitle>{viewingTask.title}</DialogTitle>
                                 <DialogDescription className="flex items-center gap-2 pt-1">
@@ -828,6 +578,7 @@ export default function TraineeProjectsPage() {
                                     <p className="text-sm text-muted-foreground italic">No description provided.</p>
                                 )}
 
+                                {/* Progress Section */}
                                 <div className="space-y-2 pt-2 border-t">
                                     <div className="flex items-center justify-between text-sm">
                                         <span className="font-medium">Progress</span>
@@ -844,18 +595,61 @@ export default function TraineeProjectsPage() {
                                     ) : (
                                         <Progress value={viewingTask.completionPercentage} className="h-2" />
                                     )}
-                                    {canUpdateProgress && progressChanged && (
-                                        <Button
-                                            size="sm"
-                                            className="w-full"
-                                            onClick={handleSaveProgress}
-                                            disabled={savingProgress}
-                                        >
-                                            {savingProgress ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-                                            Save Progress
-                                        </Button>
-                                    )}
                                 </div>
+
+                                {/* Comment Input */}
+                                {canUpdateProgress && (
+                                    <div className="space-y-2">
+                                        <Label className="text-xs text-muted-foreground">Add a comment</Label>
+                                        <Textarea
+                                            value={taskComment}
+                                            onChange={(e) => setTaskComment(e.target.value)}
+                                            placeholder="What did you work on? Any blockers?"
+                                            rows={2}
+                                            maxLength={500}
+                                        />
+                                        <p className="text-xs text-muted-foreground text-right">{taskComment.length}/500</p>
+                                    </div>
+                                )}
+
+                                {/* Save button */}
+                                {canUpdateProgress && hasChanges && (
+                                    <Button
+                                        size="sm"
+                                        className="w-full"
+                                        onClick={handleSaveProgress}
+                                        disabled={savingProgress}
+                                    >
+                                        {savingProgress ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+                                        Save Progress
+                                    </Button>
+                                )}
+
+                                {/* Comment History */}
+                                {viewingTask.comments && viewingTask.comments.length > 0 && (
+                                    <div className="space-y-2 pt-2 border-t">
+                                        <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                                            <MessageSquare className="h-3 w-3" />
+                                            Comments ({viewingTask.comments.length})
+                                        </Label>
+                                        <div className="max-h-48 overflow-y-auto space-y-2">
+                                            {[...viewingTask.comments].reverse().map((c) => (
+                                                <div key={c._id} className="bg-muted rounded p-2 text-sm">
+                                                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                                                        <span className="font-medium">{c.user?.name || "Unknown"}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            {c.completionPercentage !== undefined && (
+                                                                <Badge variant="outline" className="text-xs py-0">{c.completionPercentage}%</Badge>
+                                                            )}
+                                                            <span>{new Date(c.createdAt).toLocaleDateString()}</span>
+                                                        </div>
+                                                    </div>
+                                                    <p className="whitespace-pre-wrap">{c.text}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="text-xs text-muted-foreground pt-2 border-t">
                                     Created by {viewingTask.createdBy.name} on {new Date(viewingTask.createdAt).toLocaleDateString()}
